@@ -52,93 +52,194 @@ def _ensure_imports():
 
 
 
-def detect_grid_split(image) -> Tuple[int, int]:
+def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
     """
-    自动检测四宫格的分割点
-    返回 (x_split, y_split) 坐标
+    智能检测图片布局类型并切割
+    
+    支持两种布局:
+    1. 2x2 田字格 (宽高比接近1:1 或 4:3)
+    2. 1x4 横排 (宽高比约 4:1 或更宽)
+    
+    Args:
+        image: 输入图片 (BGR 格式)
+        margin: 切割边界收缩像素
+    
+    Returns:
+        List of (view_name, image) tuples: [front, back, left, right]
+    """
+    _ensure_imports()
+    height, width = image.shape[:2]
+    aspect_ratio = width / height
+    
+    print(f"[INFO] 图片尺寸: {width}x{height}, 宽高比: {aspect_ratio:.2f}")
+    
+    # 判断布局类型
+    # 1x4 横排: 宽高比 > 1.5 (如 1408x768 = 1.83)
+    # 2x2 田字格: 宽高比 <= 1.5 (如 1024x1024 = 1.0 或 1024x768 = 1.33)
+    if aspect_ratio > 1.5:
+        # 1x4 横排布局
+        print("[INFO] 检测到 1x4 横排布局")
+        return split_horizontal_layout(image, margin)
+    else:
+        # 2x2 田字格布局
+        print("[INFO] 检测到 2x2 田字格布局")
+        return split_grid_layout(image, margin)
+
+
+def find_dividing_lines(gray_image, axis: str, num_divisions: int) -> List[int]:
+    """
+    检测分割线位置
+    
+    Args:
+        gray_image: 灰度图
+        axis: 'horizontal' 或 'vertical'
+        num_divisions: 期望的分割线数量
+    
+    Returns:
+        分割线位置列表
+    """
+    _ensure_imports()
+    
+    if axis == 'vertical':
+        # 检测垂直分割线 (沿x轴)
+        profile = np.mean(gray_image, axis=0)  # 每列的平均亮度
+    else:
+        # 检测水平分割线 (沿y轴)
+        profile = np.mean(gray_image, axis=1)  # 每行的平均亮度
+    
+    length = len(profile)
+    
+    # 寻找亮度峰值 (分割线通常是亮的)
+    # 将图像分成 num_divisions+1 段，在每段边界附近寻找峰值
+    dividers = []
+    for i in range(1, num_divisions + 1):
+        expected_pos = int(length * i / (num_divisions + 1))
+        search_start = max(0, expected_pos - length // 10)
+        search_end = min(length, expected_pos + length // 10)
+        
+        # 在搜索范围内找最亮的位置
+        segment = profile[search_start:search_end]
+        if len(segment) > 0:
+            local_max_idx = np.argmax(segment)
+            dividers.append(search_start + local_max_idx)
+    
+    return dividers
+
+
+def split_horizontal_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
+    """
+    切割 1x4 横排布局
+    
+    布局: [Front | Back | Left | Right] 或 [Front | Left | Right | Back]
     """
     _ensure_imports()
     height, width = image.shape[:2]
     
-    # 转换为灰度图
+    # 转灰度
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     else:
         gray = image
     
-    # 方法1: 假设中心分割（最简单）
-    center_x = width // 2
-    center_y = height // 2
+    # 检测3条垂直分割线
+    dividers = find_dividing_lines(gray, 'vertical', 3)
     
-    # 方法2: 边缘检测找分割线（可选增强）
-    # 在中心区域搜索明显的分割线
-    search_range = 50  # 在中心 +/- 50 像素范围内搜索
+    if len(dividers) < 3:
+        # 回退到均等分割
+        print("[WARNING] 未检测到足够分割线，使用均等分割")
+        dividers = [width // 4, width // 2, 3 * width // 4]
     
-    # 检测水平分割线（寻找行亮度跳变最小的位置）
-    row_sums = []
-    for y in range(center_y - search_range, center_y + search_range):
-        if 0 <= y < height:
-            row_sums.append((y, np.std(gray[y, :])))
+    dividers = sorted(dividers)
+    print(f"[INFO] 垂直分割线位置: {dividers}")
     
-    # 检测垂直分割线
-    col_sums = []
-    for x in range(center_x - search_range, center_x + search_range):
-        if 0 <= x < width:
-            col_sums.append((x, np.std(gray[:, x])))
+    # 定义四个区域
+    x_positions = [0] + dividers + [width]
     
-    # 如果能检测到，使用检测结果；否则使用中心点
-    if row_sums:
-        # 找到标准差最小的行（可能是分割线）
-        best_y = min(row_sums, key=lambda x: x[1])[0]
-    else:
-        best_y = center_y
+    views = []
+    view_names = ['front', 'back', 'left', 'right']
+    
+    for i, name in enumerate(view_names):
+        x1 = x_positions[i] + margin
+        x2 = x_positions[i + 1] - margin
+        y1 = margin
+        y2 = height - margin
         
-    if col_sums:
-        best_x = min(col_sums, key=lambda x: x[1])[0]
-    else:
-        best_x = center_x
+        if x2 > x1 and y2 > y1:
+            cropped = image[y1:y2, x1:x2].copy()
+            print(f"[INFO] {name} 视图: 位置 ({x1},{y1})-({x2},{y2}), 尺寸 {x2-x1}x{y2-y1}")
+            views.append((name, cropped))
     
-    return best_x, best_y
+    return views
 
 
-def split_quadrant_image(image, margin: int = 5) -> List[Tuple[str, tuple]]:
+def split_grid_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
     """
-    将四宫格图片分割为四个独立视图
+    切割 2x2 田字格布局
     
-    布局假设:
-        左上: 正面 (front)
-        右上: 背面 (back)
-        左下: 左侧 (left)
-        右下: 右侧 (right)
-    
-    Args:
-        image: 输入图片 (BGR 格式)
-        margin: 切割时从边界收缩的像素数，去除可能的分割线
-    
-    Returns:
-        List of (view_name, image) tuples
+    布局:
+    [Front | Back ]
+    [Left  | Right]
     """
+    _ensure_imports()
     height, width = image.shape[:2]
-    x_split, y_split = detect_grid_split(image)
     
-    print(f"[INFO] 图片尺寸: {width}x{height}")
+    # 转灰度
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+    
+    # 检测1条水平分割线和1条垂直分割线
+    h_dividers = find_dividing_lines(gray, 'horizontal', 1)
+    v_dividers = find_dividing_lines(gray, 'vertical', 1)
+    
+    y_split = h_dividers[0] if h_dividers else height // 2
+    x_split = v_dividers[0] if v_dividers else width // 2
+    
     print(f"[INFO] 检测到分割点: ({x_split}, {y_split})")
     
-    # 定义四个区域，带有边界收缩
+    # 定义四个区域
     regions = {
-        'front': (margin, margin, x_split - margin, y_split - margin),           # 左上
-        'back': (x_split + margin, margin, width - margin, y_split - margin),    # 右上
-        'left': (margin, y_split + margin, x_split - margin, height - margin),   # 左下
-        'right': (x_split + margin, y_split + margin, width - margin, height - margin)  # 右下
+        'front': (margin, margin, x_split - margin, y_split - margin),
+        'back': (x_split + margin, margin, width - margin, y_split - margin),
+        'left': (margin, y_split + margin, x_split - margin, height - margin),
+        'right': (x_split + margin, y_split + margin, width - margin, height - margin)
     }
     
     views = []
-    for name, (x1, y1, x2, y2) in regions.items():
-        cropped = image[y1:y2, x1:x2].copy()
-        print(f"[INFO] {name} 视图: 位置 ({x1},{y1})-({x2},{y2}), 尺寸 {x2-x1}x{y2-y1}")
-        views.append((name, cropped))
+    for name in ['front', 'back', 'left', 'right']:
+        x1, y1, x2, y2 = regions[name]
+        if x2 > x1 and y2 > y1:
+            cropped = image[y1:y2, x1:x2].copy()
+            print(f"[INFO] {name} 视图: 位置 ({x1},{y1})-({x2},{y2}), 尺寸 {x2-x1}x{y2-y1}")
+            views.append((name, cropped))
     
     return views
+
+
+# 保留旧函数名以保持兼容性
+def detect_grid_split(image) -> Tuple[int, int]:
+    """向后兼容的分割点检测函数"""
+    _ensure_imports()
+    height, width = image.shape[:2]
+    
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+    
+    h_dividers = find_dividing_lines(gray, 'horizontal', 1)
+    v_dividers = find_dividing_lines(gray, 'vertical', 1)
+    
+    y_split = h_dividers[0] if h_dividers else height // 2
+    x_split = v_dividers[0] if v_dividers else width // 2
+    
+    return x_split, y_split
+
+
+def split_quadrant_image(image, margin: int = 5) -> List[Tuple[str, tuple]]:
+    """向后兼容的四宫格切割函数 - 现在会自动检测布局类型"""
+    return detect_layout_and_split(image, margin)
 
 
 def remove_background(image):

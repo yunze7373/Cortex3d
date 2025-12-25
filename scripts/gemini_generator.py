@@ -1,17 +1,9 @@
 #!/usr/bin/env python3
 """
 Gemini 多视角图像生成器
-使用 Gemini API (Imagen) 生成四视图角色设计图，并自动切割
+使用 Gemini API 生成四视图角色设计图
 
-使用方法:
-    # 设置 API Key
-    export GEMINI_API_KEY="your-api-key"
-    
-    # 生成角色
-    python gemini_generator.py "末日幸存者，穿着破旧西装的商人"
-    
-    # 使用自定义模型
-    python gemini_generator.py "赛博朋克战士" --model gemini-2.0-flash-exp
+使用共享配置: 从 config.py 导入提示词模板和模型名称
 
 依赖:
     pip install google-generativeai pillow
@@ -25,6 +17,9 @@ from datetime import datetime
 from typing import Optional
 import base64
 import io
+
+# 导入共享配置
+from config import IMAGE_MODEL, build_multiview_prompt
 
 # Lazy imports
 genai = None
@@ -48,75 +43,8 @@ def _ensure_imports():
             )
 
 
-# =============================================================================
-# 提示词模板
-# =============================================================================
-
-SYSTEM_PROMPT = """You are a professional 3D character concept artist specialized in creating precise multi-view reference sheets for 3D modeling and figurine production.
-
-Your task is to generate a "3D Modeling Reference Sheet" with exactly 4 orthographic views of a character.
-
-**STRICT OUTPUT REQUIREMENTS (MUST FOLLOW):**
-
-1. **Layout:** Quadriptych (4-panel split) with clear separation:
-   - Top-Left: Front View
-   - Top-Right: Back View  
-   - Bottom-Left: Left Side View
-   - Bottom-Right: Right Side View
-
-2. **Pose:** A-Pose / Static Standing Pose:
-   - Legs shoulder-width apart
-   - Arms straight down, angled 45 degrees away from the body
-   - Palms facing inwards or backwards
-   - NO crossing arms, NO holding objects in front of chest
-   
-3. **Perspective:** Orthographic Projection:
-   - Flat lighting, no depth of field
-   - No perspective distortion
-   - Equal scale across all 4 views
-   
-4. **Background:** Pure, solid light grey (#D3D3D3)
-   - No smoke, no scenery, no text, no logos
-   
-5. **Consistency:** The character's proportions, costume details, and colors must be IDENTICAL across all 4 views.
-
-**STYLE:**
-- Hyper-realistic 3D CGI render style
-- 8K resolution textures
-- Focus on clear silhouettes and defined distinct materials
-
-**NEGATIVE CONSTRAINTS:**
-- Do NOT generate dynamic action poses
-- Do NOT hold weapons across the body
-- Do NOT include heavy shadows that hide details
-- Do NOT add any text or watermarks"""
-
-
-CHARACTER_TEMPLATE = """**CHARACTER DESCRIPTION:**
-{description}
-
-**HEAD-BODY RATIO:** 1:7.5 (Realistic human proportions)
-
-**ADDITIONAL REQUIREMENTS:**
-- All 4 views must show the COMPLETE character from head to toe
-- Character should be centered in each panel
-- Maintain consistent lighting across all views
-- Materials should be clearly distinguishable (leather, metal, fabric, skin, etc.)
-
-Generate a high-quality 4-panel orthographic reference sheet now."""
-
-
-def build_prompt(character_description: str) -> str:
-    """
-    构建完整的图像生成提示词
-    
-    Args:
-        character_description: 用户的角色描述
-    
-    Returns:
-        完整的提示词
-    """
-    return CHARACTER_TEMPLATE.format(description=character_description)
+# 使用共享配置中的默认模型
+DEFAULT_MODEL = IMAGE_MODEL
 
 
 # =============================================================================
@@ -126,7 +54,7 @@ def build_prompt(character_description: str) -> str:
 def generate_character_views(
     character_description: str,
     api_key: str,
-    model_name: str = "gemini-2.0-flash-exp",
+    model_name: str = DEFAULT_MODEL,
     output_dir: str = "test_images",
     auto_cut: bool = True
 ) -> Optional[str]:
@@ -159,7 +87,7 @@ def generate_character_views(
     model = genai.GenerativeModel(model_name)
     
     # 构建提示词
-    full_prompt = SYSTEM_PROMPT + "\n\n" + build_prompt(character_description)
+    full_prompt = build_multiview_prompt(character_description)
     
     print("[INFO] 正在生成图像... (可能需要 30-60 秒)")
     
@@ -419,7 +347,7 @@ def main():
     )
     parser.add_argument(
         "--model",
-        default="gemini-2.0-flash-exp",
+        default=DEFAULT_MODEL,
         help="模型名称 (默认: gemini-2.0-flash-exp)"
     )
     parser.add_argument(

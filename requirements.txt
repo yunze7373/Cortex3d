@@ -9,6 +9,9 @@ onnxruntime>=1.16.0
 # Gemini API
 google-generativeai>=0.8.0
 
+# HTTP 请求
+requests>=2.31.0
+
 # Hugging Face API 调用
 gradio_client>=0.10.0
 
