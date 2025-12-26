@@ -1,0 +1,24 @@
+services:
+  instantmesh:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cortex3d-instantmesh:latest
+    container_name: cortex3d-dev
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - hf-cache:/root/.cache/huggingface
+    shm_size: "8gb"
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  hf-cache:
