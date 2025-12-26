@@ -234,9 +234,14 @@ def main():
         meshes = model.extract_mesh(scene_codes, has_vertex_color=not args.bake_texture, resolution=args.mc_resolution)
         timer.end(f"Extracting mesh for {name}")
 
-        # Smooth the mesh to remove Marching Cubes artifacts (blockiness)
-        logging.info("Applying Laplacian smoothing...")
-        trimesh.smoothing.filter_laplacian(meshes[0], iterations=5)
+        # Smooth the mesh using Taubin smoothing (preserves volume/details better than Laplacian)
+        logging.info("Applying Taubin smoothing (Volume Preserving)...")
+        try:
+            trimesh.smoothing.filter_taubin(meshes[0], iterations=10)
+        except AttributeError:
+            # Fallback if filter_taubin is missing in old trimesh versions
+            logging.warning("Taubin smoothing not found, falling back to Laplacian...")
+            trimesh.smoothing.filter_laplacian(meshes[0], iterations=3)
 
         out_mesh_path = os.path.join(save_dir, f"{name}.{args.model_save_format}")
 

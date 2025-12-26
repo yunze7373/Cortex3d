@@ -36,7 +36,7 @@ test-triposr:
 		--output-dir /workspace/outputs/triposr \
 		--bake-texture \
 		--texture-resolution 2048 \
-		--no-remove-bg
+		--mc-resolution 1024
 
 # 检查环境
 check:
