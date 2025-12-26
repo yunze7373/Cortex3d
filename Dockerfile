@@ -25,7 +25,7 @@ RUN git clone https://github.com/NVlabs/nvdiffrast.git /opt/nvdiffrast \
     && cd /opt/nvdiffrast \
     && sed -i 's/from importlib.metadata import version/__version__ = "0.3.1"  # patched\n# from importlib.metadata import version/' nvdiffrast/__init__.py \
     && sed -i 's/__version__ = version(__package__ or .nvdiffrast.)/__version__ = __version__  # patched/' nvdiffrast/__init__.py \
-    && pip3 install --no-cache-dir --no-build-isolation -e . \
+    && pip3 install --no-cache-dir --no-build-isolation . \
     && python3 -c "import nvdiffrast.torch as dr; print('✅ nvdiffrast installed successfully')"
 
 # InstantMesh 依赖 (使用官方版本，分步安装避免 resolver 问题)
