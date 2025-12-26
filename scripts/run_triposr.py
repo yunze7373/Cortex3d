@@ -111,9 +111,9 @@ def main():
     )
     parser.add_argument(
         "--foreground-ratio",
-        default=0.85,
+        default=0.95,
         type=float,
-        help="Ratio of foreground size. Default: 0.85",
+        help="Ratio of foreground size. Default: 0.95",
     )
     parser.add_argument(
         "--output-dir",
