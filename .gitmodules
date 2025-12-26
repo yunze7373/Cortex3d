@@ -1,3 +1,6 @@
 [submodule "InstantMesh"]
 	path = InstantMesh
 	url = https://github.com/TencentARC/InstantMesh.git
+[submodule "TripoSR"]
+	path = TripoSR
+	url = https://github.com/VAST-AI-Research/TripoSR.git
