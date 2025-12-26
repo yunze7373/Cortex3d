@@ -17,9 +17,10 @@ RUN pip3 install --no-cache-dir \
     torch torchvision \
     --index-url https://download.pytorch.org/whl/cu121
 
-# nvdiffrast (需要 --no-build-isolation)
+# nvdiffrast (必须在 PyTorch 之后安装，需要 --no-build-isolation)
 RUN pip3 install --no-cache-dir --no-build-isolation \
-    git+https://github.com/NVlabs/nvdiffrast/
+    git+https://github.com/NVlabs/nvdiffrast/ \
+    && python3 -c "import nvdiffrast.torch as dr; print('✅ nvdiffrast installed successfully')"
 
 # InstantMesh 依赖
 RUN pip3 install --no-cache-dir \
@@ -32,3 +33,7 @@ RUN pip3 install --no-cache-dir \
     kiui pygltflib imageio
 
 WORKDIR /workspace
+
+# 最终验证
+RUN python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ All dependencies OK')"
+
