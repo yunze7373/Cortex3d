@@ -28,16 +28,17 @@ RUN git clone https://github.com/NVlabs/nvdiffrast.git /opt/nvdiffrast \
 
 
 
-# InstantMesh 依赖 (diffusers 需要固定版本以兼容 zero123plus)
+# InstantMesh 依赖 (使用官方 requirements.txt 指定的版本)
 RUN pip3 install --no-cache-dir \
-    pytorch-lightning \
-    diffusers==0.27.0 transformers accelerate \
-    huggingface_hub==0.23.0 \
+    pytorch-lightning==2.1.2 \
+    diffusers==0.20.2 \
+    transformers==4.34.1 \
+    accelerate \
     einops omegaconf \
     trimesh xatlas pymcubes \
     rembg onnxruntime \
-    pillow tqdm safetensors \
-    kiui pygltflib imageio
+    pillow tqdm huggingface_hub safetensors \
+    kiui pygltflib imageio[ffmpeg] plyfile
 
 WORKDIR /workspace
 
