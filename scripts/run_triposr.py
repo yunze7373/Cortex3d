@@ -25,9 +25,28 @@ def patched_create_context(**kwargs):
     return _original_create_context(**kwargs)
 moderngl.create_context = patched_create_context
 
+# Import tsr modules to patch
+import tsr.bake_texture
 from tsr.system import TSR
 from tsr.utils import remove_background, resize_foreground, save_video
 from tsr.bake_texture import bake_texture
+
+# Monkeypatch positions_to_colors to fix device mismatch (CPU vs CUDA)
+def patched_positions_to_colors(model, scene_code, positions_texture, texture_resolution):
+    device = scene_code.device
+    positions = torch.tensor(positions_texture.reshape(-1, 4)[:, :-1], dtype=torch.float32, device=device)
+    with torch.no_grad():
+        queried_grid = model.renderer.query_triplane(
+            model.decoder,
+            positions,
+            scene_code,
+        )
+    rgb_f = queried_grid["color"].cpu().numpy().reshape(-1, 3)
+    rgba_f = np.insert(rgb_f, 3, positions_texture.reshape(-1, 4)[:, -1], axis=1)
+    rgba_f[rgba_f[:, -1] == 0.0] = [0, 0, 0, 0]
+    return rgba_f.reshape(texture_resolution, texture_resolution, 4)
+
+tsr.bake_texture.positions_to_colors = patched_positions_to_colors
 
 
 class Timer:
