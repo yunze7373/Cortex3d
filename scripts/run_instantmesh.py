@@ -139,7 +139,11 @@ model = instantiate_from_config(model_config)
 if os.path.exists(infer_config.model_path):
     model_ckpt_path = infer_config.model_path
 else:
-    model_ckpt_path = hf_hub_download(repo_id="TencentARC/InstantMesh", filename=f"{config_name.replace('-', '_')}.ckpt", repo_type="model")
+    # Fallback to downloading from HuggingFace
+    # Use the filename defined in the config (e.g. instant_mesh_large.ckpt) 
+    # instead of guessing from the config name
+    ckpt_filename = os.path.basename(infer_config.model_path)
+    model_ckpt_path = hf_hub_download(repo_id="TencentARC/InstantMesh", filename=ckpt_filename, repo_type="model")
 state_dict = torch.load(model_ckpt_path, map_location='cpu')['state_dict']
 state_dict = {k[14:]: v for k, v in state_dict.items() if k.startswith('lrm_generator.')}
 model.load_state_dict(state_dict, strict=True)
