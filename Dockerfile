@@ -25,7 +25,7 @@ RUN pip3 install --no-cache-dir \
 # torchmcubes: TripoSR 需要编译该库
 RUN pip3 install --no-cache-dir pytorch-lightning==2.1.2 einops omegaconf torchmetrics
 RUN pip3 install --no-cache-dir diffusers==0.20.2 transformers==4.35.0 huggingface-hub==0.16.4
-RUN pip3 install --no-cache-dir accelerate==0.24.1 tensorboard trimesh xatlas pymcubes rembg onnxruntime
+RUN pip3 install --no-cache-dir accelerate==0.24.1 tensorboard trimesh xatlas pymcubes rembg onnxruntime moderngl
 RUN pip3 install --no-cache-dir pillow tqdm safetensors kiui pygltflib imageio[ffmpeg] plyfile
 
 # TripoSR 额外依赖 (需编译)
