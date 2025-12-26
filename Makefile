@@ -9,11 +9,11 @@ shell:
 
 # 运行 InstantMesh
 run:
-	docker compose exec $(SVC) python3 /workspace/InstantMesh/run.py $(ARGS)
+	docker compose exec $(SVC) python3 /workspace/scripts/run_instantmesh.py $(ARGS)
 
 # 使用测试图片运行
 test:
-	docker compose exec $(SVC) python3 /workspace/InstantMesh/run.py \
+	docker compose exec $(SVC) python3 /workspace/scripts/run_instantmesh.py \
 		/workspace/InstantMesh/configs/instant-mesh-large.yaml \
 		/workspace/test_images/character_20251226_013442_front.png \
 		--output_path /workspace/outputs
