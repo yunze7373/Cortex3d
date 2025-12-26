@@ -42,6 +42,12 @@ test-triposr:
 check:
 	docker compose exec $(SVC) python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ OK:', torch.cuda.get_device_name(0))"
 
+# 临时修复缺少 GL 库的问题 (避免重建镜像)
+# 增加 xvfb 用于模拟 X11 环境
+fix-gl:
+	docker compose exec $(SVC) apt-get update
+	docker compose exec $(SVC) apt-get install -y libgl1 libegl1 libx11-6 xvfb
+
 # 构建镜像
 build:
 	docker compose build --no-cache

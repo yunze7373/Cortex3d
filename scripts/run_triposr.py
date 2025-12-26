@@ -17,6 +17,14 @@ triposr_root = os.path.join(project_root, "TripoSR")
 sys.path.append(triposr_root)
 
 # Now import from tsr
+import moderngl
+# Monkeypatch moderngl to force EGL backend for headless rendering
+_original_create_context = moderngl.create_context
+def patched_create_context(**kwargs):
+    kwargs['backend'] = 'egl'
+    return _original_create_context(**kwargs)
+moderngl.create_context = patched_create_context
+
 from tsr.system import TSR
 from tsr.utils import remove_background, resize_foreground, save_video
 from tsr.bake_texture import bake_texture
