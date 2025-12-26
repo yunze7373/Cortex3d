@@ -24,7 +24,7 @@ RUN pip3 install --no-cache-dir \
 RUN pip3 install --no-cache-dir \
     pytorch-lightning==2.1.2 einops omegaconf torchmetrics \
     diffusers==0.20.2 transformers==4.34.1 huggingface-hub==0.16.4 \
-    accelerate tensorboard trimesh xatlas pymcubes rembg onnxruntime \
+    accelerate==0.24.1 tensorboard trimesh xatlas pymcubes rembg onnxruntime \
     pillow tqdm safetensors kiui pygltflib imageio[ffmpeg] plyfile
 
 # nvdiffrast - 移到最后安装，防止被其他 pip 操作影响
