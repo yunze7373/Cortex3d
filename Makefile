@@ -29,6 +29,15 @@ test-hq:
 		--texture_resolution 2048 \
 		--guidance_scale 7.5
 
+# 运行 TripoSR 测试 (几何锐度高)
+test-triposr:
+	docker compose exec $(SVC) python3 /workspace/scripts/run_triposr.py \
+		/workspace/test_images/character_20251226_013442_front.png \
+		--output-dir /workspace/outputs/triposr \
+		--bake-texture \
+		--texture-resolution 2048 \
+		--no-remove-bg
+
 # 检查环境
 check:
 	docker compose exec $(SVC) python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ OK:', torch.cuda.get_device_name(0))"
