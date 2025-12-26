@@ -30,7 +30,7 @@ RUN git clone https://github.com/NVlabs/nvdiffrast.git /opt/nvdiffrast \
 
 # InstantMesh 依赖 (使用官方版本，分步安装避免 resolver 问题)
 RUN pip3 install --no-cache-dir pytorch-lightning==2.1.2 einops omegaconf torchmetrics
-RUN pip3 install --no-cache-dir diffusers==0.20.2 transformers==4.34.1 huggingface-hub==0.19.4
+RUN pip3 install --no-cache-dir diffusers==0.20.2 transformers==4.34.1
 RUN pip3 install --no-cache-dir accelerate tensorboard trimesh xatlas pymcubes rembg onnxruntime
 RUN pip3 install --no-cache-dir pillow tqdm safetensors kiui pygltflib imageio[ffmpeg] plyfile
 
