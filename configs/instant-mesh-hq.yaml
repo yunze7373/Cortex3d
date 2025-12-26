@@ -10,8 +10,8 @@ model_config:
     triplane_low_res: 32
     triplane_high_res: 64
     triplane_dim: 80
-    rendering_samples_per_ray: 256
-    grid_res: 256
+    rendering_samples_per_ray: 128
+    grid_res: 128
     grid_scale: 2.1
 
 
