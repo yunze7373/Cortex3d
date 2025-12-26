@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
     ninja-build g++ \
     && rm -rf /var/lib/apt/lists/*
 
+# 升级 pip
+RUN pip3 install --upgrade pip
+
 # PyTorch + CUDA 12.1
 RUN pip3 install --no-cache-dir \
     torch torchvision \
@@ -20,29 +23,21 @@ RUN pip3 install --no-cache-dir \
 # nvdiffrast - 安装并修补 __init__.py 以解决包元数据问题
 RUN git clone https://github.com/NVlabs/nvdiffrast.git /opt/nvdiffrast \
     && cd /opt/nvdiffrast \
-    # 修补 __init__.py，移除 version 查询以避免 PackageNotFoundError
     && sed -i 's/from importlib.metadata import version/__version__ = "0.3.1"  # patched\n# from importlib.metadata import version/' nvdiffrast/__init__.py \
     && sed -i 's/__version__ = version(__package__ or .nvdiffrast.)/__version__ = __version__  # patched/' nvdiffrast/__init__.py \
     && pip3 install --no-cache-dir --no-build-isolation -e . \
     && python3 -c "import nvdiffrast.torch as dr; print('✅ nvdiffrast installed successfully')"
 
-
-
-# InstantMesh 依赖 (使用官方 requirements.txt 指定的版本)
-RUN pip3 install --no-cache-dir \
-    pytorch-lightning==2.1.2 \
-    diffusers==0.20.2 \
-    transformers==4.34.1 \
-    accelerate \
-    einops omegaconf \
-    trimesh xatlas pymcubes \
-    rembg onnxruntime \
-    pillow tqdm huggingface_hub safetensors \
-    kiui pygltflib imageio[ffmpeg] plyfile
+# InstantMesh 依赖 (使用官方版本，分步安装避免 resolver 问题)
+RUN pip3 install --no-cache-dir pytorch-lightning==2.1.2 einops omegaconf torchmetrics
+RUN pip3 install --no-cache-dir diffusers==0.20.2 transformers==4.34.1 huggingface-hub==0.19.4
+RUN pip3 install --no-cache-dir accelerate tensorboard trimesh xatlas pymcubes rembg onnxruntime
+RUN pip3 install --no-cache-dir pillow tqdm safetensors kiui pygltflib imageio[ffmpeg] plyfile
 
 WORKDIR /workspace
 
 # 最终验证
 RUN python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ All dependencies OK')"
+
 
 

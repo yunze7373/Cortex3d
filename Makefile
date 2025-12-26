@@ -11,13 +11,18 @@ shell:
 run:
 	docker compose exec $(SVC) python3 /workspace/InstantMesh/run.py $(ARGS)
 
-# 使用测试图片运行
+# 使用测试图片运行 (使用本地 zero123plus pipeline)
 test:
 	docker compose exec $(SVC) python3 /workspace/InstantMesh/run.py \
 		/workspace/InstantMesh/configs/instant-mesh-large.yaml \
 		/workspace/test_images/character_20251226_013442_front.png \
 		--output_path /workspace/outputs
 
+# 修补 run.py 使用本地 zero123plus (只需运行一次)
+patch:
+	docker compose exec $(SVC) bash -c "cd /workspace/InstantMesh && \
+		sed -i 's|custom_pipeline=\"zero123plus\"|custom_pipeline=\"./zero123plus\"|' run.py && \
+		echo '✅ run.py patched to use local zero123plus'"
 
 # 检查环境
 check:
