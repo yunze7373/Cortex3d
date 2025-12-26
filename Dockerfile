@@ -20,11 +20,12 @@ RUN pip3 install --no-cache-dir \
     torch torchvision \
     --index-url https://download.pytorch.org/whl/cu121
 
-# InstantMesh 依赖 (使用官方版本，分步安装避免 resolver 问题)
-RUN pip3 install --no-cache-dir pytorch-lightning==2.1.2 einops omegaconf torchmetrics
-RUN pip3 install --no-cache-dir diffusers==0.20.2 transformers==4.34.1 huggingface-hub==0.25.2
-RUN pip3 install --no-cache-dir accelerate tensorboard trimesh xatlas pymcubes rembg onnxruntime
-RUN pip3 install --no-cache-dir pillow tqdm safetensors kiui pygltflib imageio[ffmpeg] plyfile
+# InstantMesh 依赖 (合并安装以确保依赖解析一致性)
+RUN pip3 install --no-cache-dir \
+    pytorch-lightning==2.1.2 einops omegaconf torchmetrics \
+    diffusers==0.20.2 transformers==4.34.1 huggingface-hub==0.16.4 \
+    accelerate tensorboard trimesh xatlas pymcubes rembg onnxruntime \
+    pillow tqdm safetensors kiui pygltflib imageio[ffmpeg] plyfile
 
 # nvdiffrast - 移到最后安装，防止被其他 pip 操作影响
 RUN git clone https://github.com/NVlabs/nvdiffrast.git /opt/nvdiffrast \
