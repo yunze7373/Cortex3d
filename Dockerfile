@@ -17,9 +17,11 @@ RUN pip3 install --no-cache-dir \
     torch torchvision \
     --index-url https://download.pytorch.org/whl/cu121
 
-# nvdiffrast (必须在 PyTorch 之后安装，需要 --no-build-isolation)
-RUN pip3 install --no-cache-dir --no-build-isolation \
-    git+https://github.com/NVlabs/nvdiffrast/ \
+# nvdiffrast - 克隆并本地安装（解决包名识别问题）
+RUN git clone https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast \
+    && cd /tmp/nvdiffrast \
+    && pip3 install --no-cache-dir --no-build-isolation . \
+    && cd / && rm -rf /tmp/nvdiffrast \
     && python3 -c "import nvdiffrast.torch as dr; print('✅ nvdiffrast installed successfully')"
 
 # InstantMesh 依赖
@@ -36,4 +38,5 @@ WORKDIR /workspace
 
 # 最终验证
 RUN python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ All dependencies OK')"
+
 
