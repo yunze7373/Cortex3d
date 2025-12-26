@@ -12,8 +12,8 @@ RUN apt-get update && apt-get install -y \
     ninja-build g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# 升级 pip
-RUN pip3 install --upgrade pip
+# 升级 pip 及构建工具
+RUN pip3 install --upgrade pip setuptools wheel
 
 # PyTorch + CUDA 12.1
 RUN pip3 install --no-cache-dir \
