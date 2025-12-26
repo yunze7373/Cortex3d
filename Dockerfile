@@ -20,7 +20,13 @@ RUN pip3 install --no-cache-dir \
     torch torchvision \
     --index-url https://download.pytorch.org/whl/cu121
 
-# nvdiffrast - 安装并修补 __init__.py 以解决包元数据问题
+# InstantMesh 依赖 (使用官方版本，分步安装避免 resolver 问题)
+RUN pip3 install --no-cache-dir pytorch-lightning==2.1.2 einops omegaconf torchmetrics
+RUN pip3 install --no-cache-dir diffusers==0.20.2 transformers==4.34.1
+RUN pip3 install --no-cache-dir accelerate tensorboard trimesh xatlas pymcubes rembg onnxruntime
+RUN pip3 install --no-cache-dir pillow tqdm safetensors kiui pygltflib imageio[ffmpeg] plyfile
+
+# nvdiffrast - 移到最后安装，防止被其他 pip 操作影响
 RUN git clone https://github.com/NVlabs/nvdiffrast.git /opt/nvdiffrast \
     && cd /opt/nvdiffrast \
     && sed -i 's/from importlib.metadata import version/__version__ = "0.3.1"  # patched\n# from importlib.metadata import version/' nvdiffrast/__init__.py \
@@ -28,16 +34,10 @@ RUN git clone https://github.com/NVlabs/nvdiffrast.git /opt/nvdiffrast \
     && pip3 install --no-cache-dir --no-build-isolation . \
     && python3 -c "import nvdiffrast.torch as dr; print('✅ nvdiffrast installed successfully')"
 
-# InstantMesh 依赖 (使用官方版本，分步安装避免 resolver 问题)
-RUN pip3 install --no-cache-dir pytorch-lightning==2.1.2 einops omegaconf torchmetrics
-RUN pip3 install --no-cache-dir diffusers==0.20.2 transformers==4.34.1
-RUN pip3 install --no-cache-dir accelerate tensorboard trimesh xatlas pymcubes rembg onnxruntime
-RUN pip3 install --no-cache-dir pillow tqdm safetensors kiui pygltflib imageio[ffmpeg] plyfile
-
 WORKDIR /workspace
 
-# 最终验证
-RUN python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ All dependencies OK')"
+# 最终验证 (包含 pip list 以便调试)
+RUN pip3 list | grep nvdiffrast && python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ All dependencies OK')"
 
 
 
