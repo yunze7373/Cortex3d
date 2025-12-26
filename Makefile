@@ -13,7 +13,11 @@ run:
 
 # 使用测试图片运行
 test:
-	docker compose exec $(SVC) python3 /workspace/InstantMesh/run.py /workspace/test_images/character_20251226_013442_front.png --output_dir /workspace/outputs
+	docker compose exec $(SVC) python3 /workspace/InstantMesh/run.py \
+		/workspace/InstantMesh/configs/instant-mesh-large.yaml \
+		/workspace/test_images/character_20251226_013442_front.png \
+		--output_path /workspace/outputs
+
 
 # 检查环境
 check:
