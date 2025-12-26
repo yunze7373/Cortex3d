@@ -230,3 +230,6 @@ def main():
             meshes[0].export(out_mesh_path)
             timer.end(f"Exporting mesh for {name}")
             logging.info(f"Mesh saved to {out_mesh_path}")
+
+if __name__ == "__main__":
+    main()
