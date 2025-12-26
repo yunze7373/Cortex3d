@@ -8,6 +8,7 @@ import numpy as np
 import rembg
 import torch
 import xatlas
+import trimesh
 from PIL import Image
 
 # Add TripoSR submodule to path
@@ -232,6 +233,10 @@ def main():
         # Let's follow reference: `meshes = model.extract_mesh(scene_codes, not args.bake_texture, resolution=args.mc_resolution)`
         meshes = model.extract_mesh(scene_codes, has_vertex_color=not args.bake_texture, resolution=args.mc_resolution)
         timer.end(f"Extracting mesh for {name}")
+
+        # Smooth the mesh to remove Marching Cubes artifacts (blockiness)
+        logging.info("Applying Laplacian smoothing...")
+        trimesh.smoothing.filter_laplacian(meshes[0], iterations=5)
 
         out_mesh_path = os.path.join(save_dir, f"{name}.{args.model_save_format}")
 
