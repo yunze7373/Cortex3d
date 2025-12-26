@@ -241,7 +241,26 @@ def main():
             bake_output = bake_texture(meshes[0], model, scene_codes[0], args.texture_resolution)
             timer.end(f"Baking texture for {name}")
 
+            timer.end(f"Baking texture for {name}")
+
+            # Scale model to real-world size (e.g. 100mm height)
+            # TripoSR outputs normalized coordinates approx [-0.5, 0.5]
+            # Slicers usually treat 1 unit = 1mm. So 1 unit height = 1mm (too small).
+            # We scale it to 100mm (10cm) standard figure height.
+            target_height = 100.0
+            
+            # Calculate current height
+            vs = meshes[0].vertices
+            ymin, ymax = vs[:, 1].min(), vs[:, 1].max()
+            current_height = ymax - ymin
+            if current_height > 0:
+                scale_factor = target_height / current_height
+                logging.info(f"Scaling model by {scale_factor:.2f} to reach {target_height}mm height")
+                # Scale vertices
+                meshes[0].vertices *= scale_factor
+            
             timer.start("Exporting mesh and texture")
+            # Note: We use the SCALED vertices for export
             xatlas.export(
                 out_mesh_path, 
                 meshes[0].vertices[bake_output["vmapping"]], 
@@ -253,6 +272,15 @@ def main():
             timer.end("Exporting mesh and texture")
             logging.info(f"Mesh and texture saved to {out_mesh_path}")
         else:
+            # Scale for non-textured export too
+            target_height = 100.0
+            vs = meshes[0].vertices
+            ymin, ymax = vs[:, 1].min(), vs[:, 1].max()
+            current_height = ymax - ymin
+            if current_height > 0:
+                scale_factor = target_height / current_height
+                meshes[0].vertices *= scale_factor
+
             timer.start(f"Exporting mesh for {name}")
             meshes[0].export(out_mesh_path)
             timer.end(f"Exporting mesh for {name}")
