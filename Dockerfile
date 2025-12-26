@@ -36,8 +36,8 @@ RUN git clone https://github.com/NVlabs/nvdiffrast.git /opt/nvdiffrast \
 
 WORKDIR /workspace
 
-# 最终验证 (包含 pip list 以便调试)
-RUN pip3 list | grep nvdiffrast && python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ All dependencies OK')"
+# 最终验证
+RUN python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ All dependencies OK')"
 
 
 
