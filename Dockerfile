@@ -17,11 +17,15 @@ RUN pip3 install --no-cache-dir \
     torch torchvision \
     --index-url https://download.pytorch.org/whl/cu121
 
-# nvdiffrast - 使用 editable 模式安装（保留源码以确保包名正确）
+# nvdiffrast - 安装并修补 __init__.py 以解决包元数据问题
 RUN git clone https://github.com/NVlabs/nvdiffrast.git /opt/nvdiffrast \
     && cd /opt/nvdiffrast \
+    # 修补 __init__.py，移除 version 查询以避免 PackageNotFoundError
+    && sed -i 's/from importlib.metadata import version/__version__ = "0.3.1"  # patched\n# from importlib.metadata import version/' nvdiffrast/__init__.py \
+    && sed -i 's/__version__ = version(__package__ or .nvdiffrast.)/__version__ = __version__  # patched/' nvdiffrast/__init__.py \
     && pip3 install --no-cache-dir --no-build-isolation -e . \
     && python3 -c "import nvdiffrast.torch as dr; print('✅ nvdiffrast installed successfully')"
+
 
 
 # InstantMesh 依赖
