@@ -86,6 +86,8 @@ parser.add_argument('--view', type=int, default=6, choices=[4, 6], help='Number 
 parser.add_argument('--no_rembg', action='store_true', help='Do not remove input background.')
 parser.add_argument('--export_texmap', action='store_true', help='Export a mesh with texture map.')
 parser.add_argument('--save_video', action='store_true', help='Save a circular-view video.')
+parser.add_argument('--texture_resolution', type=int, default=None, help='Override texture resolution.')
+parser.add_argument('--guidance_scale', type=float, default=7.5, help='Classifier-free guidance scale.')
 args = parser.parse_args()
 seed_everything(args.seed)
 
@@ -97,6 +99,9 @@ config = OmegaConf.load(args.config)
 config_name = os.path.basename(args.config).replace('.yaml', '')
 model_config = config.model_config
 infer_config = config.infer_config
+
+if args.texture_resolution is not None:
+    infer_config.texture_resolution = args.texture_resolution
 
 IS_FLEXICUBES = True if config_name.startswith('instant-mesh') else False
 
@@ -177,14 +182,27 @@ for idx, image_file in enumerate(input_files):
 
     # remove background optionally
     input_image = Image.open(image_file)
-    if not args.no_rembg:
+    
+    # Smart background handling
+    has_alpha = False
+    if input_image.mode == 'RGBA':
+        alpha_extrema = input_image.split()[-1].getextrema()
+        if alpha_extrema[0] < 255:  # Has transparent pixels
+            has_alpha = True
+
+    if not args.no_rembg and not has_alpha:
         input_image = remove_background(input_image, rembg_session)
+        input_image = resize_foreground(input_image, 0.85)
+    elif has_alpha:
+        # If image already has alpha (e.g. from image_processor.py), 
+        # we skip rembg but still center/resize it for optimal 3D generation
         input_image = resize_foreground(input_image, 0.85)
     
     # sampling
     output_image = pipeline(
         input_image, 
         num_inference_steps=args.diffusion_steps, 
+        guidance_scale=args.guidance_scale,
     ).images[0]
 
     output_image.save(os.path.join(image_path, f'{name}.png'))

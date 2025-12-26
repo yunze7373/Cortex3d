@@ -11,12 +11,23 @@ shell:
 run:
 	docker compose exec $(SVC) python3 /workspace/scripts/run_instantmesh.py $(ARGS)
 
-# 使用测试图片运行
+# 使用测试图片运行 (标准质量 75 steps, 1024 tex)
 test:
 	docker compose exec $(SVC) python3 /workspace/scripts/run_instantmesh.py \
 		/workspace/InstantMesh/configs/instant-mesh-large.yaml \
 		/workspace/test_images/character_20251226_013442_front.png \
 		--output_path /workspace/outputs
+
+# 使用测试图片运行 (高质量 200 steps, 2048 tex)
+# 增加 diffusion steps 和 texture resolution
+test-hq:
+	docker compose exec $(SVC) python3 /workspace/scripts/run_instantmesh.py \
+		/workspace/InstantMesh/configs/instant-mesh-large.yaml \
+		/workspace/test_images/character_20251226_013442_front.png \
+		--output_path /workspace/outputs \
+		--diffusion_steps 200 \
+		--texture_resolution 2048 \
+		--guidance_scale 7.5
 
 # 检查环境
 check:
