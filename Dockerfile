@@ -32,10 +32,11 @@ RUN git clone https://github.com/NVlabs/nvdiffrast.git /opt/nvdiffrast \
 RUN pip3 install --no-cache-dir \
     pytorch-lightning \
     diffusers==0.27.0 transformers accelerate \
+    huggingface_hub==0.23.0 \
     einops omegaconf \
     trimesh xatlas pymcubes \
     rembg onnxruntime \
-    pillow tqdm huggingface_hub safetensors \
+    pillow tqdm safetensors \
     kiui pygltflib imageio
 
 WORKDIR /workspace
