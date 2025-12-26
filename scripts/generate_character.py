@@ -108,6 +108,12 @@ def main():
         if not description:
             description = "末日幸存者，穿着破烂的定制西装，白衬衫沾满血迹和污垢，肩部皮质枪套，表情坚毅疲惫"
             print(f"[使用示例描述] {description}")
+
+    # 自动增强提示词 (特别是面部)
+    enhancements = ", detailed face, delicate features, high resolution, 8k, masterpiece, photorealistic, sharp focus"
+    if "face" not in description.lower() and "feature" not in description.lower():
+         description += enhancements
+         print(f"[提示词增强] {description}")
     
     # 调用生成器
     if args.mode == "proxy":

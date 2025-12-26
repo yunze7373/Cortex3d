@@ -22,7 +22,7 @@ test:
 # 增加 diffusion steps 和 texture resolution
 test-hq:
 	docker compose exec $(SVC) python3 /workspace/scripts/run_instantmesh.py \
-		/workspace/InstantMesh/configs/instant-mesh-large.yaml \
+		/workspace/configs/instant-mesh-hq.yaml \
 		/workspace/test_images/character_20251226_013442_front.png \
 		--output_path /workspace/outputs \
 		--diffusion_steps 200 \
