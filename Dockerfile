@@ -24,7 +24,7 @@ RUN pip3 install --no-cache-dir \
 # transformers 4.35.0: TripoSR 需要
 # diffusers 0.29.0: Upgrade for Marigold support (InstantMesh compatible via pipe API)
 RUN pip3 install --no-cache-dir pytorch-lightning==2.1.2 einops omegaconf torchmetrics
-RUN pip3 install --no-cache-dir diffusers==0.29.0 transformers==4.35.0 huggingface-hub>=0.23.2
+RUN pip3 install --no-cache-dir diffusers==0.29.0 transformers huggingface-hub>=0.23.2
 RUN pip3 install --no-cache-dir accelerate==0.24.1 tensorboard trimesh xatlas pymcubes rembg onnxruntime moderngl
 RUN pip3 install --no-cache-dir pillow tqdm safetensors kiui pygltflib imageio[ffmpeg] plyfile
 
