@@ -84,7 +84,7 @@ def process_mesh(mesh_path, displacement_path, output_path, strength=0.15, voxel
     # 5. Decimate (Reduce file size for printing)
     # Target ~500k faces
     mod_dec = obj.modifiers.new(name="Decimate_Final", type='DECIMATE')
-    mod_dec.params["COLLAPSE"].ratio = 0.5 # Aggressive reduction
+    mod_dec.ratio = 0.5 # Aggressive reduction
     # Or use face count
     # mod_dec.ratio = 500000 / len(obj.data.polygons)
     
