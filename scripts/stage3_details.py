@@ -70,18 +70,20 @@ def process_image(pipe, image_path, output_dir):
         output_type="np",  # Request numpy output directly
     )
     
-    logging.info(f"Output attributes: {dir(pipeline_output)}")
-    
-    # Try common attributes
-    if hasattr(pipeline_output, "depth_np"):
-        depth_pred = pipeline_output.depth_np
-    elif hasattr(pipeline_output, "depth"):
-        depth_pred = pipeline_output.depth[0]
-    elif hasattr(pipeline_output, "prediction"):
+    # Marigold output attribute is 'prediction'
+    if hasattr(pipeline_output, "prediction"):
         depth_pred = pipeline_output.prediction
     else:
-        # Check if it behaves like a dict or list
-        logging.error(f"Unknown output format. Output: {pipeline_output}")
+        # Fallback/Debug
+        logging.error(f"Unknown output format. Attributes: {dir(pipeline_output)}")
+        sys.exit(1)
+        
+    # Squeeze dimensions: (1, 1, H, W) -> (H, W)
+    depth_pred = depth_pred.squeeze()
+    
+    # Ensure it's 2D
+    if len(depth_pred.shape) != 2:
+        logging.error(f"Unexpected depth map shape: {depth_pred.shape}")
         sys.exit(1)
     
     # Save as 16-bit PNG (or EXR if needed, but PNG is easier for Blender)
@@ -96,10 +98,11 @@ def process_image(pipe, image_path, output_dir):
     Image.fromarray(depth_uint16).save(output_path, mode="I;16")
     logging.info(f"Saved 16-bit displacement map: {output_path}")
 
-    # Optional: Save visualization
-    vis_path = output_dir / f"{filename}_vis.png"
-    pipeline_output.depth_colored.save(vis_path)
-    logging.info(f"Saved visualization: {vis_path}")
+    # Optional: Save visualization if available
+    if hasattr(pipeline_output, "depth_colored"):
+         vis_path = output_dir / f"{filename}_vis.png"
+         pipeline_output.depth_colored.save(vis_path)
+         logging.info(f"Saved visualization: {vis_path}")
 
 def main():
     parser = argparse.ArgumentParser(description="Stage 3: Detail Generation (Marigold)")
