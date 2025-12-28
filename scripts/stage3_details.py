@@ -65,11 +65,12 @@ def process_image(pipe, image_path, output_dir):
     pipeline_output = pipe(
         image,
         num_inference_steps=4,
-        ensemble_size=1,  # Speed over quality for now
+        ensemble_size=1,
         match_input_resolution=False,
+        output_type="np",  # Request numpy output directly
     )
     
-    depth_pred: np.ndarray = pipeline_output.depth_np
+    depth_pred: np.ndarray = pipeline_output.depth[0]  # It returns a batch, take first item
     
     # Save as 16-bit PNG (or EXR if needed, but PNG is easier for Blender)
     # Marigold output is normalized 0-1.
