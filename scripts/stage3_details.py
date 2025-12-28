@@ -38,9 +38,18 @@ def setup_pipeline():
             logging.warning("Pipeline loaded on CPU (Slow!)")
             
         return pipe
-    except ImportError:
-        logging.error("Failed to import diffusers. Please install dependencies.")
-        logging.error("pip install diffusers transformers minimize accelerate")
+    except ImportError as e:
+        logging.error(f"Failed to import diffusers or Marigold pipeline: {e}")
+        logging.error("Check if 'diffusers' >= 0.28.0 is installed.")
+        # Try to debug imports
+        try:
+            import diffusers
+            logging.info(f"Diffusers version: {diffusers.__version__}")
+        except ImportError:
+            logging.error("Diffusers package not found at all.")
+        sys.exit(1)
+    except Exception as e:
+        logging.error(f"Unexpected error during pipeline loading: {e}")
         sys.exit(1)
 
 def process_image(pipe, image_path, output_dir):
