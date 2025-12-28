@@ -91,7 +91,7 @@ def process_mesh(mesh_path, displacement_path, output_path, strength=0.15, voxel
     bpy.ops.object.modifier_apply(modifier="Decimate_Final")
     
     # 6. Export STL
-    bpy.ops.export_mesh.stl(filepath=output_path, use_selection=True)
+    bpy.ops.wm.stl_export(filepath=output_path, export_selected_objects=True)
     print(f"[SUCCESS] Exported to {output_path}")
 
 if __name__ == "__main__":
