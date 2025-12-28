@@ -38,6 +38,27 @@ test-triposr:
 		--texture-resolution 2048 \
 		--mc-resolution 1024
 
+# --- Unified Pipeline Targets ---
+
+# Stage 2: Unified Reconstruction (Auto/InstantMesh/TripoSR)
+reconstruct:
+	docker compose exec $(SVC) python3 /workspace/scripts/reconstructor.py \
+		/workspace/test_images/character_20251226_013442_front.png \
+		--algo auto --quality balanced
+
+# Stage 3: Detail Generation (Marigold)
+stage3:
+	docker compose exec $(SVC) python3 /workspace/scripts/stage3_details.py \
+		/workspace/test_images/character_20251226_013442_front.png
+
+# Stage 4: Blender Refinement
+# Note: Requires Blender installed in Docker or local path mapped
+stage4:
+	docker compose exec $(SVC) python3 /workspace/scripts/blender_factory.py \
+		--mesh /workspace/outputs/instantmesh/character_20251226_013442_front.obj \
+		--displacement /workspace/outputs/stage3/character_20251226_013442_front_displacement.png \
+		--output /workspace/outputs/final_print.stl
+
 # 检查环境
 check:
 	docker compose exec $(SVC) python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ OK:', torch.cuda.get_device_name(0))"

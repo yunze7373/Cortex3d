@@ -8,6 +8,7 @@ import numpy as np
 import rembg
 import torch
 import xatlas
+from tsr.utils import scale_tensor
 import trimesh
 from PIL import Image
 
@@ -48,6 +49,68 @@ def patched_positions_to_colors(model, scene_code, positions_texture, texture_re
     return rgba_f.reshape(texture_resolution, texture_resolution, 4)
 
 tsr.bake_texture.positions_to_colors = patched_positions_to_colors
+
+class PatchedTSR(TSR):
+    def extract_mesh(self, scene_codes, has_vertex_color, resolution: int = 256, threshold: float = 25.0):
+        self.set_marching_cubes_resolution(resolution)
+        meshes = []
+        for scene_code in scene_codes:
+            # Chunk strategy for density query to avoid OOM
+            grid_vertices = self.isosurface_helper.grid_vertices
+            chunk_size = 65536 * 4  # ~260k points per chunk
+            densities = []
+            num_points = grid_vertices.shape[0]
+            
+            logging.info(f"Querying density field in chunks (Total points: {num_points}, Chunk size: {chunk_size})...")
+            
+            for i in range(0, num_points, chunk_size):
+                chunk = grid_vertices[i:i+chunk_size].to(scene_code.device)
+                scaled_chunk = scale_tensor(
+                    chunk,
+                    self.isosurface_helper.points_range,
+                    (-self.renderer.cfg.radius, self.renderer.cfg.radius),
+                )
+                with torch.no_grad():
+                    density_chunk = self.renderer.query_triplane(
+                        self.decoder,
+                        scaled_chunk,
+                        scene_code,
+                    )["density_act"]
+                densities.append(density_chunk.cpu())
+                
+            density = torch.cat(densities, dim=0)
+    
+            v_pos, t_pos_idx = self.isosurface_helper(-(density - threshold))
+            
+            v_pos = scale_tensor(
+                v_pos,
+                self.isosurface_helper.points_range,
+                (-self.renderer.cfg.radius, self.renderer.cfg.radius),
+            )
+    
+            color = None
+            if has_vertex_color:
+                num_v_points = v_pos.shape[0]
+                logging.info(f"Querying color field in chunks (Total vertices: {num_v_points})...")
+                colors = []
+                for i in range(0, num_v_points, chunk_size):
+                    chunk_v = v_pos[i:i+chunk_size].to(scene_code.device)
+                    with torch.no_grad():
+                        color_chunk = self.renderer.query_triplane(
+                            self.decoder,
+                            chunk_v,
+                            scene_code,
+                        )["color"]
+                    colors.append(color_chunk.cpu())
+                color = torch.cat(colors, dim=0)
+    
+            mesh = trimesh.Trimesh(
+                vertices=v_pos.cpu().numpy(),
+                faces=t_pos_idx.cpu().numpy(),
+                vertex_colors=color.cpu().numpy() if has_vertex_color else None,
+            )
+            meshes.append(mesh)
+        return meshes
 
 
 class Timer:
@@ -155,7 +218,7 @@ def main():
         device = "cpu"
 
     timer.start("Initializing model")
-    model = TSR.from_pretrained(
+    model = PatchedTSR.from_pretrained(
         args.pretrained_model_name_or_path,
         config_name="config.yaml",
         weight_name="model.ckpt",
