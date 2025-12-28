@@ -8,7 +8,6 @@ import numpy as np
 import rembg
 import torch
 import xatlas
-from tsr.utils import scale_tensor
 import trimesh
 from PIL import Image
 
@@ -19,6 +18,7 @@ triposr_root = os.path.join(project_root, "TripoSR")
 sys.path.append(triposr_root)
 
 # Now import from tsr
+from tsr.utils import scale_tensor
 import moderngl
 # Monkeypatch moderngl to force EGL backend for headless rendering
 _original_create_context = moderngl.create_context

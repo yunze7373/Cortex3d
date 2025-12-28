@@ -54,10 +54,15 @@ def run_instantmesh(image_path, output_dir, quality="balanced"):
         logging.error(f"Wrapper script not found: {script_path}")
         return False
 
+    IM_CONFIG = PROJECT_ROOT / "InstantMesh" / "configs" / "instant-mesh-large.yaml"
+    if quality == "high":
+        IM_CONFIG = PROJECT_ROOT / "configs" / "instant-mesh-hq.yaml" # Assuming this exists or using large as base
+
     cmd = [
         sys.executable, str(script_path),
+        str(IM_CONFIG),
         str(image_path),
-        "--output_dir", str(output_dir),
+        "--output_path", str(output_dir),
         "--export_texmap"
     ]
     
