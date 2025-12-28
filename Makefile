@@ -55,7 +55,7 @@ stage3:
 # Note: Requires Blender installed in Docker or local path mapped
 stage4:
 	docker compose exec $(SVC) python3 /workspace/scripts/blender_factory.py \
-		--mesh /workspace/outputs/instantmesh/character_20251226_013442_front.obj \
+		--mesh /workspace/outputs/instantmesh/instant-mesh-large/meshes/character_20251226_013442_front.obj \
 		--displacement /workspace/outputs/stage3/character_20251226_013442_front_displacement.png \
 		--output /workspace/outputs/final_print.stl
 
