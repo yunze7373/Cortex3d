@@ -38,10 +38,9 @@ def check_blender():
 def main():
     parser = argparse.ArgumentParser(description="Stage 4: Blender Geometry Refinement")
     parser.add_argument("--mesh", type=Path, required=True, help="Input mesh (.obj/.glb)")
-    parser.add_argument("--displacement", type=Path, required=True, help="Input displacement map (.exr/.png)")
     parser.add_argument("--output", type=Path, required=True, help="Output STL path")
-    parser.add_argument("--strength", type=float, default=0.15, help="Displacement strength")
-    parser.add_argument("--voxel_size", type=float, default=0.2, help="Voxel remesh size (mm) - technically blender units, adjusted in script")
+    parser.add_argument("--height_mm", type=float, default=100.0, help="Target height in mm")
+    parser.add_argument("--voxel_size_mm", type=float, default=0.1, help="Voxel remesh size (mm)")
     
     args = parser.parse_args()
     
@@ -56,10 +55,6 @@ def main():
         logging.error(f"Mesh not found: {args.mesh}")
         sys.exit(1)
         
-    if not args.displacement.exists():
-        logging.error(f"Displacement map not found: {args.displacement}")
-        sys.exit(1)
-        
     # Construct Blender command
     # blender -b -P refinement.py -- --mesh ...
     cmd = [
@@ -68,10 +63,9 @@ def main():
         "--python", str(REFINEMENT_SCRIPT),
         "--",  # Pass args to python script
         "--mesh", str(args.mesh.absolute()),
-        "--displacement", str(args.displacement.absolute()),
         "--output", str(args.output.absolute()),
-        "--strength", str(args.strength),
-        "--voxel_size", str(args.voxel_size)
+        "--height_mm", str(args.height_mm),
+        "--voxel_size_mm", str(args.voxel_size_mm)
     ]
     
     logging.info("Starting Blender process...")

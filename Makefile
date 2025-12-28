@@ -40,13 +40,20 @@ test-triposr:
 
 # --- Unified Pipeline Targets ---
 
+# --- Unified Pipeline Targets ---
+
+# Full Pipeline (Stage 2 + Stage 4)
+pipeline: reconstruct stage4
+
 # Stage 2: Unified Reconstruction (Auto/InstantMesh/TripoSR)
+# Defaulting to High Quality for better input to Blender
 reconstruct:
 	docker compose exec $(SVC) python3 /workspace/scripts/reconstructor.py \
 		/workspace/test_images/character_20251226_013442_front.png \
-		--algo auto --quality balanced
+		--algo auto --quality high
 
-# Stage 3: Detail Generation (Marigold)
+# Stage 3: Detail Generation (Marigold) - OPTIONAL / DEPRECATED for now
+# Keeping it for reference but not processing it in main pipeline
 stage3:
 	docker compose exec $(SVC) python3 /workspace/scripts/stage3_details.py \
 		/workspace/test_images/character_20251226_013442_front.png
@@ -55,9 +62,10 @@ stage3:
 # Note: Requires Blender installed in Docker or local path mapped
 stage4:
 	docker compose exec $(SVC) python3 /workspace/scripts/blender_factory.py \
-		--mesh /workspace/outputs/instantmesh/instant-mesh-large/meshes/character_20251226_013442_front.obj \
-		--displacement /workspace/outputs/stage3/character_20251226_013442_front_displacement.png \
-		--output /workspace/outputs/final_print.stl
+		--mesh /workspace/outputs/instantmesh/instant-mesh-hq/meshes/character_20251226_013442_front.obj \
+		--output /workspace/outputs/final_print.stl \
+		--height_mm 100 \
+		--voxel_size_mm 0.1
 
 # 检查环境
 check:

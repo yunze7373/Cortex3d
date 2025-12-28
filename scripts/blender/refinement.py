@@ -2,13 +2,19 @@ import bpy
 import argparse
 import sys
 import bmesh
+import math
 
 def cleanup_scene():
-    """Remove all objects from the scene"""
+    """Remove all objects from the scene to start fresh."""
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete()
 
-def process_mesh(mesh_path, displacement_path, output_path, strength=0.15, voxel_size_mm=0.2):
+def process_mesh(mesh_path, output_path, target_height_mm=100.0, voxel_size_mm=0.1):
+    """
+    Imports a mesh, scales it to a specific height, remeshes it for printing, and exports to STL.
+    """
+    print(f"[INFO] Processing: {mesh_path}")
+    
     # 1. Import Mesh
     if mesh_path.lower().endswith('.obj'):
         bpy.ops.wm.obj_import(filepath=mesh_path)
@@ -18,84 +24,84 @@ def process_mesh(mesh_path, displacement_path, output_path, strength=0.15, voxel
         print(f"[ERROR] Unsupported mesh format: {mesh_path}")
         sys.exit(1)
         
+    # Select the imported object
+    # usually the first selected object is the one we want
     obj = bpy.context.selected_objects[0]
     bpy.context.view_layer.objects.active = obj
     
-    # Ensure Scale is applied (Unit scale is crucial for displacement)
+    # 2. Geometry Cleanup (Pre-optimization)
+    # Join if multiple objects were imported (unlikely for InstantMesh but good practice)
+    if len(bpy.context.selected_objects) > 1:
+        bpy.ops.object.join()
+        
+    # 3. Standardize Scale (Crucial for Voxel Remesh)
+    # We want the Z-height to be exactly target_height_mm (e.g., 100mm)
+    # Blender's default unit is usually Meters. 100mm = 0.1m.
+    
+    # First, apply all transforms so we get real dimensions
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     
-    # 2. Add Subdivision Surface (Multires is better for sculpting, Subsurf for simple displace)
-    # We use Subsurf + Displace modifier stack
-    mod_sub = obj.modifiers.new(name="Subdivision", type='SUBSURF')
-    mod_sub.levels = 4
-    mod_sub.render_levels = 4
-    mod_sub.subdivision_type = 'SIMPLE' # Keep shape, just add geometry
-    
-    # 3. Add Displacement
-    # Load Texture
-    try:
-        img = bpy.data.images.load(displacement_path)
-    except Exception as e:
-        print(f"[ERROR] Could not load displacement map: {e}")
+    dims = obj.dimensions
+    current_z = dims.z
+    if current_z == 0:
+        print("[ERROR] Object has 0 height.")
         sys.exit(1)
         
-    tex = bpy.data.textures.new("DisplacementTex", 'IMAGE')
-    tex.image = img
-    tex.extension = 'EXTEND' 
+    # Calculate scale factor
+    # target_height_mm is in mm. Convert to meters (Blender units).
+    target_height_m = target_height_mm / 1000.0
+    scale_factor = target_height_m / current_z
     
-    mod_disp = obj.modifiers.new(name="Displace", type='DISPLACE')
-    mod_disp.texture = tex
-    mod_disp.mid_level = 0.5
-    mod_disp.strength = strength
+    obj.scale = (scale_factor, scale_factor, scale_factor)
+    bpy.ops.object.transform_apply(scale=True)
     
-    # 4. Remesh (Voxel) to fuse everything
-    # Cortex3d logic: "Sandwich Fix" -> Displace -> Remesh -> Displace (Optional)
-    # For now, we apply modifiers first
+    print(f"[INFO] Scaled model to {target_height_mm}mm height (Factor: {scale_factor:.4f})")
     
-    # Apply modifiers
-    bpy.ops.object.modifier_apply(modifier="Subdivision")
-    bpy.ops.object.modifier_apply(modifier="Displace")
+    # 4. Voxel Remesh
+    # This fuses the geometry and makes it water-tight.
+    # Voxel size input is in mm. Convert to meters.
+    voxel_size_m = voxel_size_mm / 1000.0
     
-    # Voxel Remesh
-    # Blender Voxel Size is in meters usually (if unit system is metric)
-    # We assume model is roughly scaled. 0.2mm = 0.0002m
-    # But if model is imported as "100 units = 100mm", then 0.2
-    
-    # Check dimensions
-    dims = obj.dimensions
-    z_height = dims.z
-    print(f"[INFO] Model Height: {z_height} units")
-    
-    # Assuming the input model is normalized to ~1.0 or ~100.0
-    # Cortex3d auto-scale sets it to 100mm (if using run_triposr).
-    # If height is ~100, then 0.2mm is 0.2 units.
-    
-    target_voxel_size = voxel_size_mm
-    if z_height < 5.0: # Likely normalized to 1.0
-         target_voxel_size = voxel_size_mm / 100.0
-         
     mod_remesh = obj.modifiers.new(name="Remesh", type='REMESH')
     mod_remesh.mode = 'VOXEL'
-    mod_remesh.voxel_size = target_voxel_size
-    mod_remesh.adaptivity = 0.01
+    mod_remesh.voxel_size = voxel_size_m
+    mod_remesh.adaptivity = 0.0 # Uniform voxels for best quality
     
-    bpy.ops.object.modifier_apply(modifier="Remesh")
+    try:
+        bpy.ops.object.modifier_apply(modifier="Remesh")
+    except Exception as e:
+        print(f"[WARNING] Remesh failed (mesh might be empty or too small): {e}")
+
+    # 5. Smooth (Optional, to remove voxel blockiness)
+    mod_smooth = obj.modifiers.new(name="Smooth", type='CORRECTIVE_SMOOTH')
+    mod_smooth.iterations = 10
+    mod_smooth.smooth_type = 'LENGTH_WEIGHTED'
+    mod_smooth.rest_source = 'BIND' # Keep volume
+    bpy.ops.object.modifier_apply(modifier="Smooth")
+
+    # 6. Decimate (Optimize for printing/slicing)
+    # Target ~500k faces or ratio 0.5 depending on density
+    mod_dec = obj.modifiers.new(name="Decimate", type='DECIMATE')
+    # If the mesh is super dense after remesh (0.1mm), we might need strong reduction
+    # Let's target a face count if possible, or use a ratio.
+    # For simplicity, ratio 0.2 usually keeps shape well after high-res remesh.
+    mod_dec.ratio = 0.2 
+    bpy.ops.object.modifier_apply(modifier="Decimate")
     
-    # 5. Decimate (Reduce file size for printing)
-    # Target ~500k faces
-    mod_dec = obj.modifiers.new(name="Decimate_Final", type='DECIMATE')
-    mod_dec.ratio = 0.5 # Aggressive reduction
-    # Or use face count
-    # mod_dec.ratio = 500000 / len(obj.data.polygons)
+    print(f"[INFO] Final Vertex Count: {len(obj.data.vertices)}")
     
-    bpy.ops.object.modifier_apply(modifier="Decimate_Final")
-    
-    # 6. Export STL
-    bpy.ops.wm.stl_export(filepath=output_path, export_selected_objects=True)
+    # 7. Export STL
+    # Using the new Blender 4.2+ API
+    if hasattr(bpy.ops.wm, "stl_export"):
+        bpy.ops.wm.stl_export(filepath=output_path, export_selected_objects=True)
+    else:
+        # Fallback for older versions if needed, though we know user has 4.2
+        bpy.ops.export_mesh.stl(filepath=output_path, use_selection=True)
+        
     print(f"[SUCCESS] Exported to {output_path}")
 
 if __name__ == "__main__":
-    # Remove all args up to "--"
+    # Handle args
     try:
         idx = sys.argv.index("--")
         args_list = sys.argv[idx+1:]
@@ -104,12 +110,11 @@ if __name__ == "__main__":
         
     parser = argparse.ArgumentParser()
     parser.add_argument("--mesh", required=True)
-    parser.add_argument("--displacement", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--strength", type=float, default=0.15)
-    parser.add_argument("--voxel_size", type=float, default=0.2)
+    parser.add_argument("--height_mm", type=float, default=100.0, help="Target height in mm")
+    parser.add_argument("--voxel_size_mm", type=float, default=0.1, help="Voxel detail size in mm")
     
     args = parser.parse_args(args_list)
     
     cleanup_scene()
-    process_mesh(args.mesh, args.displacement, args.output, args.strength, args.voxel_size)
+    process_mesh(args.mesh, args.output, args.height_mm, args.voxel_size_mm)
