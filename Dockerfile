@@ -15,10 +15,10 @@ RUN apt-get update && apt-get install -y \
 # 升级 pip 及构建工具
 RUN pip3 install --upgrade pip setuptools wheel
 
-# PyTorch + CUDA 12.1 (Upgraded to Torch 2.5.1+ for security fixes)
+# PyTorch + CUDA 12.1 (Upgraded to Torch 2.6.0+ for security fixes CVE-2025-32434)
 RUN pip3 install --no-cache-dir \
-    "torch>=2.5.1" "torchvision>=0.20.1" \
-    --index-url https://download.pytorch.org/whl/cu121
+    "torch>=2.6.0" "torchvision>=0.21.0" \
+    --index-url https://download.pytorch.org/whl/cu124
 
 # InstantMesh & TripoSR 统一依赖
 # transformers 4.35.0: TripoSR needs this specific version range usually
