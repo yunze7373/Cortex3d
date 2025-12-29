@@ -15,16 +15,16 @@ RUN apt-get update && apt-get install -y \
 # 升级 pip 及构建工具
 RUN pip3 install --upgrade pip setuptools wheel
 
-# PyTorch + CUDA 12.1
+# PyTorch + CUDA 12.1 (Upgraded to Torch 2.5.1+ for security fixes)
 RUN pip3 install --no-cache-dir \
-    torch torchvision \
+    "torch>=2.5.1" "torchvision>=0.20.1" \
     --index-url https://download.pytorch.org/whl/cu121
 
 # InstantMesh & TripoSR 统一依赖
-# transformers 4.35.0: TripoSR 需要
-# diffusers 0.29.0: Upgrade for Marigold support (InstantMesh compatible via pipe API)
+# transformers 4.35.0: TripoSR needs this specific version range usually
+# diffusers 0.29.0: Upgrade for Marigold support
 RUN pip3 install --no-cache-dir pytorch-lightning==2.1.2 einops omegaconf torchmetrics
-RUN pip3 install --no-cache-dir diffusers==0.29.0 transformers==4.36.2 huggingface-hub>=0.23.2
+RUN pip3 install --no-cache-dir diffusers==0.29.0 transformers==4.35.2 huggingface-hub>=0.23.2
 RUN pip3 install --no-cache-dir accelerate==0.24.1 tensorboard trimesh xatlas pymcubes rembg onnxruntime moderngl
 RUN pip3 install --no-cache-dir pillow tqdm safetensors kiui pygltflib imageio[ffmpeg] plyfile
 
