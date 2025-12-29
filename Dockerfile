@@ -56,6 +56,9 @@ WORKDIR /workspace
 # 最终验证
 RUN python3 -c "import torch; import nvdiffrast.torch as dr; import diffusers; print(f'✅ All dependencies OK. Diffusers: {diffusers.__version__}')"
 RUN blender --version
+    
+# FINAL ENFORCEMENT: Force transformers to 4.35.2 to avoid torch.load vulnerability check
+RUN pip3 install --force-reinstall --no-cache-dir transformers==4.35.2
 
 
 

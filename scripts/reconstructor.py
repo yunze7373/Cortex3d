@@ -15,6 +15,14 @@ from pathlib import Path
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# DEBUG: Check environment versions
+try:
+    import torch
+    import transformers
+    logging.info(f"ENVIRONMENT CHECK: Torch={torch.__version__}, Transformers={transformers.__version__}")
+except ImportError:
+    logging.warning("Could not import torch/transformers for version check.")
+
 SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
