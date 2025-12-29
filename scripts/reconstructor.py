@@ -145,25 +145,28 @@ def main():
     # Helper to find result mesh
     image_name = args.image.stem
     
-    # Auto mode: Try InstantMesh first, fallback to TripoSR
+    # Auto mode: Try InstantMesh first.
+    # DISABLE FALLBACK for debugging to ensure we get InstantMesh quality.
     if args.algo == "auto":
-        logging.info("Mode: AUTO. Trying InstantMesh first...")
+        logging.info("Mode: AUTO. Running InstantMesh...")
         if run_instantmesh(args.image, algo_output_dir, args.quality):
             success = True
             # InstantMesh output structure: <out_dir>/instant-mesh-large/meshes/<name>.obj
             # or instant-mesh-hq depending on config used.
-            # We need to construct the expected path.
             config_name = "instant-mesh-hq" if args.quality == "high" else "instant-mesh-large"
             result_mesh = algo_output_dir / config_name / "meshes" / f"{image_name}.obj"
         else:
-            logging.warning("InstantMesh failed. Falling back to TripoSR...")
-            fallback_dir = args.output_dir / "triposr"
-            if run_triposr(args.image, fallback_dir, args.quality):
-                success = True
-                result_mesh = fallback_dir / image_name / f"{image_name}.obj"
-                logging.info(f"Fallback to TripoSR successful. Result in {fallback_dir}")
-            else:
-                logging.error("Both algorithms failed.")
+            logging.error("InstantMesh failed. Fallback disabled to debug quality.")
+            sys.exit(1)
+            
+            # logging.warning("InstantMesh failed. Falling back to TripoSR...")
+            # fallback_dir = args.output_dir / "triposr"
+            # if run_triposr(args.image, fallback_dir, args.quality):
+            #     success = True
+            #     result_mesh = fallback_dir / image_name / f"{image_name}.obj"
+            #     logging.info(f"Fallback to TripoSR successful. Result in {fallback_dir}")
+            # else:
+            #     logging.error("Both algorithms failed.")
     
     elif args.algo == "instantmesh":
         if run_instantmesh(args.image, algo_output_dir, args.quality):

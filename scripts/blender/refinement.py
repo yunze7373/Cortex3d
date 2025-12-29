@@ -57,6 +57,13 @@ def process_mesh(mesh_path, output_path, target_height_mm=100.0, voxel_size_mm=0
     
     print(f"[INFO] Scaled model to {target_height_mm}mm height (Factor: {scale_factor:.4f})")
     
+    # 3.5 Pre-Smooth (Crucial for removing source noise)
+    # TripoSR/InstantMesh raw output can be noisy. Smooth it before remeshing.
+    mod_smooth_pre = obj.modifiers.new(name="Pre_Smooth", type='LAPLACIANSMOOTH')
+    mod_smooth_pre.iterations = 5
+    mod_smooth_pre.lambda_factor = 0.1
+    bpy.ops.object.modifier_apply(modifier="Pre_Smooth")
+
     # 4. Voxel Remesh
     # This fuses the geometry and makes it water-tight.
     # Voxel size input is in mm. Convert to meters.
@@ -72,9 +79,9 @@ def process_mesh(mesh_path, output_path, target_height_mm=100.0, voxel_size_mm=0
     except Exception as e:
         print(f"[WARNING] Remesh failed (mesh might be empty or too small): {e}")
 
-    # 5. Smooth (Optional, to remove voxel blockiness)
+    # 5. Post-Smooth (To remove voxel aliasing)
     mod_smooth = obj.modifiers.new(name="Smooth", type='CORRECTIVE_SMOOTH')
-    mod_smooth.iterations = 10
+    mod_smooth.iterations = 20
     mod_smooth.smooth_type = 'LENGTH_WEIGHTED'
     mod_smooth.rest_source = 'BIND' # Keep volume
     bpy.ops.object.modifier_apply(modifier="Smooth")
