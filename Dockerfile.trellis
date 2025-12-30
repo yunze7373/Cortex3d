@@ -46,7 +46,9 @@ RUN pip3 install --no-cache-dir \
     huggingface_hub \
     xformers \
     scipy \
-    tqdm
+    tqdm \
+    easydict \
+    diffusers
 
 # Install spconv for sparse convolutions (required by TRELLIS)
 RUN pip3 install --no-cache-dir spconv-cu121
