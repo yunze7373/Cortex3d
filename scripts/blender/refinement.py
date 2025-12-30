@@ -80,11 +80,10 @@ def process_mesh(mesh_path, output_path, target_height_mm=100.0, voxel_size_mm=0
         print(f"[WARNING] Remesh failed (mesh might be empty or too small): {e}")
 
     # 5. Post-Smooth (To remove voxel aliasing)
-    mod_smooth = obj.modifiers.new(name="Smooth", type='CORRECTIVE_SMOOTH')
-    mod_smooth.iterations = 20
-    mod_smooth.smooth_type = 'LENGTH_WEIGHTED'
-    mod_smooth.rest_source = 'BIND' # Keep volume
-    bpy.ops.object.corrective_smooth_bind(modifier="Smooth")
+    # Use regular SMOOTH modifier instead of CORRECTIVE_SMOOTH (which requires binding)
+    mod_smooth = obj.modifiers.new(name="Smooth", type='SMOOTH')
+    mod_smooth.factor = 0.5
+    mod_smooth.iterations = 10
     bpy.ops.object.modifier_apply(modifier="Smooth")
 
     # 6. Decimate (Optimize for printing/slicing)
