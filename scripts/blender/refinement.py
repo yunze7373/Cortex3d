@@ -84,6 +84,7 @@ def process_mesh(mesh_path, output_path, target_height_mm=100.0, voxel_size_mm=0
     mod_smooth.iterations = 20
     mod_smooth.smooth_type = 'LENGTH_WEIGHTED'
     mod_smooth.rest_source = 'BIND' # Keep volume
+    bpy.ops.object.corrective_smooth_bind(modifier="Smooth")
     bpy.ops.object.modifier_apply(modifier="Smooth")
 
     # 6. Decimate (Optimize for printing/slicing)
