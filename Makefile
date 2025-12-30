@@ -45,12 +45,21 @@ test-triposr:
 # Full Pipeline (Stage 2 + Stage 4)
 pipeline: reconstruct stage4
 
+# NEW: Multi-View Pipeline (Uses real 4-view images for higher quality)
+pipeline-mv: reconstruct-mv stage4
+
 # Stage 2: Unified Reconstruction (Auto/InstantMesh/TripoSR)
 # Defaulting to High Quality for better input to Blender
 reconstruct:
 	docker compose exec $(SVC) python3 /workspace/scripts/reconstructor.py \
 		/workspace/test_images/character_20251226_013442_front.png \
 		--algo auto --quality high
+
+# NEW: Multi-View Reconstruction (Uses 4 real views: front, back, left, right)
+reconstruct-mv:
+	docker compose exec $(SVC) python3 /workspace/scripts/reconstructor.py \
+		/workspace/test_images/character_20251226_013442_front.png \
+		--algo multiview --quality high
 
 # Stage 3: Detail Generation (Marigold) - OPTIONAL / DEPRECATED for now
 # Keeping it for reference but not processing it in main pipeline
@@ -66,6 +75,7 @@ stage4:
 		--output /workspace/outputs/final_print.stl \
 		--height_mm 100 \
 		--voxel_size_mm 0.1
+
 
 # 检查环境
 check:
