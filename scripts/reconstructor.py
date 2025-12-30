@@ -225,7 +225,9 @@ def main():
         if run_multiview(image_prefix, algo_output_dir, args.quality):
             success = True
             config_name = "instant-mesh-hq-multiview" if args.quality == "high" else "instant-mesh-large-multiview"
-            result_mesh = algo_output_dir / config_name / "meshes" / f"{image_name}.obj"
+            # For multiview, the mesh name is the base prefix (without _front suffix)
+            multiview_name = Path(image_prefix).name
+            result_mesh = algo_output_dir / config_name / "meshes" / f"{multiview_name}.obj"
         
     if success and result_mesh and result_mesh.exists():
         logging.info(f"Reconstruction completed successfully. Mesh: {result_mesh}")
