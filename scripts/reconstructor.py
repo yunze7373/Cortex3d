@@ -161,10 +161,34 @@ def run_multiview(image_prefix, output_dir, quality="balanced"):
         
     return run_command(cmd, cwd=PROJECT_ROOT)
 
+def run_trellis(image_path, output_dir, quality="balanced"):
+    """
+    调用 TRELLIS 生成 (微软高质量图转3D模型)
+    """
+    logging.info(f"Starting TRELLIS reconstruction... (Quality: {quality})")
+    
+    script_path = SCRIPT_DIR / "run_trellis.py"
+    if not script_path.exists():
+        logging.error(f"TRELLIS script not found: {script_path}")
+        return False
+
+    cmd = [
+        sys.executable, str(script_path),
+        str(image_path),
+        "--output", str(output_dir),
+        "--format", "obj"
+    ]
+    
+    if quality == "high":
+        cmd.extend(["--resolution", "1024"])
+        
+    return run_command(cmd, cwd=PROJECT_ROOT)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Cortex3d Unified Reconstructor (Stage 2)")
     parser.add_argument("image", type=Path, help="Path to input image (front view) OR prefix for multi-view images")
-    parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview"], default="instantmesh", help="Reconstruction algorithm")
+    parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis"], default="instantmesh", help="Reconstruction algorithm")
     parser.add_argument("--quality", choices=["balanced", "high"], default="balanced", help="Quality preset")
     parser.add_argument("--output_dir", type=Path, default=OUTPUTS_DIR, help="Output directory")
     
@@ -228,6 +252,12 @@ def main():
             # For multiview, the mesh name is the base prefix (without _front suffix)
             multiview_name = Path(image_prefix).name
             result_mesh = algo_output_dir / config_name / "meshes" / f"{multiview_name}.obj"
+    
+    elif args.algo == "trellis":
+        algo_output_dir = args.output_dir / "trellis"
+        if run_trellis(args.image, algo_output_dir, args.quality):
+            success = True
+            result_mesh = algo_output_dir / f"{image_name}.obj"
         
     if success and result_mesh and result_mesh.exists():
         logging.info(f"Reconstruction completed successfully. Mesh: {result_mesh}")

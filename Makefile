@@ -76,6 +76,33 @@ stage4:
 		--height_mm 100 \
 		--voxel_size_mm 0.1
 
+# --- TRELLIS Targets (High Quality) ---
+
+# Build TRELLIS Docker image
+build-trellis:
+	docker compose build trellis
+
+# Start TRELLIS container
+up-trellis:
+	docker compose up -d trellis
+
+# TRELLIS reconstruction
+reconstruct-trellis:
+	docker compose exec trellis python3 /workspace/scripts/run_trellis.py \
+		/workspace/test_images/character_20251226_013442_front.png \
+		--output /workspace/outputs/trellis \
+		--resolution 512
+
+# TRELLIS + Blender pipeline
+pipeline-trellis: reconstruct-trellis stage4-trellis
+
+# Stage 4 for TRELLIS output
+stage4-trellis:
+	docker compose exec trellis python3 /workspace/scripts/blender_factory.py \
+		--mesh /workspace/outputs/trellis/character_20251226_013442_front.obj \
+		--output /workspace/outputs/final_print_trellis.stl \
+		--height_mm 100 \
+		--voxel_size_mm 0.1
 
 # 检查环境
 check:

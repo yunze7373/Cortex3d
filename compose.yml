@@ -20,5 +20,27 @@ services:
               count: all
               capabilities: [gpu]
 
+  trellis:
+    build:
+      context: .
+      dockerfile: Dockerfile.trellis
+    image: cortex3d-trellis:latest
+    container_name: cortex3d-trellis
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - hf-cache:/root/.cache/huggingface
+    shm_size: "16gb"
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
 volumes:
   hf-cache:
+
