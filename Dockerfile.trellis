@@ -43,10 +43,10 @@ RUN pip3 install --no-cache-dir spconv-cu121
 # Install utils3d
 RUN pip3 install --no-cache-dir git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
 
-# Install nvdiffrast
+# Install nvdiffrast (requires --no-build-isolation)
 RUN pip3 install --no-cache-dir ninja
 RUN git clone https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast && \
-    cd /tmp/nvdiffrast && pip3 install --no-cache-dir . && \
+    cd /tmp/nvdiffrast && pip3 install --no-cache-dir --no-build-isolation . && \
     rm -rf /tmp/nvdiffrast
 
 # Install kaolin
