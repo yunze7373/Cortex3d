@@ -54,6 +54,7 @@ def main():
         default=None,
         help="Override decimate ratio (0-1). Default depends on profile and face count.",
     )
+    parser.add_argument("--skip_remesh", action="store_true", help="Skip voxel remeshing (preserve original topology)")
     
     args = parser.parse_args()
     
@@ -84,6 +85,9 @@ def main():
 
     if args.decimate_ratio is not None:
         cmd.extend(["--decimate_ratio", str(args.decimate_ratio)])
+        
+    if args.skip_remesh:
+        cmd.append("--skip_remesh")
     
     logging.info("Starting Blender process...")
     try:
