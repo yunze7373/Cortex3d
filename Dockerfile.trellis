@@ -37,6 +37,9 @@ RUN pip3 install --no-cache-dir \
 # Install xformers for PyTorch 2.4.0 + CUDA 12.1
 RUN pip3 install --no-cache-dir xformers==0.0.27.post2 --index-url https://download.pytorch.org/whl/cu121
 
+# Install flash-attn (required by TRELLIS)
+RUN pip3 install --no-cache-dir flash-attn --no-build-isolation
+
 # Install spconv for sparse convolutions
 RUN pip3 install --no-cache-dir spconv-cu121
 
