@@ -57,8 +57,8 @@ RUN git clone --depth 1 --recursive https://github.com/microsoft/TRELLIS.git /op
 
 WORKDIR /opt/trellis
 
-# Install diffoctreerast via setup.sh (the extension is cloned/built by the script)
-RUN chmod +x setup.sh && ./setup.sh --diffoctreerast --mipgaussian || echo "Some extensions may have failed, continuing..."
+# Install flash_attn and other extensions via setup.sh
+RUN chmod +x setup.sh && ./setup.sh --flash-attn --diffoctreerast --mipgaussian || echo "Some extensions may have failed, continuing..."
 
 # Create workspace
 RUN mkdir -p /workspace
