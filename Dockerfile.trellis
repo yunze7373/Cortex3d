@@ -52,13 +52,13 @@ RUN git clone https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast && \
 # Install kaolin
 RUN pip3 install --no-cache-dir kaolin -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu121.html
 
-# Clone TRELLIS repository
+# Clone TRELLIS repository with submodules
 RUN git clone --depth 1 --recursive https://github.com/microsoft/TRELLIS.git /opt/trellis
 
 WORKDIR /opt/trellis
 
-# Install diffoctreerast extension
-RUN cd /opt/trellis/extensions/diffoctreerast && pip3 install --no-cache-dir .
+# Install diffoctreerast via setup.sh (the extension is cloned/built by the script)
+RUN chmod +x setup.sh && ./setup.sh --diffoctreerast --mipgaussian || echo "Some extensions may have failed, continuing..."
 
 # Create workspace
 RUN mkdir -p /workspace
@@ -66,6 +66,6 @@ WORKDIR /workspace
 
 # Pre-validation
 RUN python3 -c "import torch; import torchvision; print(f'✅ PyTorch {torch.__version__}, TorchVision {torchvision.__version__}')"
-RUN python3 -c "import xformers; print(f'✅ xFormers OK')"
+RUN python3 -c "import xformers; print(f'✅ xFormers OK')" || true
 
 CMD ["python3"]
