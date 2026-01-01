@@ -90,8 +90,7 @@ up-trellis:
 reconstruct-trellis:
 	docker compose exec trellis python3 /workspace/scripts/run_trellis.py \
 		/workspace/test_images/character_20251226_013442_front.png \
-		--output /workspace/outputs/trellis \
-		--resolution 512
+		--output /workspace/outputs/trellis
 
 # TRELLIS + Blender pipeline
 pipeline-trellis: reconstruct-trellis stage4-trellis
