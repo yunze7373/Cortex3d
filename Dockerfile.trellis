@@ -1,6 +1,6 @@
 # TRELLIS Dockerfile for Cortex3d
 # Microsoft TRELLIS: State-of-the-art Image-to-3D Generation
-# Requirements: NVIDIA GPU with 16-24GB VRAM, Linux
+# Based on official setup.sh instructions
 
 FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
@@ -10,42 +10,62 @@ ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0"
 
 # System dependencies
 RUN apt-get update && apt-get install -y \
-    python3 python3-pip python3-dev git wget \
-    libgl1-mesa-glx libglib2.0-0 \
+    python3.10 python3.10-dev python3-pip git wget curl \
+    libgl1-mesa-glx libglib2.0-0 libjpeg-dev \
     ninja-build g++ cmake \
     libsparsehash-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Make python3.10 the default
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
+
 # Upgrade pip
 RUN pip3 install --upgrade pip setuptools wheel
 
-# Clone TRELLIS repository FIRST to get requirements.txt
-RUN git clone --depth 1 https://github.com/microsoft/TRELLIS.git /opt/trellis
-
-WORKDIR /opt/trellis
-
-# Install TRELLIS requirements from repository
-RUN pip3 install --no-cache-dir -r requirements.txt
-
-# Reinstall torch/torchvision with CUDA 12.1 to ensure compatibility
-RUN pip3 install --no-cache-dir --force-reinstall \
+# Install PyTorch 2.4.0 with CUDA 12.1 (as per TRELLIS setup.sh)
+RUN pip3 install --no-cache-dir \
     torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 \
     --index-url https://download.pytorch.org/whl/cu121
 
-# Install spconv for sparse convolutions (required by TRELLIS)
+# Install basic TRELLIS dependencies (from setup.sh --basic)
+RUN pip3 install --no-cache-dir \
+    pillow imageio imageio-ffmpeg tqdm easydict opencv-python-headless \
+    scipy ninja rembg onnxruntime trimesh open3d xatlas pyvista \
+    pymeshfix igraph transformers
+
+# Install xformers for PyTorch 2.4.0 + CUDA 12.1
+RUN pip3 install --no-cache-dir xformers==0.0.27.post2 --index-url https://download.pytorch.org/whl/cu121
+
+# Install spconv for sparse convolutions
 RUN pip3 install --no-cache-dir spconv-cu121
 
-# Install TRELLIS as editable package
-RUN if [ -f "setup.py" ]; then pip3 install --no-cache-dir -e .; fi
+# Install utils3d
+RUN pip3 install --no-cache-dir git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
+
+# Install nvdiffrast
+RUN pip3 install --no-cache-dir ninja
+RUN git clone https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast && \
+    cd /tmp/nvdiffrast && pip3 install --no-cache-dir . && \
+    rm -rf /tmp/nvdiffrast
+
+# Install kaolin
+RUN pip3 install --no-cache-dir kaolin -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu121.html
+
+# Clone TRELLIS repository
+RUN git clone --depth 1 --recursive https://github.com/microsoft/TRELLIS.git /opt/trellis
+
+WORKDIR /opt/trellis
+
+# Install diffoctreerast extension
+RUN cd /opt/trellis/extensions/diffoctreerast && pip3 install --no-cache-dir .
 
 # Create workspace
 RUN mkdir -p /workspace
 WORKDIR /workspace
 
-# Pre-download model weights on first run (handled by script)
-# Models will be cached in /root/.cache/huggingface
-
-# Validation
-RUN python3 -c "import torch; print(f'✅ PyTorch {torch.__version__} with CUDA: {torch.cuda.is_available()}')"
+# Pre-validation
+RUN python3 -c "import torch; import torchvision; print(f'✅ PyTorch {torch.__version__}, TorchVision {torchvision.__version__}')"
+RUN python3 -c "import xformers; print(f'✅ xFormers OK')"
 
 CMD ["python3"]
