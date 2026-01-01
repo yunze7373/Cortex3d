@@ -95,9 +95,9 @@ reconstruct-trellis:
 # TRELLIS + Blender pipeline
 pipeline-trellis: reconstruct-trellis stage4-trellis
 
-# Stage 4 for TRELLIS output
+# Helper for TRELLIS post-processing (runs in instantmesh container because it has Blender)
 stage4-trellis:
-	docker compose exec trellis python3 /workspace/scripts/blender_factory.py \
+	docker compose exec $(SVC) python3 /workspace/scripts/blender_factory.py \
 		--mesh /workspace/outputs/trellis/character_20251226_013442_front.obj \
 		--output /workspace/outputs/final_print_trellis.stl \
 		--height_mm 100 \
