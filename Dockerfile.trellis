@@ -19,42 +19,23 @@ RUN apt-get update && apt-get install -y \
 # Upgrade pip
 RUN pip3 install --upgrade pip setuptools wheel
 
-# PyTorch + CUDA 12.1
-RUN pip3 install --no-cache-dir \
-    torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cu121
-
-# Clone TRELLIS repository
+# Clone TRELLIS repository FIRST to get requirements.txt
 RUN git clone --depth 1 https://github.com/microsoft/TRELLIS.git /opt/trellis
 
 WORKDIR /opt/trellis
 
-# Install TRELLIS dependencies
-# Note: The requirements may vary based on the repository structure
-RUN pip3 install --no-cache-dir \
-    transformers \
-    accelerate \
-    safetensors \
-    omegaconf \
-    einops \
-    pillow \
-    trimesh \
-    opencv-python \
-    imageio \
-    rembg \
-    onnxruntime \
-    huggingface_hub \
-    xformers \
-    scipy \
-    tqdm \
-    easydict \
-    diffusers
+# Install TRELLIS requirements from repository
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Reinstall torch/torchvision with CUDA 12.1 to ensure compatibility
+RUN pip3 install --no-cache-dir --force-reinstall \
+    torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 \
+    --index-url https://download.pytorch.org/whl/cu121
 
 # Install spconv for sparse convolutions (required by TRELLIS)
 RUN pip3 install --no-cache-dir spconv-cu121
 
-# Install additional TRELLIS dependencies from setup if available
-RUN if [ -f "requirements.txt" ]; then pip3 install --no-cache-dir -r requirements.txt; fi
+# Install TRELLIS as editable package
 RUN if [ -f "setup.py" ]; then pip3 install --no-cache-dir -e .; fi
 
 # Create workspace
