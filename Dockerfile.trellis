@@ -63,6 +63,12 @@ WORKDIR /opt/trellis
 # Install flash_attn and other extensions via setup.sh
 RUN chmod +x setup.sh && ./setup.sh --flash-attn --diffoctreerast --mipgaussian || echo "Some extensions may have failed, continuing..."
 
+# Install gaussian-splatting (diff-gaussian-rasterization)
+RUN git clone --recursive https://github.com/ashawkey/diff-gaussian-rasterization /tmp/gaussian_rasterization && \
+    cd /tmp/gaussian_rasterization && \
+    pip3 install --no-cache-dir . && \
+    rm -rf /tmp/gaussian_rasterization
+
 # Create workspace
 RUN mkdir -p /workspace
 WORKDIR /workspace
