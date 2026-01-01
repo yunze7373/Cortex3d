@@ -66,6 +66,12 @@ WORKDIR /opt/trellis
 # Install flash_attn and other extensions via setup.sh
 RUN chmod +x setup.sh && ./setup.sh --flash-attn --diffoctreerast --mipgaussian || echo "Some extensions may have failed, continuing..."
 
+# Patch gaussian_render.py to support standard diff-gaussian-rasterization
+# (Remove kernel_size and subpixel_offset arguments which are not in the standard version)
+RUN sed -i 's/kernel_size = pipe.kernel_size/kernel_size = 0.0/' /opt/trellis/trellis/renderers/gaussian_render.py && \
+    sed -i 's/kernel_size=kernel_size,//' /opt/trellis/trellis/renderers/gaussian_render.py && \
+    sed -i 's/subpixel_offset=subpixel_offset,//' /opt/trellis/trellis/renderers/gaussian_render.py
+
 # Install gaussian-splatting (diff-gaussian-rasterization)
 RUN git clone --recursive https://github.com/ashawkey/diff-gaussian-rasterization /tmp/gaussian_rasterization && \
     cd /tmp/gaussian_rasterization && \
