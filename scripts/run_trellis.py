@@ -17,6 +17,7 @@ from pathlib import Path
 
 # Set environment before imports
 os.environ['SPCONV_ALGO'] = 'native'  # Faster for single runs
+os.environ['ATTN_BACKEND'] = 'xformers'  # Force xformers to avoid flash_attn dependency logic check
 
 # Add TRELLIS to path
 TRELLIS_ROOT = Path("/opt/trellis")
