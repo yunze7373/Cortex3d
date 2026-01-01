@@ -41,6 +41,19 @@ def main():
     parser.add_argument("--output", type=Path, required=True, help="Output STL path")
     parser.add_argument("--height_mm", type=float, default=100.0, help="Target height in mm")
     parser.add_argument("--voxel_size_mm", type=float, default=0.1, help="Voxel remesh size (mm)")
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default="default",
+        choices=["default", "resin-mini"],
+        help="Print profile preset passed to refinement script.",
+    )
+    parser.add_argument(
+        "--decimate_ratio",
+        type=float,
+        default=None,
+        help="Override decimate ratio (0-1). Default depends on profile and face count.",
+    )
     
     args = parser.parse_args()
     
@@ -65,8 +78,12 @@ def main():
         "--mesh", str(args.mesh.absolute()),
         "--output", str(args.output.absolute()),
         "--height_mm", str(args.height_mm),
-        "--voxel_size_mm", str(args.voxel_size_mm)
+        "--voxel_size_mm", str(args.voxel_size_mm),
+        "--profile", str(args.profile),
     ]
+
+    if args.decimate_ratio is not None:
+        cmd.extend(["--decimate_ratio", str(args.decimate_ratio)])
     
     logging.info("Starting Blender process...")
     try:

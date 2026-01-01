@@ -4,16 +4,31 @@ import sys
 import bmesh
 import math
 
+
+def resolve_profile(profile: str | None, height_mm: float, voxel_size_mm: float):
+    # Keep backward-compatible defaults unless a profile is explicitly selected.
+    if profile is None or profile == "default":
+        return height_mm, voxel_size_mm
+
+    if profile == "resin-mini":
+        # 28–35mm resin minis: aim ~32mm height, fairly fine voxel remesh.
+        # Note: very small voxel sizes explode face count; this is a practical default.
+        return 32.0, 0.05
+
+    raise ValueError(f"Unknown profile: {profile}")
+
 def cleanup_scene():
     """Remove all objects from the scene to start fresh."""
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete()
 
-def process_mesh(mesh_path, output_path, target_height_mm=100.0, voxel_size_mm=0.1):
+def process_mesh(mesh_path, output_path, target_height_mm=100.0, voxel_size_mm=0.1, profile: str | None = None, decimate_ratio: float | None = None):
     """
     Imports a mesh, scales it to a specific height, remeshes it for printing, and exports to STL.
     """
     print(f"[INFO] Processing: {mesh_path}")
+
+    target_height_mm, voxel_size_mm = resolve_profile(profile, target_height_mm, voxel_size_mm)
     
     # 1. Import Mesh
     if mesh_path.lower().endswith('.obj'):
@@ -86,14 +101,29 @@ def process_mesh(mesh_path, output_path, target_height_mm=100.0, voxel_size_mm=0
     mod_smooth.iterations = 10
     bpy.ops.object.modifier_apply(modifier="Smooth")
 
+    # Recalculate normals after remesh/smooth
+    try:
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.normals_make_consistent(inside=False)
+        bpy.ops.object.mode_set(mode='OBJECT')
+    except Exception as e:
+        print(f"[WARNING] Failed to recalculate normals: {e}")
+
     # 6. Decimate (Optimize for printing/slicing)
-    # Target ~500k faces or ratio 0.5 depending on density
-    mod_dec = obj.modifiers.new(name="Decimate", type='DECIMATE')
-    # If the mesh is super dense after remesh (0.1mm), we might need strong reduction
-    # Let's target a face count if possible, or use a ratio.
-    # For simplicity, ratio 0.2 usually keeps shape well after high-res remesh.
-    mod_dec.ratio = 0.2 
-    bpy.ops.object.modifier_apply(modifier="Decimate")
+    # Use a conservative, size-aware default: only decimate if face count is huge.
+    face_count = len(obj.data.polygons)
+    if decimate_ratio is None:
+        if profile == "resin-mini":
+            # Keep more detail for minis; decimate only when extremely dense.
+            decimate_ratio = 0.35 if face_count > 2_000_000 else None
+        else:
+            decimate_ratio = 0.2
+
+    if decimate_ratio is not None:
+        mod_dec = obj.modifiers.new(name="Decimate", type='DECIMATE')
+        mod_dec.ratio = float(decimate_ratio)
+        bpy.ops.object.modifier_apply(modifier="Decimate")
     
     print(f"[INFO] Final Vertex Count: {len(obj.data.vertices)}")
     
@@ -120,8 +150,21 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=True)
     parser.add_argument("--height_mm", type=float, default=100.0, help="Target height in mm")
     parser.add_argument("--voxel_size_mm", type=float, default=0.1, help="Voxel detail size in mm")
+    parser.add_argument(
+        "--profile",
+        type=str,
+        default="default",
+        choices=["default", "resin-mini"],
+        help="Print profile preset. 'resin-mini' targets 28–35mm resin minis.",
+    )
+    parser.add_argument(
+        "--decimate_ratio",
+        type=float,
+        default=None,
+        help="Override decimate ratio (0-1). Default depends on profile and face count.",
+    )
     
     args = parser.parse_args(args_list)
     
     cleanup_scene()
-    process_mesh(args.mesh, args.output, args.height_mm, args.voxel_size_mm)
+    process_mesh(args.mesh, args.output, args.height_mm, args.voxel_size_mm, profile=args.profile, decimate_ratio=args.decimate_ratio)

@@ -176,11 +176,15 @@ def run_trellis(image_path, output_dir, quality="balanced"):
         sys.executable, str(script_path),
         str(image_path),
         "--output", str(output_dir),
-        "--format", "obj"
     ]
-    
+
+    # Note: scripts/run_trellis.py does not expose a resolution flag.
+    # Use texture size + simplify as quality controls.
     if quality == "high":
-        cmd.extend(["--resolution", "1024"])
+        cmd.extend([
+            "--texture_size", "2048",
+            "--simplify", "0.98",
+        ])
         
     return run_command(cmd, cwd=PROJECT_ROOT)
 
