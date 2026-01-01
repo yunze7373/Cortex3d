@@ -22,7 +22,7 @@ def cleanup_scene():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete()
 
-def process_mesh(mesh_path, output_path, target_height_mm=100.0, voxel_size_mm=0.1, profile: str | None = None, decimate_ratio: float | None = None):
+def process_mesh(mesh_path, output_path, target_height_mm=100.0, voxel_size_mm=0.1, profile: str | None = None, decimate_ratio: float | None = None, skip_remesh: bool = False):
     """
     Imports a mesh, scales it to a specific height, remeshes it for printing, and exports to STL.
     """
@@ -80,35 +80,37 @@ def process_mesh(mesh_path, output_path, target_height_mm=100.0, voxel_size_mm=0
     bpy.ops.object.modifier_apply(modifier="Pre_Smooth")
 
     # 4. Voxel Remesh
-    # This fuses the geometry and makes it water-tight.
-    # Voxel size input is in mm. Convert to meters.
-    voxel_size_m = voxel_size_mm / 1000.0
-    
-    mod_remesh = obj.modifiers.new(name="Remesh", type='REMESH')
-    mod_remesh.mode = 'VOXEL'
-    mod_remesh.voxel_size = voxel_size_m
-    mod_remesh.adaptivity = 0.0 # Uniform voxels for best quality
-    
-    try:
-        bpy.ops.object.modifier_apply(modifier="Remesh")
-    except Exception as e:
-        print(f"[WARNING] Remesh failed (mesh might be empty or too small): {e}")
+    if not skip_remesh:
+        # This fuses the geometry and makes it water-tight.
+        # Voxel size input is in mm. Convert to meters.
+        voxel_size_m = voxel_size_mm / 1000.0
+        
+        mod_remesh = obj.modifiers.new(name="Remesh", type='REMESH')
+        mod_remesh.mode = 'VOXEL'
+        mod_remesh.voxel_size = voxel_size_m
+        mod_remesh.adaptivity = 0.0 # Uniform voxels for best quality
+        
+        try:
+            bpy.ops.object.modifier_apply(modifier="Remesh")
+        except Exception as e:
+            print(f"[WARNING] Remesh failed (mesh might be empty or too small): {e}")
 
-    # 5. Post-Smooth (To remove voxel aliasing)
-    # Use regular SMOOTH modifier instead of CORRECTIVE_SMOOTH (which requires binding)
-    mod_smooth = obj.modifiers.new(name="Smooth", type='SMOOTH')
-    mod_smooth.factor = 0.5
-    mod_smooth.iterations = 10
-    bpy.ops.object.modifier_apply(modifier="Smooth")
+        # 5. Post-Smooth (Only if remeshed, to remove voxel aliasing)
+        mod_smooth = obj.modifiers.new(name="Smooth", type='SMOOTH')
+        mod_smooth.factor = 0.5
+        mod_smooth.iterations = 10
+        bpy.ops.object.modifier_apply(modifier="Smooth")
 
-    # Recalculate normals after remesh/smooth
-    try:
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.mesh.normals_make_consistent(inside=False)
-        bpy.ops.object.mode_set(mode='OBJECT')
-    except Exception as e:
-        print(f"[WARNING] Failed to recalculate normals: {e}")
+        # Recalculate normals after remesh/smooth
+        try:
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.mesh.normals_make_consistent(inside=False)
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception as e:
+            print(f"[WARNING] Failed to recalculate normals: {e}")
+    else:
+        print("[INFO] Skipping Voxel Remesh (preserving original topology)")
 
     # 6. Decimate (Optimize for printing/slicing)
     # Use a conservative, size-aware default: only decimate if face count is huge.
@@ -163,8 +165,9 @@ if __name__ == "__main__":
         default=None,
         help="Override decimate ratio (0-1). Default depends on profile and face count.",
     )
+    parser.add_argument("--skip_remesh", action="store_true", help="Skip voxel remeshing (preserve original topology)")
     
     args = parser.parse_args(args_list)
     
     cleanup_scene()
-    process_mesh(args.mesh, args.output, args.height_mm, args.voxel_size_mm, profile=args.profile, decimate_ratio=args.decimate_ratio)
+    process_mesh(args.mesh, args.output, args.height_mm, args.voxel_size_mm, profile=args.profile, decimate_ratio=args.decimate_ratio, skip_remesh=args.skip_remesh)

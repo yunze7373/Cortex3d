@@ -101,7 +101,14 @@ stage4-trellis:
 		--mesh /workspace/outputs/trellis/character_20251226_013442_front.obj \
 		--output /workspace/outputs/final_print_trellis.stl \
 		--height_mm 100 \
-		--voxel_size_mm 0.1
+# Helper for TRELLIS post-processing (runs in instantmesh container because it has Blender)
+stage4-trellis:
+	docker compose exec $(SVC) python3 /workspace/scripts/blender_factory.py \
+		--mesh /workspace/outputs/trellis/character_20251226_013442_front.obj \
+		--output /workspace/outputs/final_print_trellis.stl \
+		--height_mm 100 \
+		--voxel_size_mm 0.1 \
+		--skip_remesh
 
 # 检查环境
 check:
