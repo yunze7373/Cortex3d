@@ -25,6 +25,12 @@ script_dir = Path(__file__).parent
 if str(script_dir) not in sys.path:
     sys.path.insert(0, str(script_dir))
 
+# 导入配置 (会自动加载 .env)
+try:
+    import config
+except ImportError:
+    pass # 如果找不到 config 也没关系，可能用户手动 export 了
+
 
 def main():
     parser = argparse.ArgumentParser(
