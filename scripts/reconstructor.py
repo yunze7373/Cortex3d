@@ -164,19 +164,53 @@ def run_multiview(image_prefix, output_dir, quality="balanced"):
 def run_trellis(image_path, output_dir, quality="balanced"):
     """
     调用 TRELLIS 生成 (微软高质量图转3D模型)
+    会自动检测环境：如果在本地运行，则通过 Docker Compose 调用容器。
     """
     logging.info(f"Starting TRELLIS reconstruction... (Quality: {quality})")
     
-    script_path = SCRIPT_DIR / "run_trellis.py"
-    if not script_path.exists():
-        logging.error(f"TRELLIS script not found: {script_path}")
-        return False
+    # 检测是否在 Docker 容器内
+    in_docker = os.path.exists("/.dockerenv") or os.environ.get("AM_I_IN_A_DOCKER_CONTAINER", False)
+    
+    if in_docker:
+        # 容器内直接运行
+        script_path = SCRIPT_DIR / "run_trellis.py"
+        if not script_path.exists():
+            logging.error(f"TRELLIS script not found: {script_path}")
+            return False
+            
+        cmd = [sys.executable, str(script_path)]
+        # 路径直接使用传入的路径 (假设容器内路径一致)
+        img_arg = str(image_path)
+        out_arg = str(output_dir)
+        
+    else:
+        # 本地运行 -> 调用 Docker Compose
+        logging.info("Running locally, dispatching to 'trellis' container...")
+        
+        # 转换路径为容器内路径 (假设挂载了 . -> /workspace)
+        # image_path 是绝对路径或相对路径。我们需要相对于 PROJECT_ROOT 的路径。
+        try:
+            rel_image = image_path.absolute().relative_to(PROJECT_ROOT.absolute())
+            container_image = f"/workspace/{rel_image}"
+            
+            rel_output = output_dir.absolute().relative_to(PROJECT_ROOT.absolute())
+            container_output = f"/workspace/{rel_output}"
+        except ValueError:
+            logging.warning("Path is outside project root, trying to use as-is...")
+            container_image = str(image_path)
+            container_output = str(output_dir)
 
-    cmd = [
-        sys.executable, str(script_path),
-        str(image_path),
-        "--output", str(output_dir),
-    ]
+        cmd = [
+            "docker", "compose", "exec", "-T", # -T 避免 TTY 错误
+            "trellis",
+            "python3", "/workspace/scripts/run_trellis.py"
+        ]
+        img_arg = container_image
+        out_arg = container_output
+
+    # 组装参数
+    cmd.append(img_arg)
+    cmd.extend(["--output", out_arg])
 
     # Note: scripts/run_trellis.py does not expose a resolution flag.
     # Use texture size + simplify as quality controls.
