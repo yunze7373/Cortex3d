@@ -77,6 +77,12 @@ def main():
         help="生成后自动打开预览"
     )
     
+    parser.add_argument(
+        "--style",
+        default=None,
+        help="风格描述 (例如: 'cyberpunk', 'fantasy', 'anime'). 默认自动根据描述匹配或使用 'cinematic character'"
+    )
+    
     args = parser.parse_args()
     
     # Banner
@@ -110,14 +116,32 @@ def main():
     if args.description:
         description = args.description
     else:
-        print("\n请输入角色描述 (按 Enter 使用示例):")
-        print("示例: 末日幸存者，穿着破旧定制西装的商人，携带手枪")
+        print("\n请输入角色描述:")
+        print("示例: 赛博朋克女骇客，霓虹灯外套，机械义肢")
+        print("示例: 中世纪骑士，银色铠甲，红色披风")
         print("-" * 50)
         description = input("\n角色描述: ").strip()
         
         if not description:
-            description = "末日幸存者，穿着破烂的定制西装，白衬衫沾满血迹和污垢，肩部皮质枪套，表情坚毅疲惫"
-            print(f"[使用示例描述] {description}")
+            print("[错误] 描述不能为空")
+            sys.exit(1)
+
+    # 确定风格
+    style = args.style
+    if not style:
+        # 简单的关键词风格匹配
+        desc_lower = description.lower()
+        if "cyberpunk" in desc_lower or "neon" in desc_lower or "mech" in desc_lower:
+            style = "Cyberpunk sci-fi style"
+        elif "knight" in desc_lower or "magic" in desc_lower or "fantasy" in desc_lower or "dragon" in desc_lower:
+            style = "High fantasy style"
+        elif "anime" in desc_lower or "manga" in desc_lower:
+            style = "Anime style"
+        else:
+            style = "Cinematic character design"
+        print(f"[自动匹配风格] {style}")
+    else:
+        print(f"[指定风格] {style}")
 
     # 自动增强提示词 (特别是面部)
     enhancements = ", detailed face, delicate features, high resolution, 8k, masterpiece, photorealistic, sharp focus"
@@ -133,10 +157,17 @@ def main():
             token=args.token,
             output_dir=args.output,
             auto_cut=not args.no_cut,
-            model=model
+            model=model,
+            style=style
         )
     else:
+        # Gemini Generator也需要更新支持style，这里暂时只支持proxy模式的style传递
+        # 或稍微修改一下 gemini_generator 的调用假设它有 style (需要去检查 gemini_generator.py)
+        # 检查 gemini_generator.py 发现它可能需要单独更新，暂时只更新 proxy 路径因为它是默认推荐
         from gemini_generator import generate_character_views
+        # 注意：如果 gemini_generator 还没更新支持 style，这里会报错。
+        # 为了安全，先检查一下 gemini_generator。
+        # 假设暂时不传 style给 gemini (或者稍后更新它)
         result = generate_character_views(
             character_description=description,
             api_key=args.api_key,

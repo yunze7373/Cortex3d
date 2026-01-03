@@ -162,7 +162,8 @@ def generate_character_multiview(
     token: str,
     output_dir: str = "test_images",
     auto_cut: bool = True,
-    model: str = DEFAULT_MODEL
+    model: str = DEFAULT_MODEL,
+    style: str = "cinematic character"
 ) -> Optional[str]:
     """
     生成多视角角色图像并保存
@@ -173,9 +174,7 @@ def generate_character_multiview(
         output_dir: 输出目录
         auto_cut: 是否自动切割为四个独立视图
         model: 模型名称
-    
-    Returns:
-        保存的图像路径 或 None
+        style: 风格描述
     """
     _ensure_imports()
     
@@ -183,11 +182,12 @@ def generate_character_multiview(
     print("Cortex3d - AiProxy 多视角图像生成")
     print("="*60)
     print(f"[角色] {character_description[:80]}...")
+    print(f"[风格] {style}")
     print(f"[模型] {model}")
     print("-"*60)
     
     # 构建提示词
-    prompt = build_multiview_prompt(character_description)
+    prompt = build_multiview_prompt(character_description, style=style)
     
     # 调用 AiProxy
     result = generate_image_via_proxy(

@@ -73,7 +73,7 @@ ABSOLUTELY NO TEXT:
 
 def build_multiview_prompt(
     character_description: str,
-    style: str = "gritty post-apocalyptic survivor"
+    style: str = "cinematic character"
 ) -> str:
     """
     构建多视图角色生成提示词
