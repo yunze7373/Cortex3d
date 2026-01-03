@@ -214,18 +214,25 @@ def run_trellis(image_path, output_dir, quality="balanced"):
 
     # Note: scripts/run_trellis.py does not expose a resolution flag.
     # Use texture size + simplify as quality controls.
-    if quality == "high":
+    if quality == "ultra":
+        cmd.extend([
+            "--texture_size", "4096",
+            "--simplify", "0.95", # Keep 95% of faces
+            "--ss_steps", "75",
+            "--slat_steps", "75",
+        ])
+    elif quality == "high":
         cmd.extend([
             "--texture_size", "2048",
             # Simplify 0.5 keeps 50% of faces. 0.98 kept only 2%.
-            "--simplify", "0.5",
+            "--simplify", "0.8", # Increased from 0.5 to 0.8 for better detail
             "--ss_steps", "50",
             "--slat_steps", "50",
         ])
     else:
         # Default/Balanced
         cmd.extend([
-            "--simplify", "0.90", # Slightly less aggressive than 0.95
+            "--simplify", "0.5", 
         ])
         
     return run_command(cmd, cwd=PROJECT_ROOT)
@@ -235,7 +242,7 @@ def main():
     parser = argparse.ArgumentParser(description="Cortex3d Unified Reconstructor (Stage 2)")
     parser.add_argument("image", type=Path, help="Path to input image (front view) OR prefix for multi-view images")
     parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis"], default="instantmesh", help="Reconstruction algorithm")
-    parser.add_argument("--quality", choices=["balanced", "high"], default="balanced", help="Quality preset")
+    parser.add_argument("--quality", choices=["balanced", "high", "ultra"], default="balanced", help="Quality preset")
     parser.add_argument("--output_dir", type=Path, default=OUTPUTS_DIR, help="Output directory")
     
     args = parser.parse_args()

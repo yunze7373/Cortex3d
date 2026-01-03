@@ -78,6 +78,12 @@ def main():
         help="生成后自动转换为 3D 模型 (TRELLIS High Quality)"
     )
     parser.add_argument(
+        "--quality",
+        choices=["balanced", "high", "ultra"],
+        default="high",
+        help="3D 模型质量 (默认: high, 推荐: ultra 获取最佳细节)"
+    )
+    parser.add_argument(
         "--preview",
         action="store_true",
         help="生成后自动打开预览"
@@ -226,7 +232,7 @@ def main():
                     str(reconstructor_script),
                     str(front_img),
                     "--algo", "trellis",
-                    "--quality", "high",
+                    "--quality", args.quality,
                     "--output_dir", str(Path("outputs"))
                 ]
                 
