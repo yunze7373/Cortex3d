@@ -35,32 +35,50 @@ def main():
     to_process = []
     
     print("\nStatus Report:")
-    print("-" * 60)
-    print(f"{'Image':<40} | {'Status':<15} | {'Output'}")
-    print("-" * 60)
+    print("-" * 100)
+    print(f"{'Asset ID':<38} | {'Style/Desc':<30} | {'Status':<10} | {'Output'}")
+    print("-" * 100)
+    
+    import json
     
     for img_path in sorted(front_images):
-        # Expected output name: stem of the image (without _front) + .glb?
-        # Typically generate_character.py creates names like "character_TIMESTAMP_front.png"
-        # reconstructor.py outputs "character_TIMESTAMP.glb" (or input stem .glb)
+        # Image: UUID_front.png
+        # Asset ID: UUID
+        asset_id = img_path.stem.replace("_front", "")
         
-        # reconstructor (TRELLIS) typically uses the image stem as the output name
-        # So inputs/foo_front.png -> outputs/foo_front.glb
-        # Wait, let's verify run_trellis behavior.
-        # run_trellis: image_name = Path(args.image).stem -> output_dir / f"{image_name}.glb"
-        # So output is "character_TIMESTAMP_front.glb"
+        # Check for metadata
+        json_path = input_dir / f"{asset_id}.json"
+        desc_preview = "Unknown"
+        if json_path.exists():
+            try:
+                with open(json_path, "r") as f:
+                    meta = json.load(f)
+                    # Try to get style or description
+                    style = meta.get("style", "Unknown")
+                    desc = meta.get("description", "")
+                    if len(desc) > 20: desc = desc[:17] + "..."
+                    desc_preview = f"{style} / {desc}"
+            except:
+                pass
+        
+        # Check for GLB output
+        # Output: outputs/trellis/UUID_front.glb OR UUID.glb?
+        # Reconstructor (TRELLIS) typically uses input stem: UUID_front.glb
+        # But if we change reconstructor to use asset id?
+        # Current pipeline: reconstructor(img_path) -> stem(img_path).glb
+        # So outputs/trellis/UUID_front.glb
         
         expected_glb = output_dir / f"{img_path.stem}.glb"
         
         if expected_glb.exists():
             status = "✅ DONE"
-            print(f"{img_path.name:<40} | {status:<15} | {expected_glb.name}")
+            print(f"{asset_id:<38} | {desc_preview:<30} | {status:<10} | {expected_glb.name}")
         else:
             status = "⏳ PENDING"
-            print(f"{img_path.name:<40} | {status:<15} | -")
+            print(f"{asset_id:<38} | {desc_preview:<30} | {status:<10} | -")
             to_process.append(img_path)
             
-    print("-" * 60)
+    print("-" * 100)
     
     if not to_process:
         print("\n[INFO] All images have been processed! 🎉")

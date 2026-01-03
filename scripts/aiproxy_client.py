@@ -157,13 +157,33 @@ def extract_image_from_reply(reply: str) -> Optional[Tuple[bytes, str]]:
     return None
 
 
+    # 自动切割
+    if auto_cut:
+        try:
+            from image_processor import process_quadrant_image
+            print("\n[INFO] 自动切割四视图...")
+            process_quadrant_image(
+                input_path=str(filepath),
+                output_dir=output_dir,
+                remove_bg_flag=True,
+                margin=5
+            )
+        except ImportError:
+            print("[WARNING] 无法导入 image_processor，跳过自动切割")
+        except Exception as e:
+            print(f"[WARNING] 切割失败: {e}")
+    
+    return str(filepath)
+
+
 def generate_character_multiview(
     character_description: str,
     token: str,
     output_dir: str = "test_images",
     auto_cut: bool = True,
     model: str = DEFAULT_MODEL,
-    style: str = "cinematic character"
+    style: str = "cinematic character",
+    asset_id: Optional[str] = None
 ) -> Optional[str]:
     """
     生成多视角角色图像并保存
@@ -172,24 +192,40 @@ def generate_character_multiview(
         character_description: 角色描述
         token: AiProxy 客户端令牌
         output_dir: 输出目录
-        auto_cut: 是否自动切割为四个独立视图
+        auto_cut: 是否自动切割
         model: 模型名称
         style: 风格描述
+        asset_id: 指定的资产ID (如果不给则自动生成 UUID)
+    
+    Returns:
+        保存的图像路径 或 None
     """
     _ensure_imports()
+    import uuid
+    import json
     
+    # 1. 生成唯一 ID
+    if not asset_id:
+        # 使用 UUID + 时间戳前缀确保绝对有序和唯一
+        # 格式: 20260103_uuid
+        # 或者直接 UUID。用户要求作为 "Asset ID"。UUID 更像 ID。
+        # 结合一下：timestamp_shortuuid?
+        # 为了简洁和唯一性，直接用 UUID4 string
+        asset_id = str(uuid.uuid4())
+        
     print("="*60)
-    print("Cortex3d - AiProxy 多视角图像生成")
+    print(f"Cortex3d - Asset Generation [{asset_id}]")
     print("="*60)
     print(f"[角色] {character_description[:80]}...")
     print(f"[风格] {style}")
     print(f"[模型] {model}")
+    print(f"[ID]   {asset_id}")
     print("-"*60)
     
     # 构建提示词
     prompt = build_multiview_prompt(character_description, style=style)
     
-    # 调用 AiProxy
+    # 调用 AiProxy (实际生成)
     result = generate_image_via_proxy(
         prompt=prompt,
         token=token,
@@ -213,16 +249,28 @@ def generate_character_multiview(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"character_{timestamp}.{ext}"
+    filename = f"{asset_id}.{ext}"
     filepath = output_path / filename
     
     with open(filepath, "wb") as f:
         f.write(image_bytes)
     
-    print(f"[保存] {filepath}")
+    print(f"[保存图像] {filepath}")
     
-    # 自动切割
+    # 2. 保存元数据 (Metadata Sidecar)
+    metadata = {
+        "asset_id": asset_id,
+        "created_at": datetime.now().isoformat(),
+        "description": character_description,
+        "style": style,
+        "model": model,
+        "prompt": prompt,
+        "files": {
+            "master": str(filename),
+        }
+    }
+    
+    # 3. 自动切割
     if auto_cut:
         try:
             from image_processor import process_quadrant_image
@@ -233,10 +281,20 @@ def generate_character_multiview(
                 remove_bg_flag=True,
                 margin=5
             )
+            # 记录切割后的文件
+            metadata["files"]["front"] = f"{asset_id}_front.png"
+            metadata["files"]["side"] = f"{asset_id}_left.png" # 左右等
+            
         except ImportError:
             print("[WARNING] 无法导入 image_processor，跳过自动切割")
         except Exception as e:
             print(f"[WARNING] 切割失败: {e}")
+            
+    # 写入 JSON
+    json_path = output_path / f"{asset_id}.json"
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=2, ensure_ascii=False)
+    print(f"[保存元数据] {json_path}")
     
     return str(filepath)
 
