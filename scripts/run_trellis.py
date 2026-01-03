@@ -279,6 +279,51 @@ def main():
         simplify=args.simplify,
         texture_size=args.texture_size,
     )
+    
+    # =========================================================================
+    # POST-PROCESSING: Enhance Texture Quality
+    # =========================================================================
+    print("[INFO] Post-processing texture for photo-realism...")
+    try:
+        from PIL import ImageEnhance
+        
+        # Helper to process a PIL image
+        def process_texture(pil_img):
+            # 1. Sharpening (Crucial for 4K)
+            enhancer = ImageEnhance.Sharpness(pil_img)
+            pil_img = enhancer.enhance(1.5) # +50% Sharpness
+            
+            # 2. Color/Saturation (Restore vibrancy)
+            enhancer = ImageEnhance.Color(pil_img)
+            pil_img = enhancer.enhance(1.2) # +20% Saturation
+            
+            # 3. Contrast (Pop details)
+            enhancer = ImageEnhance.Contrast(pil_img)
+            pil_img = enhancer.enhance(1.1) # +10% Contrast
+            
+            # 4. Brightness (Fix dark bake)
+            enhancer = ImageEnhance.Brightness(pil_img)
+            pil_img = enhancer.enhance(1.1) # +10% Brightness
+            
+            return pil_img
+
+        # Iterate over geometry in the scene to find textures
+        # 'glb' is usually a trimesh.Scene
+        if hasattr(glb, 'geometry'):
+            for geom_name, geom in glb.geometry.items():
+                if hasattr(geom, 'visual') and hasattr(geom.visual, 'material'):
+                    mat = geom.visual.material
+                    # Check for PBR material (baseColorTexture) or Simple material (image)
+                    if hasattr(mat, 'baseColorTexture') and mat.baseColorTexture:
+                        print(f"[INFO] Enhancing texture for geometry: {geom_name}")
+                        mat.baseColorTexture = process_texture(mat.baseColorTexture)
+                    elif hasattr(mat, 'image') and mat.image:
+                        print(f"[INFO] Enhancing texture for geometry: {geom_name}")
+                        mat.image = process_texture(mat.image)
+                        
+    except Exception as e:
+        print(f"[WARNING] Texture enhancement failed: {e}")
+
     glb.export(str(glb_path))
     
     # Export OBJ mesh
