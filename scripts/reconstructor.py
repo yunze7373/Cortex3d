@@ -183,7 +183,15 @@ def run_trellis(image_path, output_dir, quality="balanced"):
     if quality == "high":
         cmd.extend([
             "--texture_size", "2048",
-            "--simplify", "0.98",
+            # Simplify 0.5 keeps 50% of faces. 0.98 kept only 2%.
+            "--simplify", "0.5",
+            "--ss_steps", "50",
+            "--slat_steps", "50",
+        ])
+    else:
+        # Default/Balanced
+        cmd.extend([
+            "--simplify", "0.90", # Slightly less aggressive than 0.95
         ])
         
     return run_command(cmd, cwd=PROJECT_ROOT)
