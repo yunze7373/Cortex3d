@@ -73,7 +73,20 @@ def preprocess_image(image_path: str):
         background = Image.new("RGBA", img.size, (255, 255, 255, 255))
         img = Image.alpha_composite(background, img).convert("RGB")
     
-    print(f"[INFO] Image size: {img.size}")
+    # 2. Pad to square to preserve aspect ratio
+    # If we don't do this, the pipeline might force-resize to 512x512, squashing the character.
+    w, h = img.size
+    if w != h:
+        print(f"[INFO] Image is non-square ({w}x{h}). Padding to square to preserve proportions.")
+        max_dim = max(w, h)
+        new_img = Image.new("RGB", (max_dim, max_dim), (255, 255, 255))
+        # Center the image
+        paste_x = (max_dim - w) // 2
+        paste_y = (max_dim - h) // 2
+        new_img.paste(img, (paste_x, paste_y))
+        img = new_img
+        
+    print(f"[INFO] Final Image size: {img.size}")
     return img
 
 
