@@ -128,31 +128,17 @@ def find_dividing_lines(gray_image, axis: str, num_divisions: int) -> List[int]:
 
 def split_horizontal_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
     """
-    切割 1x4 横排布局
-    
-    布局: [Front | Back | Left | Right] 或 [Front | Left | Right | Back]
+    切割 1x4 横排布局 - 使用固定几何分割
     """
-    _ensure_imports()
+    # _ensure_imports() # (already called by caller or globally)
     height, width = image.shape[:2]
     
-    # 转灰度
-    if len(image.shape) == 3:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = image
+    # 使用固定网格分割，比依靠亮度检测（find_dividing_lines）更可靠，
+    # 尤其是在背景复杂或黑暗的情况下。AI生成图通常严格遵守栅格。
+    dividers = [width // 4, width // 2, 3 * width // 4]
     
-    # 检测3条垂直分割线
-    dividers = find_dividing_lines(gray, 'vertical', 3)
+    # print(f"[INFO] 垂直分割线位置: {dividers}")
     
-    if len(dividers) < 3:
-        # 回退到均等分割
-        print("[WARNING] 未检测到足够分割线，使用均等分割")
-        dividers = [width // 4, width // 2, 3 * width // 4]
-    
-    dividers = sorted(dividers)
-    print(f"[INFO] 垂直分割线位置: {dividers}")
-    
-    # 定义四个区域
     x_positions = [0] + dividers + [width]
     
     views = []
@@ -164,9 +150,15 @@ def split_horizontal_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
         y1 = margin
         y2 = height - margin
         
+        # 边界检查
+        x1 = max(0, x1)
+        x2 = min(width, x2)
+        y1 = max(0, y1)
+        y2 = min(height, y2)
+        
         if x2 > x1 and y2 > y1:
             cropped = image[y1:y2, x1:x2].copy()
-            print(f"[INFO] {name} 视图: 位置 ({x1},{y1})-({x2},{y2}), 尺寸 {x2-x1}x{y2-y1}")
+            # print(f"[INFO] {name} 视图: {x2-x1}x{y2-y1}")
             views.append((name, cropped))
     
     return views
@@ -174,29 +166,15 @@ def split_horizontal_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
 
 def split_grid_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
     """
-    切割 2x2 田字格布局
-    
-    布局:
-    [Front | Back ]
-    [Left  | Right]
+    切割 2x2 田字格布局 - 使用固定几何分割
     """
-    _ensure_imports()
     height, width = image.shape[:2]
     
-    # 转灰度
-    if len(image.shape) == 3:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = image
+    # 强制中心分割
+    x_split = width // 2
+    y_split = height // 2
     
-    # 检测1条水平分割线和1条垂直分割线
-    h_dividers = find_dividing_lines(gray, 'horizontal', 1)
-    v_dividers = find_dividing_lines(gray, 'vertical', 1)
-    
-    y_split = h_dividers[0] if h_dividers else height // 2
-    x_split = v_dividers[0] if v_dividers else width // 2
-    
-    print(f"[INFO] 检测到分割点: ({x_split}, {y_split})")
+    # print(f"[INFO] 分割中心点: ({x_split}, {y_split})")
     
     # 定义四个区域
     regions = {
@@ -207,11 +185,21 @@ def split_grid_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
     }
     
     views = []
+    # 顺序：前、后、左、右 (注意：田字格通常是 前后/左右 排列，但也取决于具体模型)
+    # 假设标准 layout:
+    # Front | Back
+    # Left  | Right
     for name in ['front', 'back', 'left', 'right']:
         x1, y1, x2, y2 = regions[name]
+        
+        x1 = max(0, x1)
+        x2 = min(width, x2)
+        y1 = max(0, y1)
+        y2 = min(height, y2)
+
         if x2 > x1 and y2 > y1:
             cropped = image[y1:y2, x1:x2].copy()
-            print(f"[INFO] {name} 视图: 位置 ({x1},{y1})-({x2},{y2}), 尺寸 {x2-x1}x{y2-y1}")
+            # print(f"[INFO] {name} 视图: {x2-x1}x{y2-y1}")
             views.append((name, cropped))
     
     return views
