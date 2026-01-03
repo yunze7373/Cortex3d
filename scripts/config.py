@@ -66,6 +66,13 @@ LAYOUT & COMPOSITION:
 • Clean separation between panels
 • Neutral grey background in all panels
 
+LIGHTING & SHADING (CRITICAL):
+• Flat, even lighting (albedo texture style)
+• Soft ambient light only
+• NO strong shadows, NO cast shadows, NO harsh contrast
+• NO chiaroscuro, NO dramatic lighting
+• Face must be clearly visible without shadow obstruction
+
 STYLE & AESTHETIC:
 • 3D digital rendering with cinematic quality
 • Photorealistic CGI, 8k textures
