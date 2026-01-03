@@ -279,8 +279,7 @@ def process_quadrant_image(
     input_path: str,
     output_dir: str,
     remove_bg_flag: bool = True,
-    margin: int = 5,
-    upscale: bool = True
+    margin: int = 5
 ) -> List[str]:
     """
     处理四宫格图片的主函数
@@ -321,10 +320,6 @@ def process_quadrant_image(
         output_filename = f"{input_stem}_{view_name}.png"
         output_filepath = output_path / output_filename
         
-        # 增强/放大
-        if upscale:
-            view_image = enhance_image(view_image)
-        
         if remove_bg_flag:
             print(f"[处理中] 去除 {view_name} 视图背景...")
             try:
@@ -344,38 +339,6 @@ def process_quadrant_image(
     print(f"\n[完成] 共生成 {len(output_files)} 个视图文件")
     return output_files
 
-
-
-def enhance_image(image, target_min_width=1024):
-    """
-    提升图片分辨率和清晰度
-    1. 如果宽度 < target_min_width，此时放大 2x (Bicubic)
-    2. 应用锐化滤镜
-    """
-    _ensure_imports()
-    height, width = image.shape[:2]
-    
-    scale = 1.0
-    if width < target_min_width:
-        scale = 2.0
-        # 如果还是太小，可能需要更大，但暂时限制2x以免失真太重
-        
-    if scale > 1.0:
-        new_width = int(width * scale)
-        new_height = int(height * scale)
-        print(f"  [增强] 放大图片: {width}x{height} -> {new_width}x{new_height}")
-        image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
-        
-    # 锐化 (Unsharp Masking 模拟)
-    # create a blurred version
-    gaussian = cv2.GaussianBlur(image, (0, 0), 3.0)
-    # addWeighted: dst = src1*alpha + src2*beta + gamma
-    # unsharp algorithm: original + (original - blurred) * amount
-    # = original * (1+amount) - blurred * amount
-    amount = 1.5
-    sharpened = cv2.addWeighted(image, 1.0 + amount, gaussian, -amount, 0)
-    
-    return sharpened
 
 def main():
     parser = argparse.ArgumentParser(
@@ -401,24 +364,16 @@ def main():
         default=5,
         help="切割边界收缩像素 (默认: 5)"
     )
-    parser.add_argument(
-        "--no-upscale",
-        action="store_true",
-        help="禁用自动放大增强"
-    )
     
     args = parser.parse_args()
     
-    # Update process_quadrant_image call signature to pass upscale flag if we added it to the function
-    # But currently process_quadrant_image doesn't take it.
-    # We will modify process_quadrant_image below.
     process_quadrant_image(
         input_path=args.input,
         output_dir=args.output,
         remove_bg_flag=not args.no_rembg,
-        margin=args.margin,
-        upscale=not args.no_upscale
+        margin=args.margin
     )
+
 
 if __name__ == "__main__":
     main()

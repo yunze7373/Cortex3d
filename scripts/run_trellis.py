@@ -73,20 +73,6 @@ def preprocess_image(image_path: str):
         background = Image.new("RGBA", img.size, (255, 255, 255, 255))
         img = Image.alpha_composite(background, img).convert("RGB")
     
-    
-    # Pad to square to prevent distortion
-    w, h = img.size
-    max_dim = max(w, h)
-    if w != h:
-        print(f"[INFO] Padding image to square: {w}x{h} -> {max_dim}x{max_dim}")
-        # Create white background square
-        new_img = Image.new("RGB", (max_dim, max_dim), (255, 255, 255))
-        # Center paste
-        paste_x = (max_dim - w) // 2
-        paste_y = (max_dim - h) // 2
-        new_img.paste(img, (paste_x, paste_y))
-        img = new_img
-    
     print(f"[INFO] Image size: {img.size}")
     return img
 
