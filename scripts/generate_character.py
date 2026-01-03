@@ -66,6 +66,16 @@ def main():
         action="store_true",
         help="不自动切割"
     )
+    parser.add_argument(
+        "--to-3d",
+        action="store_true",
+        help="生成后自动转换为 3D 模型 (TRELLIS High Quality)"
+    )
+    parser.add_argument(
+        "--preview",
+        action="store_true",
+        help="生成后自动打开预览"
+    )
     
     args = parser.parse_args()
     
@@ -73,7 +83,7 @@ def main():
     print("""
 ╔═══════════════════════════════════════════════════════════════╗
 ║                    Cortex3d 角色生成器                         ║
-║         AI 多视角图像生成 → 切割 → 去背景                      ║
+║         AI 多视角图像生成 → 切割 → 去背景 → 3D建模             ║
 ╚═══════════════════════════════════════════════════════════════╝
     """)
     
@@ -137,22 +147,76 @@ def main():
     
     if result:
         print("\n" + "═" * 50)
-        print("✅ 完成!")
+        print("✅ 2D 生成完成!")
         print("═" * 50)
         
-        # 列出生成的文件
         output_path = Path(args.output)
+        master_path = Path(result)
+        
+        # 确定 Front 视图路径 (即使没有切割，result也是master图片)
+        # 如果 auto_cut 为 True (args.no_cut 为 False)，则会有 _front.png
+        front_img = None
+        if not args.no_cut:
+            front_img = master_path.parent / (master_path.stem + "_front.png")
+        
+        # 1. 自动预览
+        if args.preview:
+            import subprocess
+            print("\n[INFO] 打开预览...")
+            try:
+                if sys.platform == "darwin": # macOS
+                    subprocess.run(["open", str(master_path)])
+                elif sys.platform == "win32":
+                    os.startfile(str(master_path))
+                else: # linux
+                    subprocess.run(["xdg-open", str(master_path)])
+            except Exception as e:
+                print(f"[WARNING] 无法打开预览: {e}")
+
+        # 2. 自动转 3D
+        if args.to_3d:
+            if not front_img or not front_img.exists():
+                print("\n[ERROR] 无法找到 Front 视图进行 3D 生成 (请确保未设置 --no-cut 且切割成功)")
+            else:
+                print("\n" + "═" * 50)
+                print("🚀 启动 3D 生成流水线 (TRELLIS High Quality)...")
+                print("═" * 50)
+                
+                # 调用 scripts/reconstructor.py
+                reconstructor_script = script_dir / "reconstructor.py"
+                cmd = [
+                    sys.executable,
+                    str(reconstructor_script),
+                    str(front_img),
+                    "--algo", "trellis",
+                    "--quality", "high",
+                    "--output_dir", str(Path("outputs"))
+                ]
+                
+                try:
+                    import subprocess
+                    subprocess.run(cmd, check=True)
+                    print("\n[SUCCESS] 全流程完成！")
+                    
+                    # 尝试打开 3D 结果
+                    glb_path = Path("outputs/trellis") / (front_img.stem + ".glb")
+                    if args.preview and glb_path.exists():
+                         if sys.platform == "darwin":
+                            subprocess.run(["open", str(glb_path)])
+                            
+                except subprocess.CalledProcessError as e:
+                    print(f"\n[ERROR] 3D 生成失败 (Exit Code {e.returncode})")
+                except Exception as e:
+                    print(f"\n[ERROR] 3D 生成异常: {e}")
+
+        # 列出生成的文件
         if output_path.exists():
             files = list(output_path.glob("*.png"))
             if files:
-                print("\n生成的文件:")
+                print("\n生成的文件列表:")
                 for f in sorted(files)[-5:]:
-                    print(f"  📷 {f.name}")
+                     print(f"  📷 {f.name}")
         
-        print("\n下一步:")
-        print("  1. 查看 test_images/ 目录中的图片")
-        print("  2. 使用 *_front.png 在 InstantMesh 生成 3D 模型:")
-        print("     https://huggingface.co/spaces/TencentARC/InstantMesh")
     else:
         print("\n❌ 生成失败，请检查错误信息")
         sys.exit(1)
