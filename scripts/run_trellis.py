@@ -240,10 +240,14 @@ def main():
         seed=args.seed,
         formats=["gaussian", "mesh"],
         preprocess_image=False, # We already preprocessed
-        ss_sampling_steps=args.ss_steps,
-        slat_sampling_steps=args.slat_steps,
-        ss_guidance_strength=args.ss_guidance,
-        slat_guidance_strength=args.slat_guidance,
+        sparse_structure_sampler_params={
+            "steps": args.ss_steps,
+            "cfg_strength": args.ss_guidance,
+        },
+        slat_sampler_params={
+            "steps": args.slat_steps,
+            "cfg_strength": args.slat_guidance,
+        },
     )
     
     # Create output directory
