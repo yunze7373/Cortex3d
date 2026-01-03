@@ -202,9 +202,10 @@ def main():
     parser.add_argument("image", type=str, help="Input image path")
     parser.add_argument("--output", "-o", type=str, default="outputs/trellis", help="Output directory")
     parser.add_argument("--seed", type=int, default=1, help="Random seed")
-    parser.add_argument("--simplify", type=float, default=0.95, help="Mesh simplification ratio")
-    parser.add_argument("--ss_steps", type=int, default=25, help="Structure sampling steps")
-    parser.add_argument("--slat_steps", type=int, default=25, help="Structure latent sampling steps")
+    parser.add_argument("--simplify", type=float, default=0.5, help="Mesh simplification ratio (0.5 = keep 50%)")
+    parser.add_argument("--texture_size", type=int, default=2048, help="Texture resolution")
+    parser.add_argument("--ss_steps", type=int, default=50, help="Structure sampling steps")
+    parser.add_argument("--slat_steps", type=int, default=50, help="Structure latent sampling steps")
     parser.add_argument("--ss_guidance", type=float, default=7.5, help="Structure guidance strength")
     parser.add_argument("--slat_guidance", type=float, default=7.5, help="Structure latent guidance strength")
     
