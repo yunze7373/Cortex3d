@@ -309,8 +309,18 @@ def main():
         logging.info(f"Reconstruction completed successfully. Mesh: {result_mesh}")
         # Copy to a Latest location for stage4 to pick up easily
         latest_path = args.output_dir / "latest.obj"
-        shutil.copy(result_mesh, latest_path)
-        logging.info(f"Updated latest mesh: {latest_path}")
+        try:
+            if latest_path.exists():
+                latest_path.unlink()
+            shutil.copy(result_mesh, latest_path)
+            logging.info(f"Updated latest mesh: {latest_path}")
+        except PermissionError:
+            logging.warning(f"Permission denied: Cannot update {latest_path}. (Owned by root?)")
+            logging.warning("To fix, run: sudo rm output/latest.obj")
+            # Don't exit 1, because generation IS successful
+        except Exception as e:
+            logging.warning(f"Failed to update latest.obj: {e}")
+            
         sys.exit(0)
     else:
         logging.error("Reconstruction failed or mesh not found.")
