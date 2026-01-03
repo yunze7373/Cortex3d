@@ -79,7 +79,9 @@ def generate_image_via_proxy(
     
     payload = {
         "prompt": prompt,
-        "model": model
+        "model": model,
+        "width": 1536,
+        "height": 768
     }
     
     print(f"[AiProxy] 调用 {endpoint}")
