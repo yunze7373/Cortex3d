@@ -314,7 +314,7 @@ def main():
                 print("\n[ERROR] 无法找到 Front 视图进行 3D 生成 (请确保未设置 --no-cut 且切割成功)")
             else:
                 print("\n" + "═" * 50)
-                print("🚀 启动 3D 生成流水线 (TRELLIS High Quality)...")
+                print("🚀 启动 3D 生成流水线 (Hunyuan3D Multi-View)...")
                 print("═" * 50)
                 
                 # 调用 scripts/reconstructor.py
@@ -323,8 +323,8 @@ def main():
                     sys.executable,
                     str(reconstructor_script),
                     str(front_img),
-                    "--algo", "trellis",
-                    "--quality", args.quality,
+                    "--algo", "hunyuan3d",
+                    "--quality", "ultra",  # ultra enables multi-view
                     "--output_dir", str(Path("outputs"))
                 ]
                 
@@ -333,8 +333,9 @@ def main():
                     subprocess.run(cmd, check=True)
                     print("\n[SUCCESS] 全流程完成！")
                     
-                    # 尝试打开 3D 结果
-                    glb_path = Path("outputs/trellis") / (front_img.stem + ".glb")
+                    # 尝试打开 3D 结果 (Hunyuan3D output, _front is removed from filename)
+                    output_name = front_img.stem.replace('_front', '')
+                    glb_path = Path("outputs/hunyuan3d") / (output_name + ".glb")
                     if args.preview and glb_path.exists():
                          if sys.platform == "darwin":
                             subprocess.run(["open", str(glb_path)])
