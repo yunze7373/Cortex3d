@@ -93,7 +93,9 @@ def load_hunyuan3d_pipeline(model_type="lite", multiview=False):
             try:
                 from hy3dgen.texgen import Hunyuan3DPaintPipeline
                 print("[INFO] Loading texture generation pipeline...")
-                texture_pipeline = Hunyuan3DPaintPipeline.from_pretrained(model_path)
+                # Texture models (delight, paint) are in main Hunyuan3D-2 repo, not 2mv
+                texture_model_path = 'tencent/Hunyuan3D-2'
+                texture_pipeline = Hunyuan3DPaintPipeline.from_pretrained(texture_model_path)
                 print("[INFO] Texture pipeline loaded!")
             except Exception as e:
                 print(f"[WARNING] Could not load texture pipeline: {e}")

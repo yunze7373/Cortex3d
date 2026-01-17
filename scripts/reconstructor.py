@@ -444,9 +444,11 @@ def main():
     
     elif args.algo == "hunyuan3d":
         algo_output_dir = args.output_dir / "hunyuan3d"
+        # Hunyuan3D output name removes _front suffix
+        output_name = image_name.replace('_front', '')
         if run_hunyuan3d(input_image, algo_output_dir, args.quality):
             success = True
-            result_mesh = algo_output_dir / f"{image_name}.glb"
+            result_mesh = algo_output_dir / f"{output_name}.glb"
         
     if success and result_mesh and result_mesh.exists():
         logging.info(f"Reconstruction completed successfully. Mesh: {result_mesh}")
