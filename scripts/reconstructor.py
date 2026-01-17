@@ -136,25 +136,66 @@ def run_multiview(image_prefix, output_dir, quality="balanced"):
     调用 InstantMesh Multi-View 生成 (使用用户提供的4视角图片)
     image_prefix: 图片前缀，如 "test_images/character_20251226_013442"，
                   会自动查找 *_front.png, *_back.png, *_left.png, *_right.png
+    会自动检测环境：如果在本地运行，则通过 Docker Compose 调用容器。
     """
     logging.info(f"Starting Multi-View InstantMesh reconstruction... (Quality: {quality})")
     
-    script_path = SCRIPT_DIR / "run_instantmesh_multiview.py"
-    if not script_path.exists():
-        logging.error(f"Multi-view script not found: {script_path}")
-        return False
-
-    IM_CONFIG = PROJECT_ROOT / "InstantMesh" / "configs" / "instant-mesh-large.yaml"
+    # 检测是否在 Docker 容器内
+    in_docker = os.path.exists("/.dockerenv") or os.environ.get("AM_I_IN_A_DOCKER_CONTAINER", False)
+    
+    # 配置文件
     if quality == "high":
-        IM_CONFIG = PROJECT_ROOT / "configs" / "instant-mesh-hq.yaml"
+        config_name = "instant-mesh-hq.yaml"
+        config_path = "/workspace/configs/instant-mesh-hq.yaml" if not in_docker else str(PROJECT_ROOT / "configs" / "instant-mesh-hq.yaml")
+    else:
+        config_name = "instant-mesh-large.yaml"
+        config_path = "/workspace/InstantMesh/configs/instant-mesh-large.yaml" if not in_docker else str(PROJECT_ROOT / "InstantMesh" / "configs" / "instant-mesh-large.yaml")
+    
+    if in_docker:
+        # 容器内直接运行
+        script_path = SCRIPT_DIR / "run_instantmesh_multiview.py"
+        if not script_path.exists():
+            logging.error(f"Multi-view script not found: {script_path}")
+            return False
+            
+        cmd = [
+            sys.executable, str(script_path),
+            config_path,
+            str(image_prefix),
+            "--output_path", str(output_dir),
+            "--export_texmap"
+        ]
+        
+    else:
+        # 本地运行 -> 调用 Docker Compose
+        logging.info("Running locally, dispatching to 'instantmesh' container...")
+        
+        # 转换路径为容器内路径
+        try:
+            # image_prefix 可能是 "test_images/xxx" 或绝对路径
+            prefix_path = Path(image_prefix)
+            if prefix_path.is_absolute():
+                rel_prefix = prefix_path.relative_to(PROJECT_ROOT.absolute())
+            else:
+                rel_prefix = prefix_path
+            container_prefix = f"/workspace/{rel_prefix}"
+            
+            rel_output = output_dir.absolute().relative_to(PROJECT_ROOT.absolute())
+            container_output = f"/workspace/{rel_output}"
+        except ValueError:
+            logging.warning("Path is outside project root, trying to use as-is...")
+            container_prefix = str(image_prefix)
+            container_output = str(output_dir)
 
-    cmd = [
-        sys.executable, str(script_path),
-        str(IM_CONFIG),
-        str(image_prefix),
-        "--output_path", str(output_dir),
-        "--export_texmap"
-    ]
+        cmd = [
+            "docker", "compose", "exec", "-T",
+            "instantmesh",
+            "python3", "/workspace/scripts/run_instantmesh_multiview.py",
+            config_path,
+            container_prefix,
+            "--output_path", container_output,
+            "--export_texmap"
+        ]
     
     if quality == "high":
         cmd.extend(["--texture_resolution", "2048"])
