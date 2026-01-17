@@ -271,37 +271,38 @@ def find_dividing_lines(gray_image, axis: str, num_divisions: int) -> List[int]:
 
 def split_horizontal_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
     """
-    切割 1x4 横排布局 - 使用固定几何分割
+    切割 1x4 横排布局 - 使用重叠区域避免切到手
+    
+    每个区域向两边扩展 15%，确保捕获超出格子边界的手臂等部位。
+    后续的 crop_to_subject 会根据实际主体边界裁切。
     """
-    # _ensure_imports() # (already called by caller or globally)
     height, width = image.shape[:2]
+    cell_width = width // 4
     
-    # 使用固定网格分割，比依靠亮度检测（find_dividing_lines）更可靠，
-    # 尤其是在背景复杂或黑暗的情况下。AI生成图通常严格遵守栅格。
-    dividers = [width // 4, width // 2, 3 * width // 4]
-    
-    # print(f"[INFO] 垂直分割线位置: {dividers}")
-    
-    x_positions = [0] + dividers + [width]
+    # 重叠比例：向每侧扩展 15%
+    overlap = int(cell_width * 0.15)
     
     views = []
     view_names = ['front', 'back', 'left', 'right']
     
     for i, name in enumerate(view_names):
-        x1 = x_positions[i] + margin
-        x2 = x_positions[i + 1] - margin
+        # 计算基础位置
+        base_x1 = i * cell_width
+        base_x2 = (i + 1) * cell_width
+        
+        # 向两侧扩展（允许重叠）
+        x1 = max(0, base_x1 - overlap)
+        x2 = min(width, base_x2 + overlap)
         y1 = margin
         y2 = height - margin
         
         # 边界检查
-        x1 = max(0, x1)
-        x2 = min(width, x2)
         y1 = max(0, y1)
         y2 = min(height, y2)
         
         if x2 > x1 and y2 > y1:
             cropped = image[y1:y2, x1:x2].copy()
-            # print(f"[INFO] {name} 视图: {x2-x1}x{y2-y1}")
+            print(f"[INFO] {name} 视图切割区域: x={x1}-{x2} (扩展{overlap}px)")
             views.append((name, cropped))
     
     return views
