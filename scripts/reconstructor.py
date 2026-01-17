@@ -302,6 +302,9 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced"):
         if not script_path.exists():
             logging.error(f"Hunyuan3D script not found: {script_path}")
             return False
+        
+        # Enable multi-view for ultra quality
+        use_multiview = quality == "ultra"
             
         cmd = [
             sys.executable, str(script_path),
@@ -309,10 +312,15 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced"):
             "--output", str(output_dir),
             "--model", model_type
         ]
+        if use_multiview:
+            cmd.append("--multiview")
         
     else:
         # 本地运行 -> 调用 Docker Compose
         logging.info("Running locally, dispatching to 'hunyuan3d' container...")
+        
+        # Enable multi-view for ultra quality
+        use_multiview = quality == "ultra"
         
         # 转换路径为容器内路径
         try:
@@ -334,6 +342,8 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced"):
             "--output", container_output,
             "--model", model_type
         ]
+        if use_multiview:
+            cmd.append("--multiview")
         
     return run_command(cmd, cwd=PROJECT_ROOT)
 
