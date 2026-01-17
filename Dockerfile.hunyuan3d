@@ -9,12 +9,12 @@ ENV CUDA_HOME=/usr/local/cuda
 ENV PATH="${CUDA_HOME}/bin:${PATH}"
 ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
 
-# System dependencies (including OpenGL for pymeshlab)
+# System dependencies (including OpenGL for pymeshlab and texture rendering)
 RUN apt-get update && apt-get install -y \
     python3 python3-pip python3-dev \
     git wget curl \
-    libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev \
-    libopengl0 libglx0 libegl1 \
+    libgl1-mesa-glx libgl1-mesa-dev libglib2.0-0 libsm6 libxext6 libxrender-dev \
+    libopengl0 libglx0 libegl1 libglew-dev \
     ninja-build g++ cmake \
     && rm -rf /var/lib/apt/lists/*
 
@@ -42,9 +42,20 @@ RUN pip3 install --no-cache-dir \
     xatlas \
     pygltflib \
     rembg \
-    onnxruntime-gpu
+    onnxruntime-gpu \
+    pybind11
 
-# Compile custom CUDA rasterizer (if needed)
+# Compile custom_rasterizer for texture generation
+RUN cd /opt/hunyuan3d/hy3dgen/texgen/custom_rasterizer && \
+    python3 setup.py install && \
+    echo "custom_rasterizer compiled successfully"
+
+# Compile differentiable_renderer (mesh_painter)
+RUN cd /opt/hunyuan3d/hy3dgen/texgen/differentiable_renderer && \
+    (bash compile_mesh_painter.sh || python3 setup.py install) && \
+    echo "differentiable_renderer compiled successfully"
+
+# Install Hunyuan3D package
 RUN cd /opt/hunyuan3d && \
     pip3 install -e . || echo "Package install skipped"
 
