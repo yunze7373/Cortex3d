@@ -95,6 +95,13 @@ def main():
         help="风格描述 (例如: 'cyberpunk', 'fantasy', 'anime'). 默认自动根据描述匹配或使用 'cinematic character'"
     )
     
+    parser.add_argument(
+        "--from-id",
+        dest="from_id",
+        default=None,
+        help="跳过2D生成，使用已有的图片ID直接生成3D模型 (例如: a7af1af9-a592-4499-a456-2bea8428fe49)"
+    )
+    
     args = parser.parse_args()
     
     # Banner
@@ -104,6 +111,91 @@ def main():
 ║         AI 多视角图像生成 → 切割 → 去背景 → 3D建模             ║
 ╚═══════════════════════════════════════════════════════════════╝
     """)
+    
+    # =========================================================================
+    # 快速模式：从已有ID直接生成3D
+    # =========================================================================
+    if args.from_id:
+        image_id = args.from_id.strip()
+        output_path = Path(args.output)
+        
+        # 查找 front 视图
+        front_img = output_path / f"{image_id}_front.png"
+        
+        if not front_img.exists():
+            # 尝试查找任何匹配的文件
+            matches = list(output_path.glob(f"{image_id}*_front.png"))
+            if matches:
+                front_img = matches[0]
+                image_id = front_img.stem.replace("_front", "")
+            else:
+                print(f"[ERROR] 找不到ID为 '{image_id}' 的图片")
+                print(f"        请确认 {output_path}/{image_id}_front.png 存在")
+                print(f"\n可用的图片ID:")
+                for f in sorted(output_path.glob("*_front.png"))[-10:]:
+                    print(f"  • {f.stem.replace('_front', '')}")
+                sys.exit(1)
+        
+        # 检查所有视图
+        views = ["front", "back", "left", "right"]
+        available_views = []
+        for view in views:
+            view_path = output_path / f"{image_id}_{view}.png"
+            if view_path.exists():
+                available_views.append(view)
+        
+        print(f"[ID模式] 使用已有图片: {image_id}")
+        print(f"[可用视图] {', '.join(available_views)}")
+        print(f"[Front图片] {front_img}")
+        
+        # 直接进入 3D 生成
+        print("\n" + "═" * 50)
+        print("🚀 启动 3D 生成流水线 (TRELLIS)...")
+        print("═" * 50)
+        
+        reconstructor_script = script_dir / "reconstructor.py"
+        cmd = [
+            sys.executable,
+            str(reconstructor_script),
+            str(front_img),
+            "--algo", "trellis",
+            "--quality", args.quality,
+            "--output_dir", str(Path("outputs"))
+        ]
+        
+        try:
+            import subprocess
+            subprocess.run(cmd, check=True)
+            print("\n[SUCCESS] 3D 生成完成！")
+            
+            glb_path = Path("outputs/trellis") / f"{image_id}_front.glb"
+            obj_path = Path("outputs/trellis") / f"{image_id}_front.obj"
+            
+            print(f"\n生成的3D模型:")
+            if glb_path.exists():
+                print(f"  📦 GLB: {glb_path}")
+            if obj_path.exists():
+                print(f"  📦 OBJ: {obj_path}")
+                
+            # 自动预览
+            if args.preview and glb_path.exists():
+                if sys.platform == "darwin":
+                    subprocess.run(["open", str(glb_path)])
+                elif sys.platform == "win32":
+                    os.startfile(str(glb_path))
+                    
+        except subprocess.CalledProcessError as e:
+            print(f"\n[ERROR] 3D 生成失败 (Exit Code {e.returncode})")
+            sys.exit(1)
+        except Exception as e:
+            print(f"\n[ERROR] 3D 生成异常: {e}")
+            sys.exit(1)
+            
+        sys.exit(0)  # 成功退出，不继续执行后面的2D生成逻辑
+    
+    # =========================================================================
+    # 正常模式：2D生成 + 可选3D
+    # =========================================================================
     
     # 检查认证
     if args.mode == "proxy":
