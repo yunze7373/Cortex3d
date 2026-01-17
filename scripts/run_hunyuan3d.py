@@ -68,15 +68,17 @@ def load_hunyuan3d_pipeline(model_type="lite", multiview=False):
         # Import Hunyuan3D components
         from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
         
-        model_path = 'tencent/Hunyuan3D-2'
-        
-        # Select subfolder based on multiview
+        # Select model path and subfolder based on multiview
         if multiview:
-            subfolder = 'hunyuan3d-dit-v2-mv'  # Multi-view model
-            print("[INFO] Using multi-view shape model (hunyuan3d-dit-v2-mv)")
+            # Multi-view model is in separate repo
+            model_path = 'tencent/Hunyuan3D-2mv'
+            subfolder = 'hunyuan3d-dit-v2-mv'
+            print(f"[INFO] Using multi-view model: {model_path}/{subfolder}")
         else:
-            subfolder = 'hunyuan3d-dit-v2-0'  # Single-view model
-            print("[INFO] Using single-view shape model (hunyuan3d-dit-v2-0)")
+            # Single-view model
+            model_path = 'tencent/Hunyuan3D-2'
+            subfolder = 'hunyuan3d-dit-v2-0'
+            print(f"[INFO] Using single-view model: {model_path}/{subfolder}")
         
         # Load shape generator
         print("[INFO] Loading shape generation pipeline...")
