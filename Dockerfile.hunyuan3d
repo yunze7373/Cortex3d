@@ -1,0 +1,58 @@
+# Hunyuan3D-2.0 Docker Image for Cortex3d
+# Based on CUDA 12.4 for optimal compatibility
+
+FROM nvidia/cuda:12.4.0-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH="${CUDA_HOME}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
+
+# System dependencies
+RUN apt-get update && apt-get install -y \
+    python3 python3-pip python3-dev \
+    git wget curl \
+    libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev \
+    ninja-build g++ cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create symlink for python
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
+# PyTorch with CUDA 12.4 support
+RUN pip3 install --no-cache-dir \
+    torch==2.4.0 \
+    torchvision==0.19.0 \
+    --index-url https://download.pytorch.org/whl/cu124
+
+# Clone Hunyuan3D-2.0
+WORKDIR /opt
+RUN git clone https://github.com/Tencent/Hunyuan3D-2.git hunyuan3d
+
+# Install Hunyuan3D dependencies
+WORKDIR /opt/hunyuan3d
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Install additional dependencies for texture generation
+RUN pip3 install --no-cache-dir \
+    trimesh \
+    pymeshlab \
+    xatlas \
+    pygltflib \
+    rembg \
+    onnxruntime-gpu
+
+# Compile custom CUDA rasterizer (if needed)
+RUN cd /opt/hunyuan3d && \
+    pip3 install -e . || echo "Package install skipped"
+
+# Set working directory for runtime
+WORKDIR /workspace
+
+# Environment for Hunyuan3D
+ENV HUNYUAN3D_ROOT=/opt/hunyuan3d
+ENV PYTHONPATH="${HUNYUAN3D_ROOT}:${PYTHONPATH}"
+
+# Default command
+CMD ["bash"]

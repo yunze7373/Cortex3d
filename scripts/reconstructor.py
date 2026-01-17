@@ -283,10 +283,64 @@ def run_trellis(image_path, output_dir, quality="balanced"):
     return run_command(cmd, cwd=PROJECT_ROOT)
 
 
+def run_hunyuan3d(image_path, output_dir, quality="balanced"):
+    """
+    调用 Hunyuan3D-2.0 生成 (腾讯高质量图转3D模型)
+    会自动检测环境：如果在本地运行，则通过 Docker Compose 调用容器。
+    """
+    logging.info(f"Starting Hunyuan3D-2.0 reconstruction... (Quality: {quality})")
+    
+    # 检测是否在 Docker 容器内
+    in_docker = os.path.exists("/.dockerenv") or os.environ.get("AM_I_IN_A_DOCKER_CONTAINER", False)
+    
+    # 根据质量选择模型类型
+    model_type = "full" if quality in ["high", "ultra"] else "lite"
+    
+    if in_docker:
+        # 容器内直接运行
+        script_path = SCRIPT_DIR / "run_hunyuan3d.py"
+        if not script_path.exists():
+            logging.error(f"Hunyuan3D script not found: {script_path}")
+            return False
+            
+        cmd = [
+            sys.executable, str(script_path),
+            str(image_path),
+            "--output", str(output_dir),
+            "--model", model_type
+        ]
+        
+    else:
+        # 本地运行 -> 调用 Docker Compose
+        logging.info("Running locally, dispatching to 'hunyuan3d' container...")
+        
+        # 转换路径为容器内路径
+        try:
+            rel_image = image_path.absolute().relative_to(PROJECT_ROOT.absolute())
+            container_image = f"/workspace/{rel_image}"
+            
+            rel_output = output_dir.absolute().relative_to(PROJECT_ROOT.absolute())
+            container_output = f"/workspace/{rel_output}"
+        except ValueError:
+            logging.warning("Path is outside project root, trying to use as-is...")
+            container_image = str(image_path)
+            container_output = str(output_dir)
+        
+        cmd = [
+            "docker", "compose", "exec", "-T",
+            "hunyuan3d",
+            "python3", "/workspace/scripts/run_hunyuan3d.py",
+            container_image,
+            "--output", container_output,
+            "--model", model_type
+        ]
+        
+    return run_command(cmd, cwd=PROJECT_ROOT)
+
 def main():
     parser = argparse.ArgumentParser(description="Cortex3d Unified Reconstructor (Stage 2)")
     parser.add_argument("image", type=Path, help="Path to input image (front view) OR prefix for multi-view images")
-    parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis"], default="instantmesh", help="Reconstruction algorithm")
+    parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis", "hunyuan3d"], default="trellis", help="Reconstruction algorithm")
     parser.add_argument("--quality", choices=["balanced", "high", "ultra"], default="balanced", help="Quality preset")
     parser.add_argument("--output_dir", type=Path, default=OUTPUTS_DIR, help="Output directory")
     parser.add_argument("--enhance", action="store_true", help="Enhance input image with Real-ESRGAN + GFPGAN before 3D generation")
@@ -377,6 +431,12 @@ def main():
         if run_trellis(input_image, algo_output_dir, args.quality):
             success = True
             result_mesh = algo_output_dir / f"{image_name}.obj"
+    
+    elif args.algo == "hunyuan3d":
+        algo_output_dir = args.output_dir / "hunyuan3d"
+        if run_hunyuan3d(input_image, algo_output_dir, args.quality):
+            success = True
+            result_mesh = algo_output_dir / f"{image_name}.glb"
         
     if success and result_mesh and result_mesh.exists():
         logging.info(f"Reconstruction completed successfully. Mesh: {result_mesh}")

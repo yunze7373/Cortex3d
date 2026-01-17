@@ -21,3 +21,8 @@ numpy>=1.24.0
 
 # 环境变量管理
 python-dotenv>=1.0.0
+
+# 图像增强 (Real-ESRGAN + GFPGAN)
+realesrgan>=0.3.0
+gfpgan>=1.3.8
+basicsr>=1.4.2

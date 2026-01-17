@@ -41,6 +41,27 @@ services:
               count: all
               capabilities: [gpu]
 
+  hunyuan3d:
+    build:
+      context: .
+      dockerfile: Dockerfile.hunyuan3d
+    image: cortex3d-hunyuan3d:latest
+    container_name: cortex3d-hunyuan3d
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - hf-cache:/root/.cache/huggingface
+    shm_size: "16gb"
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
 volumes:
   hf-cache:
 
