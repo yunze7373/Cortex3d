@@ -169,22 +169,17 @@ def preprocess_image(image_path: str) -> Image.Image:
     return img
 
 
-def preprocess_multiview_images(view_paths: dict) -> List[Image.Image]:
+def preprocess_multiview_images(view_paths: dict) -> dict:
     """
     Load and preprocess multiple view images.
-    Order: front, right, back, left (for Hunyuan3D-2mv)
+    Returns dict with view tags as keys (required by Hunyuan3D-2mv API).
     """
-    # Hunyuan3D-2mv expects: front(0°), right(90°), back(180°), left(270°)
-    order = ['front', 'right', 'back', 'left']
-    images = []
+    images = {}
     
-    for view in order:
-        if view in view_paths:
-            img = preprocess_image(str(view_paths[view]))
-            images.append(img)
-            print(f"[INFO] Loaded {view} view: {view_paths[view]}")
-        else:
-            print(f"[WARNING] Missing {view} view, skipping...")
+    for view, path in view_paths.items():
+        img = preprocess_image(str(path))
+        images[view] = img
+        print(f"[INFO] Loaded {view} view: {path}")
     
     if len(images) < 2:
         raise ValueError(f"Multi-view requires at least 2 views, but only found {len(images)}")
@@ -226,9 +221,9 @@ def generate_3d(
     
     try:
         # Generate shape
-        if multiview and isinstance(images, list):
-            # Multi-view: pass list of images
-            print(f"[INFO] Using {len(images)} views for generation...")
+        if multiview and isinstance(images, dict):
+            # Multi-view: pass dict of images with view tags
+            print(f"[INFO] Using {len(images)} views for generation: {list(images.keys())}")
             mesh = shape_pipeline(image=images)[0]
         else:
             # Single-view: pass single image
@@ -239,8 +234,8 @@ def generate_3d(
         # Apply texture if available
         if texture_pipeline is not None:
             print("[INFO] Generating texture...")
-            # For texture, use the front view (first image)
-            ref_image = images[0] if isinstance(images, list) else images
+            # For texture, use the front view
+            ref_image = images.get('front', list(images.values())[0]) if isinstance(images, dict) else images
             mesh = texture_pipeline(mesh, image=ref_image)
             print("[INFO] Texture applied!")
         
