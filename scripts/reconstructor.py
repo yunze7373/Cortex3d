@@ -289,6 +289,7 @@ def main():
     parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis"], default="instantmesh", help="Reconstruction algorithm")
     parser.add_argument("--quality", choices=["balanced", "high", "ultra"], default="balanced", help="Quality preset")
     parser.add_argument("--output_dir", type=Path, default=OUTPUTS_DIR, help="Output directory")
+    parser.add_argument("--enhance", action="store_true", help="Enhance input image with Real-ESRGAN + GFPGAN before 3D generation")
     
     args = parser.parse_args()
     
@@ -299,11 +300,31 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     algo_output_dir = args.output_dir / args.algo if args.algo != "auto" else args.output_dir / "instantmesh"
 
+    # Apply image enhancement if requested
+    input_image = args.image
+    if args.enhance:
+        logging.info("Applying image enhancement (Real-ESRGAN + GFPGAN)...")
+        try:
+            from image_enhancer import enhance_for_trellis
+            enhanced_path = args.image.parent / f"{args.image.stem}_enhanced.png"
+            enhance_for_trellis(str(args.image), str(enhanced_path))
+            if enhanced_path.exists():
+                input_image = enhanced_path
+                logging.info(f"Using enhanced image: {input_image}")
+            else:
+                logging.warning("Enhancement failed, using original image")
+        except ImportError as e:
+            logging.warning(f"Image enhancer not available: {e}")
+            logging.warning("Install dependencies: pip install realesrgan gfpgan basicsr")
+        except Exception as e:
+            logging.warning(f"Image enhancement failed: {e}")
+            logging.warning("Continuing with original image...")
+
     success = False
     result_mesh = None
     
     # Helper to find result mesh
-    image_name = args.image.stem
+    image_name = args.image.stem  # Keep original name for output
     
     # Auto mode: Try InstantMesh first.
     # DISABLE FALLBACK for debugging to ensure we get InstantMesh quality.
@@ -329,13 +350,13 @@ def main():
             #     logging.error("Both algorithms failed.")
     
     elif args.algo == "instantmesh":
-        if run_instantmesh(args.image, algo_output_dir, args.quality):
+        if run_instantmesh(input_image, algo_output_dir, args.quality):
             success = True
             config_name = "instant-mesh-hq" if args.quality == "high" else "instant-mesh-large"
             result_mesh = algo_output_dir / config_name / "meshes" / f"{image_name}.obj"
         
     elif args.algo == "triposr":
-        if run_triposr(args.image, algo_output_dir, args.quality):
+        if run_triposr(input_image, algo_output_dir, args.quality):
             success = True
             result_mesh = algo_output_dir / image_name / f"{image_name}.obj"
     
@@ -353,7 +374,7 @@ def main():
     
     elif args.algo == "trellis":
         algo_output_dir = args.output_dir / "trellis"
-        if run_trellis(args.image, algo_output_dir, args.quality):
+        if run_trellis(input_image, algo_output_dir, args.quality):
             success = True
             result_mesh = algo_output_dir / f"{image_name}.obj"
         
