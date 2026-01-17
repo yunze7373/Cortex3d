@@ -283,7 +283,7 @@ def run_trellis(image_path, output_dir, quality="balanced"):
     return run_command(cmd, cwd=PROJECT_ROOT)
 
 
-def run_hunyuan3d(image_path, output_dir, quality="balanced"):
+def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False):
     """
     调用 Hunyuan3D-2.0 生成 (腾讯高质量图转3D模型)
     会自动检测环境：如果在本地运行，则通过 Docker Compose 调用容器。
@@ -314,6 +314,8 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced"):
         ]
         if use_multiview:
             cmd.append("--multiview")
+        if no_texture:
+            cmd.append("--no-texture")
         
     else:
         # 本地运行 -> 调用 Docker Compose
@@ -344,6 +346,8 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced"):
         ]
         if use_multiview:
             cmd.append("--multiview")
+        if no_texture:
+            cmd.append("--no-texture")
         
     return run_command(cmd, cwd=PROJECT_ROOT)
 
@@ -354,6 +358,8 @@ def main():
     parser.add_argument("--quality", choices=["balanced", "high", "ultra"], default="balanced", help="Quality preset")
     parser.add_argument("--output_dir", type=Path, default=OUTPUTS_DIR, help="Output directory")
     parser.add_argument("--enhance", action="store_true", help="Enhance input image with Real-ESRGAN + GFPGAN before 3D generation")
+    parser.add_argument("--no-texture", "--fast", dest="no_texture", action="store_true", 
+                        help="Skip texture generation for faster results (Hunyuan3D only)")
     
     args = parser.parse_args()
     
@@ -446,7 +452,8 @@ def main():
         algo_output_dir = args.output_dir / "hunyuan3d"
         # Hunyuan3D output name removes _front suffix
         output_name = image_name.replace('_front', '')
-        if run_hunyuan3d(input_image, algo_output_dir, args.quality):
+        no_texture = getattr(args, 'no_texture', False)
+        if run_hunyuan3d(input_image, algo_output_dir, args.quality, no_texture=no_texture):
             success = True
             result_mesh = algo_output_dir / f"{output_name}.glb"
         

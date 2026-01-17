@@ -256,6 +256,14 @@ def generate_3d(
         except Exception as e:
             print(f"[WARNING] OBJ export failed: {e}")
         
+        # Export STL
+        stl_path = output_dir / f"{output_name}.stl"
+        print(f"[INFO] Exporting STL to {stl_path}...")
+        try:
+            mesh.export(str(stl_path))
+        except Exception as e:
+            print(f"[WARNING] STL export failed: {e}")
+        
         # Print mesh statistics
         if hasattr(mesh, 'vertices') and hasattr(mesh, 'faces'):
             print(f"[INFO] Mesh statistics:")
@@ -280,6 +288,8 @@ def main():
                         help="Model type: lite (shape only, 6GB) or full (shape+texture, 12-16GB)")
     parser.add_argument("--multiview", "-mv", action="store_true",
                         help="Enable multi-view mode: use front/back/left/right images")
+    parser.add_argument("--no-texture", dest="no_texture", action="store_true",
+                        help="Skip texture generation for faster results (shape only)")
     
     args = parser.parse_args()
     
@@ -300,8 +310,11 @@ def main():
             print("[WARNING] Not enough views found for multi-view. Falling back to single-view.")
             multiview = False
     
-    # Load pipeline
-    shape_pipeline, texture_pipeline = load_hunyuan3d_pipeline(args.model, multiview=multiview)
+    # Load pipeline (skip texture if --no-texture)
+    model_type = "lite" if args.no_texture else args.model
+    if args.no_texture:
+        print("[INFO] --no-texture flag set, skipping texture generation (fast mode)")
+    shape_pipeline, texture_pipeline = load_hunyuan3d_pipeline(model_type, multiview=multiview)
     
     # Preprocess images
     if multiview and len(view_paths) >= 2:
