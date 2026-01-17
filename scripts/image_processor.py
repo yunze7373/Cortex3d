@@ -283,7 +283,8 @@ def split_horizontal_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
     overlap = int(cell_width * 0.15)
     
     views = []
-    view_names = ['front', 'back', 'left', 'right']
+    # AI 通常按顺时针生成: Front(0°) → Right(90°) → Back(180°) → Left(270°)
+    view_names = ['front', 'right', 'back', 'left']
     
     for i, name in enumerate(view_names):
         # 计算基础位置
@@ -311,6 +312,10 @@ def split_horizontal_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
 def split_grid_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
     """
     切割 2x2 田字格布局 - 使用固定几何分割
+    
+    AI 生成的 2x2 布局通常是:
+    Front | Right
+    Back  | Left
     """
     height, width = image.shape[:2]
     
@@ -318,22 +323,20 @@ def split_grid_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
     x_split = width // 2
     y_split = height // 2
     
-    # print(f"[INFO] 分割中心点: ({x_split}, {y_split})")
-    
-    # 定义四个区域
+    # 定义四个区域 (顺时针: Front → Right → Back → Left)
+    # 布局:
+    # [0,0] Front | [1,0] Right
+    # [0,1] Back  | [1,1] Left
     regions = {
         'front': (margin, margin, x_split - margin, y_split - margin),
-        'back': (x_split + margin, margin, width - margin, y_split - margin),
-        'left': (margin, y_split + margin, x_split - margin, height - margin),
-        'right': (x_split + margin, y_split + margin, width - margin, height - margin)
+        'right': (x_split + margin, margin, width - margin, y_split - margin),
+        'back': (margin, y_split + margin, x_split - margin, height - margin),
+        'left': (x_split + margin, y_split + margin, width - margin, height - margin)
     }
     
     views = []
-    # 顺序：前、后、左、右 (注意：田字格通常是 前后/左右 排列，但也取决于具体模型)
-    # 假设标准 layout:
-    # Front | Back
-    # Left  | Right
-    for name in ['front', 'back', 'left', 'right']:
+    # 按顺时针顺序: front, right, back, left
+    for name in ['front', 'right', 'back', 'left']:
         x1, y1, x2, y2 = regions[name]
         
         x1 = max(0, x1)
@@ -343,7 +346,6 @@ def split_grid_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
 
         if x2 > x1 and y2 > y1:
             cropped = image[y1:y2, x1:x2].copy()
-            # print(f"[INFO] {name} 视图: {x2-x1}x{y2-y1}")
             views.append((name, cropped))
     
     return views
