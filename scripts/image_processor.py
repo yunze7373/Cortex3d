@@ -50,6 +50,149 @@ def _ensure_imports():
             REMBG_AVAILABLE = False
 
 
+def find_subject_bbox(image, padding: int = 10):
+    """
+    使用边缘检测或 alpha 通道找到主体的边界框
+    
+    Args:
+        image: BGR 或 BGRA 格式的图片
+        padding: 边界外扩像素数
+    
+    Returns:
+        (x1, y1, x2, y2) 边界框坐标
+    """
+    _ensure_imports()
+    height, width = image.shape[:2]
+    
+    # 如果有 alpha 通道，使用 alpha 找边界
+    if len(image.shape) == 3 and image.shape[2] == 4:
+        alpha = image[:, :, 3]
+        mask = alpha > 10  # 阈值
+    else:
+        # 否则使用灰度图和边缘检测
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image
+        
+        # 使用 Otsu 阈值分割前景背景
+        _, mask = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # 如果大部分是白色（背景），反转
+        if np.mean(mask) > 127:
+            mask = 255 - mask
+        
+        mask = mask > 127
+    
+    # 找到非零像素的边界
+    rows = np.any(mask, axis=1)
+    cols = np.any(mask, axis=0)
+    
+    if not np.any(rows) or not np.any(cols):
+        # 没有检测到主体，返回整个图像
+        return 0, 0, width, height
+    
+    y1, y2 = np.where(rows)[0][[0, -1]]
+    x1, x2 = np.where(cols)[0][[0, -1]]
+    
+    # 添加 padding
+    x1 = max(0, x1 - padding)
+    y1 = max(0, y1 - padding)
+    x2 = min(width, x2 + padding)
+    y2 = min(height, y2 + padding)
+    
+    return x1, y1, x2, y2
+
+
+def crop_to_subject(image, target_size: int = 1024, padding: int = 20):
+    """
+    裁切图片到主体区域，并调整到正方形输出
+    
+    Args:
+        image: BGR 或 BGRA 格式的图片
+        target_size: 输出图片尺寸 (正方形)
+        padding: 主体周围的边距
+    
+    Returns:
+        裁切后的图片 (正方形)
+    """
+    _ensure_imports()
+    
+    # 找到主体边界
+    x1, y1, x2, y2 = find_subject_bbox(image, padding=padding)
+    
+    # 计算主体尺寸
+    subject_w = x2 - x1
+    subject_h = y2 - y1
+    
+    # 扩展为正方形（取较大边）
+    max_dim = max(subject_w, subject_h)
+    
+    # 计算正方形中心
+    cx = (x1 + x2) // 2
+    cy = (y1 + y2) // 2
+    
+    # 计算正方形边界
+    half = max_dim // 2
+    sq_x1 = cx - half
+    sq_y1 = cy - half
+    sq_x2 = cx + half
+    sq_y2 = cy + half
+    
+    # 边界检查和调整
+    height, width = image.shape[:2]
+    
+    # 如果超出边界，移动正方形
+    if sq_x1 < 0:
+        sq_x2 -= sq_x1
+        sq_x1 = 0
+    if sq_y1 < 0:
+        sq_y2 -= sq_y1
+        sq_y1 = 0
+    if sq_x2 > width:
+        sq_x1 -= (sq_x2 - width)
+        sq_x2 = width
+    if sq_y2 > height:
+        sq_y1 -= (sq_y2 - height)
+        sq_y2 = height
+    
+    # 确保边界有效
+    sq_x1 = max(0, sq_x1)
+    sq_y1 = max(0, sq_y1)
+    sq_x2 = min(width, sq_x2)
+    sq_y2 = min(height, sq_y2)
+    
+    # 裁切
+    cropped = image[sq_y1:sq_y2, sq_x1:sq_x2]
+    
+    # 如果需要，调整大小
+    if cropped.shape[0] != target_size or cropped.shape[1] != target_size:
+        # 保持纵横比，放到正方形画布上
+        h, w = cropped.shape[:2]
+        scale = target_size / max(h, w)
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        
+        resized = cv2.resize(cropped, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+        
+        # 创建正方形画布（透明或白色）
+        if len(image.shape) == 3 and image.shape[2] == 4:
+            canvas = np.zeros((target_size, target_size, 4), dtype=np.uint8)
+        else:
+            canvas = np.ones((target_size, target_size, 3), dtype=np.uint8) * 255
+        
+        # 居中放置
+        x_offset = (target_size - new_w) // 2
+        y_offset = (target_size - new_h) // 2
+        
+        if len(resized.shape) == 2:
+            resized = cv2.cvtColor(resized, cv2.COLOR_GRAY2BGR)
+        
+        canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
+        return canvas
+    
+    return cropped
+
 
 
 def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
@@ -312,6 +455,11 @@ def process_quadrant_image(
             print(f"[处理中] 去除 {view_name} 视图背景...")
             try:
                 processed = remove_background(view_image)
+                
+                # 智能裁切：使用 alpha 通道找到主体边界
+                print(f"[处理中] 智能裁切 {view_name} 视图到主体区域...")
+                processed = crop_to_subject(processed, target_size=1024, padding=30)
+                
             except ImportError as e:
                 print(f"[警告] {e}")
                 print(f"[警告] 跳过去背景，保存原图")
