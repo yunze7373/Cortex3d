@@ -215,7 +215,7 @@ def main():
     parser.add_argument("image", type=str, help="Input image path")
     parser.add_argument("--output", "-o", type=str, default="outputs/trellis", help="Output directory")
     parser.add_argument("--seed", type=int, default=1, help="Random seed")
-    parser.add_argument("--simplify", type=float, default=0.5, help="Mesh simplification ratio (0.5 = keep 50%)")
+    parser.add_argument("--simplify", type=float, default=0.5, help="Mesh simplification ratio (0.5 = REMOVE 50%%, keep 50%%)")
     parser.add_argument("--texture_size", type=int, default=2048, help="Texture resolution")
     parser.add_argument("--ss_steps", type=int, default=50, help="Structure sampling steps")
     parser.add_argument("--slat_steps", type=int, default=50, help="Structure latent sampling steps")
@@ -289,37 +289,51 @@ def main():
         
         # Helper to process a PIL image
         def process_texture(pil_img):
-            # 1. Sharpening (Crucial for 4K)
-            enhancer = ImageEnhance.Sharpness(pil_img)
-            pil_img = enhancer.enhance(1.5) # +50% Sharpness
+            # 1. Brightness (Fix dark bake - CRITICAL)
+            enhancer = ImageEnhance.Brightness(pil_img)
+            pil_img = enhancer.enhance(1.35) # +35% Brightness (was 10%)
             
-            # 2. Color/Saturation (Restore vibrancy)
+            # 2. Color/Saturation (Restore vibrancy - CRITICAL)
             enhancer = ImageEnhance.Color(pil_img)
-            pil_img = enhancer.enhance(1.2) # +20% Saturation
+            pil_img = enhancer.enhance(1.45) # +45% Saturation (was 20%)
             
             # 3. Contrast (Pop details)
             enhancer = ImageEnhance.Contrast(pil_img)
-            pil_img = enhancer.enhance(1.1) # +10% Contrast
+            pil_img = enhancer.enhance(1.15) # +15% Contrast (was 10%)
             
-            # 4. Brightness (Fix dark bake)
-            enhancer = ImageEnhance.Brightness(pil_img)
-            pil_img = enhancer.enhance(1.1) # +10% Brightness
+            # 4. Sharpening (Crucial for detail)
+            enhancer = ImageEnhance.Sharpness(pil_img)
+            pil_img = enhancer.enhance(1.3) # +30% Sharpness (was 50%)
             
             return pil_img
 
-        # Iterate over geometry in the scene to find textures
-        # 'glb' is usually a trimesh.Scene
+        # Handle both trimesh.Trimesh (single mesh) and trimesh.Scene
+        # TRELLIS to_glb() returns a trimesh.Trimesh, not a Scene
+        def enhance_material(mat, source_name="mesh"):
+            if hasattr(mat, 'baseColorTexture') and mat.baseColorTexture is not None:
+                print(f"[INFO] Enhancing baseColorTexture for: {source_name}")
+                mat.baseColorTexture = process_texture(mat.baseColorTexture)
+                return True
+            elif hasattr(mat, 'image') and mat.image is not None:
+                print(f"[INFO] Enhancing texture image for: {source_name}")
+                mat.image = process_texture(mat.image)
+                return True
+            return False
+        
+        enhanced = False
+        # Case 1: Single Trimesh object (returned by TRELLIS to_glb)
+        if hasattr(glb, 'visual') and hasattr(glb.visual, 'material'):
+            enhanced = enhance_material(glb.visual.material, "main_mesh")
+        
+        # Case 2: Scene with multiple geometries
         if hasattr(glb, 'geometry'):
             for geom_name, geom in glb.geometry.items():
                 if hasattr(geom, 'visual') and hasattr(geom.visual, 'material'):
-                    mat = geom.visual.material
-                    # Check for PBR material (baseColorTexture) or Simple material (image)
-                    if hasattr(mat, 'baseColorTexture') and mat.baseColorTexture:
-                        print(f"[INFO] Enhancing texture for geometry: {geom_name}")
-                        mat.baseColorTexture = process_texture(mat.baseColorTexture)
-                    elif hasattr(mat, 'image') and mat.image:
-                        print(f"[INFO] Enhancing texture for geometry: {geom_name}")
-                        mat.image = process_texture(mat.image)
+                    if enhance_material(geom.visual.material, geom_name):
+                        enhanced = True
+        
+        if not enhanced:
+            print("[WARNING] No texture found to enhance")
                         
     except Exception as e:
         print(f"[WARNING] Texture enhancement failed: {e}")

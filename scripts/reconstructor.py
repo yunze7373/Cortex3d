@@ -214,11 +214,11 @@ def run_trellis(image_path, output_dir, quality="balanced"):
 
     # Note: scripts/run_trellis.py does not expose a resolution flag.
     # Use texture size + simplify as quality controls.
-    # Simplify parameter: ratio of faces to KEEP (0.95 = keep 95% of faces)
+    # Simplify parameter: ratio of faces to REMOVE (0.05 = remove 5%, keep 95%)
     if quality == "ultra":
         cmd.extend([
             "--texture_size", "4096",
-            "--simplify", "0.98",  # Keep 98% of faces for maximum detail
+            "--simplify", "0.02",  # Remove only 2%, keep 98% of faces for maximum detail
             "--ss_steps", "100",   # Maximum structure sampling steps
             "--slat_steps", "100", # Maximum latent sampling steps
             "--ss_guidance", "10.0",   # Higher guidance for detail
@@ -227,9 +227,9 @@ def run_trellis(image_path, output_dir, quality="balanced"):
     elif quality == "high":
         cmd.extend([
             "--texture_size", "2048",
-            "--simplify", "0.95",  # Keep 95% of faces (was 0.8 = 80%)
-            "--ss_steps", "75",    # Increased from 50
-            "--slat_steps", "75",  # Increased from 50
+            "--simplify", "0.05",  # Remove only 5%, keep 95% of faces
+            "--ss_steps", "75",    # Higher steps for better structure
+            "--slat_steps", "75",  # Higher steps for better latent detail
             "--ss_guidance", "8.5",    # Slightly higher guidance
             "--slat_guidance", "8.5",
         ])
