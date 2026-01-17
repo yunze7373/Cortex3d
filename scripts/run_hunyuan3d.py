@@ -49,83 +49,80 @@ def setup_device():
     return device
 
 
-def load_hunyuan3d_pipeline(device, model_type="lite"):
+def load_hunyuan3d_pipeline(model_type="lite"):
     """
     Load Hunyuan3D-2.0 pipeline.
     
     Args:
-        device: torch device
         model_type: "lite" (shape only, 6GB) or "full" (shape+texture, 12-16GB)
     
     Returns:
-        pipeline object
+        (shape_pipeline, texture_pipeline)
     """
     print(f"[INFO] Loading Hunyuan3D-2.0 model (type: {model_type})...")
     
     try:
-        # Import Hunyuan3D components
-        from hy3dgen.shapegen import ShapeGenerator
+        # Import Hunyuan3D components - correct API from minimal_demo.py
+        from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
+        
+        model_path = 'tencent/Hunyuan3D-2'
         
         # Load shape generator
-        shape_generator = ShapeGenerator.from_pretrained("tencent/Hunyuan3D-2")
-        shape_generator.to(device)
+        print("[INFO] Loading shape generation pipeline...")
+        shape_pipeline = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(model_path)
+        print("[INFO] Shape pipeline loaded!")
         
-        texture_generator = None
+        texture_pipeline = None
         if model_type == "full":
             try:
-                from hy3dgen.texgen import TextureGenerator
-                texture_generator = TextureGenerator.from_pretrained("tencent/Hunyuan3D-2")
-                texture_generator.to(device)
-                print("[INFO] Texture generator loaded!")
+                from hy3dgen.texgen import Hunyuan3DPaintPipeline
+                print("[INFO] Loading texture generation pipeline...")
+                texture_pipeline = Hunyuan3DPaintPipeline.from_pretrained(model_path)
+                print("[INFO] Texture pipeline loaded!")
             except Exception as e:
-                print(f"[WARNING] Could not load texture generator: {e}")
+                print(f"[WARNING] Could not load texture pipeline: {e}")
                 print("[INFO] Will generate shape only.")
         
         print("[INFO] Hunyuan3D-2.0 pipeline loaded successfully!")
-        return shape_generator, texture_generator
+        return shape_pipeline, texture_pipeline
         
     except ImportError as e:
         print(f"[ERROR] Failed to import Hunyuan3D: {e}")
+        import traceback
+        traceback.print_exc()
         raise RuntimeError(
             "Hunyuan3D loading failed. Please ensure the repository "
             "is correctly installed at /opt/hunyuan3d"
         )
 
 
-def preprocess_image(image_path: str, target_size: int = 512):
+def preprocess_image(image_path: str):
     """Load and preprocess input image."""
     print(f"[INFO] Loading image: {image_path}")
     
     img = Image.open(image_path).convert("RGBA")
+    print(f"[INFO] Original size: {img.size}, mode: {img.mode}")
     
-    # Create white background for transparent images
-    if img.mode == "RGBA":
-        background = Image.new("RGBA", img.size, (255, 255, 255, 255))
-        img = Image.alpha_composite(background, img).convert("RGB")
-    
-    # Resize to target size while maintaining aspect ratio
-    w, h = img.size
-    if max(w, h) != target_size:
-        ratio = target_size / max(w, h)
-        new_size = (int(w * ratio), int(h * ratio))
-        img = img.resize(new_size, Image.LANCZOS)
-        print(f"[INFO] Resized to: {new_size}")
-    
-    # Pad to square
-    w, h = img.size
-    if w != h:
-        size = max(w, h)
-        new_img = Image.new("RGB", (size, size), (255, 255, 255))
-        new_img.paste(img, ((size - w) // 2, (size - h) // 2))
-        img = new_img
-        print(f"[INFO] Padded to square: {size}x{size}")
+    # Remove background if needed (for RGB images)
+    if img.mode == 'RGB':
+        try:
+            from hy3dgen.rembg import BackgroundRemover
+            print("[INFO] Removing background...")
+            rembg = BackgroundRemover()
+            img = rembg(img)
+        except Exception as e:
+            print(f"[WARNING] Background removal failed: {e}")
+            # Convert to RGBA with white background
+            background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+            background.paste(img)
+            img = background
     
     return img
 
 
 def generate_3d(
-    shape_generator,
-    texture_generator,
+    shape_pipeline,
+    texture_pipeline,
     image: Image.Image,
     output_dir: Path,
     output_name: str,
@@ -135,9 +132,9 @@ def generate_3d(
     Generate 3D model from image.
     
     Args:
-        shape_generator: Hunyuan3D shape generator
-        texture_generator: Hunyuan3D texture generator (optional)
-        image: preprocessed PIL image
+        shape_pipeline: Hunyuan3D shape pipeline
+        texture_pipeline: Hunyuan3D texture pipeline (optional)
+        image: preprocessed PIL image (RGBA)
         output_dir: output directory
         output_name: base name for output files
         seed: random seed
@@ -152,26 +149,17 @@ def generate_3d(
     np.random.seed(seed)
     
     try:
-        # Generate shape
-        mesh = shape_generator(
-            image,
-            num_inference_steps=50,
-            guidance_scale=7.5,
-        )
-        
+        # Generate shape - returns list of meshes
+        mesh = shape_pipeline(image=image)[0]
         print(f"[INFO] Shape generated!")
         
         # Apply texture if available
-        if texture_generator is not None:
+        if texture_pipeline is not None:
             print("[INFO] Generating texture...")
-            mesh = texture_generator(
-                mesh,
-                image,
-                texture_size=2048,
-            )
+            mesh = texture_pipeline(mesh, image=image)
             print("[INFO] Texture applied!")
         
-        # Export GLB
+        # Export
         output_dir.mkdir(parents=True, exist_ok=True)
         glb_path = output_dir / f"{output_name}.glb"
         obj_path = output_dir / f"{output_name}.obj"
@@ -181,7 +169,10 @@ def generate_3d(
         
         # Also export OBJ
         print(f"[INFO] Exporting OBJ to {obj_path}...")
-        mesh.export(str(obj_path))
+        try:
+            mesh.export(str(obj_path))
+        except Exception as e:
+            print(f"[WARNING] OBJ export failed: {e}")
         
         # Print mesh statistics
         if hasattr(mesh, 'vertices') and hasattr(mesh, 'faces'):
@@ -216,7 +207,7 @@ def main():
     device = setup_device()
     
     # Load pipeline
-    shape_gen, texture_gen = load_hunyuan3d_pipeline(device, args.model)
+    shape_pipeline, texture_pipeline = load_hunyuan3d_pipeline(args.model)
     
     # Preprocess image
     image = preprocess_image(args.image)
@@ -226,7 +217,7 @@ def main():
     output_name = Path(args.image).stem
     
     glb_path = generate_3d(
-        shape_gen, texture_gen,
+        shape_pipeline, texture_pipeline,
         image, output_dir, output_name,
         seed=args.seed
     )
