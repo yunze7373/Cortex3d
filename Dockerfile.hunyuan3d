@@ -8,6 +8,8 @@ ENV PYTHONUNBUFFERED=1
 ENV CUDA_HOME=/usr/local/cuda
 ENV PATH="${CUDA_HOME}/bin:${PATH}"
 ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
+# Set CUDA architecture for compilation (8.6 for RTX 3070/3080/3090, 8.9 for RTX 4090)
+ENV TORCH_CUDA_ARCH_LIST="8.6"
 
 # System dependencies (including OpenGL for pymeshlab and texture rendering)
 RUN apt-get update && apt-get install -y \
