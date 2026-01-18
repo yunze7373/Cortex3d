@@ -276,7 +276,7 @@ def edge_enhance(mesh, angle_threshold: float = 30.0, push_strength: float = 0.0
 
 def sharpen_mesh(
     mesh,
-    method: str = "combined",
+    method: str = "edge",  # Changed default to "edge" - safest method
     laplacian_strength: float = 0.3,
     laplacian_iterations: int = 2,
     curvature_strength: float = 0.5,
@@ -289,8 +289,10 @@ def sharpen_mesh(
     Args:
         mesh: input trimesh.Trimesh
         method: "laplacian", "curvature", "edge", or "combined"
-        laplacian_strength: strength for Laplacian sharpening
-        laplacian_iterations: iterations for Laplacian sharpening
+                NOTE: "laplacian" and "curvature" can be destructive!
+                      "edge" is the safest option.
+        laplacian_strength: strength for Laplacian sharpening (DANGER: can destroy mesh)
+        laplacian_iterations: iterations for Laplacian sharpening  
         curvature_strength: strength for curvature enhancement
         edge_threshold: angle threshold for edge detection (degrees)
         edge_strength: push strength for edge vertices
@@ -302,7 +304,10 @@ def sharpen_mesh(
     
     result = mesh
     
+    # Warning for dangerous methods
     if method in ["laplacian", "combined"]:
+        print("[WARNING] Laplacian sharpening can destroy mesh geometry!")
+        print("[WARNING] Consider using --method edge for safer results.")
         result = laplacian_sharpen(result, laplacian_strength, laplacian_iterations)
     
     if method in ["curvature", "combined"]:

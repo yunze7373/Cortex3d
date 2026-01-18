@@ -282,15 +282,12 @@ def generate_3d(
                             temp_mesh.visual = mesh.visual
                         mesh = temp_mesh
                 
-                # Apply combined sharpening
+                # Apply SAFE edge-only sharpening (Laplacian destroys mesh!)
                 mesh = sharpen_mesh(
                     mesh,
-                    method="combined",
-                    laplacian_strength=0.3 * sharpen_strength,
-                    laplacian_iterations=2,
-                    curvature_strength=0.5 * sharpen_strength,
-                    edge_threshold=20.0,
-                    edge_strength=0.015 * sharpen_strength
+                    method="edge",  # SAFE: only enhances detected sharp edges
+                    edge_threshold=15.0,  # Lower threshold = more edges detected
+                    edge_strength=0.005 * sharpen_strength  # Very conservative push
                 )
                 print("[INFO] Mesh sharpening complete!")
             except Exception as e:
