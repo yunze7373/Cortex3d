@@ -99,8 +99,12 @@ RUN bash -c "source /opt/venv/bin/activate && \
     bash -c "source /opt/venv/bin/activate && \
     pip install --no-cache-dir --no-build-isolation ./flexgemm || echo 'flexgemm failed'"
 
-# Install TRELLIS.2 itself
-RUN pip install --no-cache-dir -e /opt/trellis2
+# Install additional dependencies that TRELLIS.2 may need
+RUN pip install --no-cache-dir rembg onnxruntime-gpu || \
+    pip install --no-cache-dir rembg onnxruntime
+
+# TRELLIS.2 doesn't have setup.py - use PYTHONPATH instead
+ENV PYTHONPATH="/opt/trellis2:${PYTHONPATH}"
 
 # Setup workspace
 WORKDIR /workspace
