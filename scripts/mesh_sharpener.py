@@ -37,16 +37,16 @@ import numpy as np
 
 # Lazy imports (keep startup fast)
 trimesh = None
-scipy = None
+sp = None  # scipy.sparse
 
 
 def _ensure_imports():
-    global trimesh, scipy
+    global trimesh, sp
     if trimesh is None:
         import trimesh as _trimesh
-        import scipy.sparse as _scipy
+        import scipy.sparse as _sp
         trimesh = _trimesh
-        scipy = _scipy
+        sp = _sp
 
 
 @dataclass
@@ -77,13 +77,13 @@ def _build_adjacency(mesh) -> "scipy.sparse.csr_matrix":
     n = len(mesh.vertices)
     edges = mesh.edges_unique
     if edges is None or len(edges) == 0:
-        return scipy.sparse.csr_matrix((n, n))
+        return sp.csr_matrix((n, n))
 
     row = np.concatenate([edges[:, 0], edges[:, 1]])
     col = np.concatenate([edges[:, 1], edges[:, 0]])
     data = np.ones(len(row), dtype=np.float32)
 
-    A = scipy.sparse.coo_matrix((data, (row, col)), shape=(n, n)).tocsr()
+    A = sp.coo_matrix((data, (row, col)), shape=(n, n)).tocsr()
     A.sum_duplicates()
     return A
 
