@@ -108,13 +108,11 @@ RUN pip install --no-cache-dir rembg accelerate safetensors huggingface_hub eino
 # Setup PYTHONPATH
 ENV PYTHONPATH="/opt/trellis2:${PYTHONPATH}"
 
-# Verify key packages
+# Note: Can't verify flex_gemm/o_voxel during build (they need GPU driver)
+# Verify only non-GPU packages
 RUN python3 -c "import torch; print(f'✓ PyTorch: {torch.__version__}')" && \
     python3 -c "import torchvision; print(f'✓ TorchVision: {torchvision.__version__}')" && \
-    python3 -c "import flex_gemm; print('✓ flex_gemm: OK')" && \
-    python3 -c "import o_voxel; print('✓ o_voxel: OK')" && \
-    python3 -c "import cumesh; print('✓ cumesh: OK')" && \
-    echo "All TRELLIS.2 dependencies verified!"
+    echo "PyTorch verified! GPU packages will be tested at runtime."
 
 # Setup workspace
 WORKDIR /workspace
