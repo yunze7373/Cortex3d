@@ -266,7 +266,7 @@ def generate_3d(
         if sharpen:
             print(f"[INFO] Applying mesh sharpening (strength={sharpen_strength})...")
             try:
-                from mesh_sharpener import sharpen_mesh
+                from mesh_sharpener import sharpen_mesh, SharpenConfig
                 import trimesh
                 
                 # Convert to trimesh if needed
@@ -282,13 +282,20 @@ def generate_3d(
                             temp_mesh.visual = mesh.visual
                         mesh = temp_mesh
                 
-                # Apply SAFE edge-only sharpening (Laplacian destroys mesh!)
-                mesh = sharpen_mesh(
-                    mesh,
-                    method="edge",  # SAFE: only enhances detected sharp edges
-                    edge_threshold=15.0,  # Lower threshold = more edges detected
-                    edge_strength=0.005 * sharpen_strength  # Very conservative push
+                # Use industrial sharpening with safe defaults
+                cfg = SharpenConfig(
+                    method="combined",
+                    laplacian_strength=0.30,
+                    laplacian_iterations=2,
+                    curvature_strength=0.50,
+                    edge_threshold_deg=20.0,
+                    edge_strength=0.015,
+                    clamp_factor=0.25,  # Key: prevents mesh explosion
+                    flatness_gamma=1.5,
+                    edge_boost=0.75,
+                    curvature_percentile=95.0
                 )
+                mesh = sharpen_mesh(mesh, cfg, overall_strength=sharpen_strength)
                 print("[INFO] Mesh sharpening complete!")
             except Exception as e:
                 print(f"[WARNING] Mesh sharpening failed: {e}")
