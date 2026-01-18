@@ -369,10 +369,79 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False, 
         
     return run_command(cmd, cwd=PROJECT_ROOT)
 
+
+def run_trellis2(image_path, output_dir, quality="balanced"):
+    """
+    调用 TRELLIS.2 生成 (微软最新，锐利边缘保留)
+    会自动检测环境：如果在本地运行，则通过 Docker Compose 调用容器。
+    
+    Args:
+        image_path: 输入图像路径
+        output_dir: 输出目录
+        quality: 质量预设 (balanced, high, ultra)
+        
+    Returns:
+        bool: 是否成功
+    """
+    image_path = Path(image_path)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    logging.info(f"[TRELLIS.2] Sharp Edge 3D Generation...")
+    logging.info(f"[TRELLIS.2] Input: {image_path}")
+    logging.info(f"[TRELLIS.2] Quality: {quality}")
+    
+    # Quality presets for decimation and texture
+    quality_presets = {
+        "balanced": {"decimation": 500000, "texture_size": 2048},
+        "high":     {"decimation": 1000000, "texture_size": 4096},
+        "ultra":    {"decimation": 2000000, "texture_size": 4096}
+    }
+    preset = quality_presets.get(quality, quality_presets["balanced"])
+    
+    # Check if running inside container
+    in_container = os.path.exists("/.dockerenv") or os.path.exists("/opt/trellis2")
+    
+    if in_container:
+        # Running inside trellis2 container -> call script directly
+        logging.info("Running inside TRELLIS.2 container...")
+        cmd = [
+            "python3", "/workspace/scripts/run_trellis2.py",
+            str(image_path),
+            "--output", str(output_dir),
+            "--decimation", str(preset["decimation"]),
+            "--texture-size", str(preset["texture_size"])
+        ]
+    else:
+        # Running locally -> use Docker Compose
+        logging.info("Running locally, dispatching to 'trellis2' container...")
+        
+        # Convert paths to container paths
+        try:
+            rel_image = image_path.absolute().relative_to(PROJECT_ROOT.absolute())
+            rel_output = output_dir.absolute().relative_to(PROJECT_ROOT.absolute())
+        except ValueError:
+            logging.error("Image path must be within project root for Docker mount")
+            return False
+        
+        container_image = f"/workspace/{rel_image.as_posix()}"
+        container_output = f"/workspace/{rel_output.as_posix()}"
+        
+        cmd = [
+            "docker", "compose", "exec", "-T", "trellis2",
+            "python3", "/workspace/scripts/run_trellis2.py",
+            container_image,
+            "--output", container_output,
+            "--decimation", str(preset["decimation"]),
+            "--texture-size", str(preset["texture_size"])
+        ]
+    
+    return run_command(cmd, cwd=PROJECT_ROOT)
+
 def main():
     parser = argparse.ArgumentParser(description="Cortex3d Unified Reconstructor (Stage 2)")
     parser.add_argument("image", type=Path, help="Path to input image (front view) OR prefix for multi-view images")
-    parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis", "hunyuan3d"], default="trellis", help="Reconstruction algorithm")
+    parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis", "trellis2", "hunyuan3d"], default="trellis", help="Reconstruction algorithm")
     parser.add_argument("--quality", choices=["balanced", "high", "ultra"], default="balanced", help="Quality preset")
     parser.add_argument("--output_dir", type=Path, default=OUTPUTS_DIR, help="Output directory")
     parser.add_argument("--enhance", action="store_true", help="Enhance input image with Real-ESRGAN + GFPGAN before 3D generation")
@@ -479,6 +548,14 @@ def main():
         sharpen_strength = getattr(args, 'sharpen_strength', 1.0)
         if run_hunyuan3d(input_image, algo_output_dir, args.quality, 
                          no_texture=no_texture, sharpen=sharpen, sharpen_strength=sharpen_strength):
+            success = True
+            result_mesh = algo_output_dir / f"{output_name}.glb"
+    
+    elif args.algo == "trellis2":
+        algo_output_dir = args.output_dir / "trellis2"
+        # TRELLIS.2 output name removes _front suffix
+        output_name = image_name.replace('_front', '')
+        if run_trellis2(input_image, algo_output_dir, args.quality):
             success = True
             result_mesh = algo_output_dir / f"{output_name}.glb"
         

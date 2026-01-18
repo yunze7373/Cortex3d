@@ -1,0 +1,127 @@
+# TRELLIS.2 Docker Container
+# Microsoft's state-of-the-art image-to-3D with sharp edge preservation
+# Based on: https://github.com/microsoft/TRELLIS.2
+
+FROM nvidia/cuda:12.4.0-devel-ubuntu22.04
+
+# Environment setup
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV TORCH_CUDA_ARCH_LIST="8.6"
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH="${CUDA_HOME}/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
+# Memory optimization
+ENV PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+# OpenCV EXR support
+ENV OPENCV_IO_ENABLE_OPENEXR=1
+
+WORKDIR /opt
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    git-lfs \
+    wget \
+    curl \
+    build-essential \
+    cmake \
+    ninja-build \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    libopenexr-dev \
+    openexr \
+    python3 \
+    python3-pip \
+    python3-dev \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create Python virtual environment
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install PyTorch 2.6 with CUDA 12.4
+RUN pip install --no-cache-dir \
+    torch==2.6.0 \
+    torchvision==0.21.0 \
+    torchaudio==2.6.0 \
+    --index-url https://download.pytorch.org/whl/cu124
+
+# Clone TRELLIS.2
+RUN git clone --recursive https://github.com/microsoft/TRELLIS.2.git /opt/trellis2
+
+WORKDIR /opt/trellis2
+
+# Install flash-attention (for faster inference)
+RUN pip install --no-cache-dir flash-attn --no-build-isolation || \
+    echo "Flash-attn install failed, will use fallback"
+
+# Install xformers as fallback
+RUN pip install --no-cache-dir xformers || echo "xformers failed"
+
+# Install basic dependencies
+RUN pip install --no-cache-dir \
+    numpy \
+    scipy \
+    pillow \
+    imageio \
+    imageio-ffmpeg \
+    opencv-python \
+    opencv-python-headless \
+    trimesh \
+    transformers \
+    accelerate \
+    safetensors \
+    huggingface_hub \
+    einops \
+    tqdm \
+    gradio
+
+# Install nvdiffrast
+RUN pip install --no-cache-dir git+https://github.com/NVlabs/nvdiffrast.git
+
+# Install custom packages from TRELLIS.2
+# o-voxel (core representation)
+RUN cd /opt/trellis2 && \
+    pip install --no-cache-dir ./packages/o_voxel || \
+    (cd packages/o_voxel && pip install --no-cache-dir -e .)
+
+# cumesh
+RUN cd /opt/trellis2 && \
+    pip install --no-cache-dir ./packages/cumesh || \
+    (cd packages/cumesh && pip install --no-cache-dir -e .)
+
+# flexgemm (optional, for efficiency)
+RUN cd /opt/trellis2 && \
+    pip install --no-cache-dir ./packages/flexgemm || \
+    echo "flexgemm failed, will use fallback"
+
+# nvdiffrec
+RUN cd /opt/trellis2 && \
+    pip install --no-cache-dir ./packages/nvdiffrec || \
+    (cd packages/nvdiffrec && pip install --no-cache-dir -e .)
+
+# Install TRELLIS.2 itself
+RUN pip install --no-cache-dir -e /opt/trellis2
+
+# Setup workspace
+WORKDIR /workspace
+RUN mkdir -p /workspace/outputs/trellis2 /workspace/test_images
+
+# Pre-download the model on first run (optional, makes image large)
+# Uncomment if you want model baked into image:
+# RUN python3 -c "from trellis2.pipelines import Trellis2ImageTo3DPipeline; Trellis2ImageTo3DPipeline.from_pretrained('microsoft/TRELLIS.2-4B')"
+
+# Copy HDRI for PBR rendering
+RUN cp -r /opt/trellis2/assets /workspace/assets || mkdir -p /workspace/assets
+
+CMD ["python3"]
