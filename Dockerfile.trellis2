@@ -62,11 +62,12 @@ RUN git clone --recursive https://github.com/microsoft/TRELLIS.2.git /opt/trelli
 WORKDIR /opt/trellis2
 
 # Install flash-attention (for faster inference)
-RUN pip install --no-cache-dir flash-attn --no-build-isolation || \
+RUN pip install --no-cache-dir flash-attn==2.6.3 --no-build-isolation || \
     echo "Flash-attn install failed, will use fallback"
 
-# Install xformers as fallback
-RUN pip install --no-cache-dir xformers || echo "xformers failed"
+# Install xformers compatible with torch 2.4 (use --no-deps to prevent torch upgrade)
+RUN pip install --no-cache-dir xformers==0.0.27.post2 --no-deps || \
+    echo "xformers failed, will use default attention"
 
 # Install basic dependencies
 RUN pip install --no-cache-dir \
