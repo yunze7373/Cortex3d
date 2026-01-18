@@ -56,6 +56,9 @@ RUN pip install --no-cache-dir \
     torchaudio==2.4.0 \
     --index-url https://download.pytorch.org/whl/cu121
 
+# Upgrade triton to 3.2.0+ (required by flex_gemm)
+RUN pip install --no-cache-dir triton==3.2.0
+
 # Clone TRELLIS.2
 RUN git clone --recursive https://github.com/microsoft/TRELLIS.2.git /opt/trellis2
 
