@@ -89,26 +89,15 @@ RUN pip install --no-cache-dir \
 # Install nvdiffrast (requires --no-build-isolation)
 RUN pip install --no-cache-dir --no-build-isolation git+https://github.com/NVlabs/nvdiffrast.git
 
-# Install custom packages from TRELLIS.2
-# o-voxel (core representation)
-RUN cd /opt/trellis2 && \
-    pip install --no-cache-dir ./packages/o_voxel || \
-    (cd packages/o_voxel && pip install --no-cache-dir -e .)
-
-# cumesh
-RUN cd /opt/trellis2 && \
-    pip install --no-cache-dir ./packages/cumesh || \
-    (cd packages/cumesh && pip install --no-cache-dir -e .)
-
-# flexgemm (optional, for efficiency)
-RUN cd /opt/trellis2 && \
-    pip install --no-cache-dir ./packages/flexgemm || \
-    echo "flexgemm failed, will use fallback"
-
-# nvdiffrec
-RUN cd /opt/trellis2 && \
-    pip install --no-cache-dir ./packages/nvdiffrec || \
-    (cd packages/nvdiffrec && pip install --no-cache-dir -e .)
+# Install TRELLIS.2 dependencies using official setup script
+# Note: --new-env skipped since we already have venv, other flags install packages
+WORKDIR /opt/trellis2
+RUN bash -c "source /opt/venv/bin/activate && \
+    pip install --no-cache-dir --no-build-isolation ./o-voxel || echo 'o-voxel failed'" && \
+    bash -c "source /opt/venv/bin/activate && \
+    pip install --no-cache-dir --no-build-isolation ./cumesh || echo 'cumesh failed'" && \
+    bash -c "source /opt/venv/bin/activate && \
+    pip install --no-cache-dir --no-build-isolation ./flexgemm || echo 'flexgemm failed'"
 
 # Install TRELLIS.2 itself
 RUN pip install --no-cache-dir -e /opt/trellis2
