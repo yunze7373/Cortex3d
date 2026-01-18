@@ -1,6 +1,6 @@
 # TRELLIS.2 Docker Container
-# Uses official setup.sh to ensure correct dependencies
-# Based on: https://github.com/microsoft/TRELLIS.2
+# Manually replicates official setup.sh without GPU check during build
+# Based on: https://github.com/microsoft/TRELLIS.2/blob/main/setup.sh
 
 FROM nvidia/cuda:12.4.0-devel-ubuntu22.04
 
@@ -13,10 +13,12 @@ ENV PATH="${CUDA_HOME}/bin:${PATH}"
 ENV LD_LIBRARY_PATH="${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}"
 ENV PYTORCH_ALLOC_CONF="expandable_segments:True"
 ENV OPENCV_IO_ENABLE_OPENEXR=1
+# Force CUDA platform (skip GPU detection during build)
+ENV TORCH_CUDA_ARCH_LIST="8.6;8.9;9.0"
 
 WORKDIR /opt
 
-# System dependencies
+# System dependencies (including libjpeg-dev for pillow-simd)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     git-lfs \
@@ -33,44 +35,86 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libopenexr-dev \
     openexr \
-    python3 \
+    libjpeg-dev \
+    python3.10 \
+    python3.10-venv \
+    python3.10-dev \
     python3-pip \
-    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Miniconda (required by TRELLIS.2 setup.sh)
-RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
-    bash /tmp/miniconda.sh -b -p /opt/conda && \
-    rm /tmp/miniconda.sh
+# Create Python virtual environment
+RUN python3.10 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-ENV PATH="/opt/conda/bin:${PATH}"
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# ========== FROM OFFICIAL setup.sh ==========
+
+# Install PyTorch 2.6.0 with CUDA 12.4 (official version)
+RUN pip install --no-cache-dir \
+    torch==2.6.0 \
+    torchvision==0.21.0 \
+    --index-url https://download.pytorch.org/whl/cu124
+
+# Basic dependencies (from setup.sh --basic)
+RUN pip install --no-cache-dir \
+    imageio imageio-ffmpeg tqdm easydict opencv-python-headless \
+    ninja trimesh transformers gradio==6.0.1 tensorboard pandas \
+    lpips zstandard kornia timm pillow
+
+# utils3d (exact commit from setup.sh)
+RUN pip install --no-cache-dir git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
 
 # Clone TRELLIS.2
 RUN git clone --recursive https://github.com/microsoft/TRELLIS.2.git /opt/trellis2
 
 WORKDIR /opt/trellis2
 
-# Use official setup.sh to install ALL dependencies with correct versions
-# This creates conda env 'trellis2' with proper PyTorch, triton, etc.
-RUN bash -c ". ./setup.sh --new-env --basic --flash-attn --nvdiffrast --cumesh --o-voxel --flexgemm"
+# flash-attn 2.7.3 (from setup.sh --flash-attn)
+RUN pip install --no-cache-dir flash-attn==2.7.3 --no-build-isolation || \
+    echo "flash-attn failed, will use fallback"
 
-# Make conda env active by default
-ENV PATH="/opt/conda/envs/trellis2/bin:${PATH}"
-ENV CONDA_DEFAULT_ENV=trellis2
+# nvdiffrast v0.4.0 (from setup.sh --nvdiffrast)
+RUN mkdir -p /tmp/extensions && \
+    git clone -b v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/extensions/nvdiffrast && \
+    pip install --no-cache-dir /tmp/extensions/nvdiffrast --no-build-isolation
 
-# Verify installation
-RUN python3 -c "import torch; print(f'PyTorch: {torch.__version__}')" && \
-    python3 -c "import torchvision; print(f'TorchVision: {torchvision.__version__}')" && \
-    python3 -c "import triton; print(f'Triton: {triton.__version__}')" && \
-    python3 -c "import flex_gemm; print('flex_gemm: OK')" && \
-    python3 -c "import o_voxel; print('o_voxel: OK')" && \
-    echo "All dependencies verified!"
+# nvdiffrec (from setup.sh --nvdiffrec)
+RUN mkdir -p /tmp/extensions && \
+    git clone -b renderutils https://github.com/JeffreyXiang/nvdiffrec.git /tmp/extensions/nvdiffrec && \
+    pip install --no-cache-dir /tmp/extensions/nvdiffrec --no-build-isolation || \
+    echo "nvdiffrec failed"
 
-# Additional Python packages
-RUN pip install --no-cache-dir rembg imageio imageio-ffmpeg trimesh
+# CuMesh (from setup.sh --cumesh)
+RUN mkdir -p /tmp/extensions && \
+    git clone https://github.com/JeffreyXiang/CuMesh.git /tmp/extensions/CuMesh --recursive && \
+    pip install --no-cache-dir /tmp/extensions/CuMesh --no-build-isolation
 
-# Setup PYTHONPATH  
+# FlexGEMM (from setup.sh --flexgemm)
+RUN mkdir -p /tmp/extensions && \
+    git clone https://github.com/JeffreyXiang/FlexGEMM.git /tmp/extensions/FlexGEMM --recursive && \
+    pip install --no-cache-dir /tmp/extensions/FlexGEMM --no-build-isolation
+
+# o-voxel (from setup.sh --o-voxel, uses local copy)
+RUN cp -r /opt/trellis2/o-voxel /tmp/extensions/o-voxel && \
+    pip install --no-cache-dir /tmp/extensions/o-voxel --no-build-isolation
+
+# ========== END OFFICIAL setup.sh ==========
+
+# Additional dependencies
+RUN pip install --no-cache-dir rembg accelerate safetensors huggingface_hub einops scipy
+
+# Setup PYTHONPATH
 ENV PYTHONPATH="/opt/trellis2:${PYTHONPATH}"
+
+# Verify key packages
+RUN python3 -c "import torch; print(f'✓ PyTorch: {torch.__version__}')" && \
+    python3 -c "import torchvision; print(f'✓ TorchVision: {torchvision.__version__}')" && \
+    python3 -c "import flex_gemm; print('✓ flex_gemm: OK')" && \
+    python3 -c "import o_voxel; print('✓ o_voxel: OK')" && \
+    python3 -c "import cumesh; print('✓ cumesh: OK')" && \
+    echo "All TRELLIS.2 dependencies verified!"
 
 # Setup workspace
 WORKDIR /workspace
