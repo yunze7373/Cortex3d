@@ -283,7 +283,7 @@ def run_trellis(image_path, output_dir, quality="balanced"):
     return run_command(cmd, cwd=PROJECT_ROOT)
 
 
-def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False):
+def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False, sharpen=False, sharpen_strength=1.0):
     """
     调用 Hunyuan3D-2.0 生成 (腾讯高质量图转3D模型)
     会自动检测环境：如果在本地运行，则通过 Docker Compose 调用容器。
@@ -327,6 +327,8 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False):
             cmd.append("--multiview")
         if no_texture:
             cmd.append("--no-texture")
+        if sharpen:
+            cmd.extend(["--sharpen", "--sharpen-strength", str(sharpen_strength)])
         
     else:
         # 本地运行 -> 调用 Docker Compose
@@ -362,6 +364,8 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False):
             cmd.append("--multiview")
         if no_texture:
             cmd.append("--no-texture")
+        if sharpen:
+            cmd.extend(["--sharpen", "--sharpen-strength", str(sharpen_strength)])
         
     return run_command(cmd, cwd=PROJECT_ROOT)
 
@@ -374,6 +378,10 @@ def main():
     parser.add_argument("--enhance", action="store_true", help="Enhance input image with Real-ESRGAN + GFPGAN before 3D generation")
     parser.add_argument("--no-texture", "--fast", dest="no_texture", action="store_true", 
                         help="Skip texture generation for faster results (Hunyuan3D only)")
+    parser.add_argument("--sharpen", action="store_true",
+                        help="Apply mesh sharpening post-processing to enhance edge details (Hunyuan3D only)")
+    parser.add_argument("--sharpen-strength", type=float, default=1.0,
+                        help="Mesh sharpening strength multiplier (0.5-2.0)")
     
     args = parser.parse_args()
     
@@ -467,7 +475,10 @@ def main():
         # Hunyuan3D output name removes _front suffix
         output_name = image_name.replace('_front', '')
         no_texture = getattr(args, 'no_texture', False)
-        if run_hunyuan3d(input_image, algo_output_dir, args.quality, no_texture=no_texture):
+        sharpen = getattr(args, 'sharpen', False)
+        sharpen_strength = getattr(args, 'sharpen_strength', 1.0)
+        if run_hunyuan3d(input_image, algo_output_dir, args.quality, 
+                         no_texture=no_texture, sharpen=sharpen, sharpen_strength=sharpen_strength):
             success = True
             result_mesh = algo_output_dir / f"{output_name}.glb"
         

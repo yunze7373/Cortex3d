@@ -201,7 +201,10 @@ def generate_3d(
     # Quality parameters
     octree_resolution: int = 384,
     guidance_scale: float = 5.0,
-    num_inference_steps: int = 50
+    num_inference_steps: int = 50,
+    # Sharpening parameters
+    sharpen: bool = False,
+    sharpen_strength: float = 1.0
 ):
     """
     Generate 3D model from image(s).
@@ -217,6 +220,8 @@ def generate_3d(
         octree_resolution: Mesh resolution (256=low, 384=medium, 512=high, 768=ultra)
         guidance_scale: Classifier-free guidance strength
         num_inference_steps: Number of diffusion steps
+        sharpen: Whether to apply mesh sharpening post-processing
+        sharpen_strength: Sharpening strength multiplier
     
     Returns:
         Path to generated GLB file
@@ -256,6 +261,42 @@ def generate_3d(
             ref_image = images.get('front', list(images.values())[0]) if isinstance(images, dict) else images
             mesh = texture_pipeline(mesh, image=ref_image)
             print("[INFO] Texture applied!")
+        
+        # Apply mesh sharpening if requested
+        if sharpen:
+            print(f"[INFO] Applying mesh sharpening (strength={sharpen_strength})...")
+            try:
+                from mesh_sharpener import sharpen_mesh
+                import trimesh
+                
+                # Convert to trimesh if needed
+                if not isinstance(mesh, trimesh.Trimesh):
+                    # Try to get the mesh data
+                    if hasattr(mesh, 'vertices') and hasattr(mesh, 'faces'):
+                        temp_mesh = trimesh.Trimesh(
+                            vertices=np.array(mesh.vertices),
+                            faces=np.array(mesh.faces)
+                        )
+                        # Preserve texture if available
+                        if hasattr(mesh, 'visual'):
+                            temp_mesh.visual = mesh.visual
+                        mesh = temp_mesh
+                
+                # Apply combined sharpening
+                mesh = sharpen_mesh(
+                    mesh,
+                    method="combined",
+                    laplacian_strength=0.3 * sharpen_strength,
+                    laplacian_iterations=2,
+                    curvature_strength=0.5 * sharpen_strength,
+                    edge_threshold=20.0,
+                    edge_strength=0.015 * sharpen_strength
+                )
+                print("[INFO] Mesh sharpening complete!")
+            except Exception as e:
+                print(f"[WARNING] Mesh sharpening failed: {e}")
+                import traceback
+                traceback.print_exc()
         
         # Export
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -315,6 +356,12 @@ def main():
     parser.add_argument("--steps", type=int, default=50,
                         help="Diffusion sampling steps (more=better quality, slower)")
     
+    # Mesh sharpening
+    parser.add_argument("--sharpen", action="store_true",
+                        help="Apply mesh sharpening post-processing to enhance edge details")
+    parser.add_argument("--sharpen-strength", type=float, default=1.0,
+                        help="Sharpening strength multiplier (0.5-2.0)")
+    
     args = parser.parse_args()
     
     print("=" * 60)
@@ -357,7 +404,9 @@ def main():
         multiview=multiview,
         octree_resolution=args.octree,
         guidance_scale=args.guidance,
-        num_inference_steps=args.steps
+        num_inference_steps=args.steps,
+        sharpen=args.sharpen,
+        sharpen_strength=args.sharpen_strength
     )
     
     print("=" * 60)
