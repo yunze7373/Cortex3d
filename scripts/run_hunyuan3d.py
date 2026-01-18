@@ -197,7 +197,11 @@ def generate_3d(
     output_dir: Path,
     output_name: str,
     seed: int = 42,
-    multiview: bool = False
+    multiview: bool = False,
+    # Quality parameters
+    octree_resolution: int = 384,
+    guidance_scale: float = 5.0,
+    num_inference_steps: int = 50
 ):
     """
     Generate 3D model from image(s).
@@ -210,6 +214,9 @@ def generate_3d(
         output_name: base name for output files
         seed: random seed
         multiview: Whether using multi-view mode
+        octree_resolution: Mesh resolution (256=low, 384=medium, 512=high, 768=ultra)
+        guidance_scale: Classifier-free guidance strength
+        num_inference_steps: Number of diffusion steps
     
     Returns:
         Path to generated GLB file
@@ -222,14 +229,23 @@ def generate_3d(
     np.random.seed(seed)
     
     try:
+        # Generation parameters
+        gen_kwargs = {
+            'image': images,
+            'octree_resolution': octree_resolution,
+            'guidance_scale': guidance_scale,
+            'num_inference_steps': num_inference_steps
+        }
+        print(f"[INFO] Generation params: octree={octree_resolution}, guidance={guidance_scale}, steps={num_inference_steps}")
+        
         # Generate shape
         if multiview and isinstance(images, dict):
             # Multi-view: pass dict of images with view tags
             print(f"[INFO] Using {len(images)} views for generation: {list(images.keys())}")
-            mesh = shape_pipeline(image=images)[0]
+            mesh = shape_pipeline(**gen_kwargs)[0]
         else:
             # Single-view: pass single image
-            mesh = shape_pipeline(image=images)[0]
+            mesh = shape_pipeline(**gen_kwargs)[0]
         
         print(f"[INFO] Shape generated!")
         
@@ -291,6 +307,14 @@ def main():
     parser.add_argument("--no-texture", dest="no_texture", action="store_true",
                         help="Skip texture generation for faster results (shape only)")
     
+    # Quality parameters for mesh detail
+    parser.add_argument("--octree", type=int, default=384,
+                        help="Octree resolution for mesh detail (256=low, 384=default, 512=high, 768=ultra)")
+    parser.add_argument("--guidance", type=float, default=5.0,
+                        help="Guidance scale for shape generation (higher=more adherence to input)")
+    parser.add_argument("--steps", type=int, default=50,
+                        help="Diffusion sampling steps (more=better quality, slower)")
+    
     args = parser.parse_args()
     
     print("=" * 60)
@@ -330,7 +354,10 @@ def main():
         shape_pipeline, texture_pipeline,
         images, output_dir, output_name,
         seed=args.seed,
-        multiview=multiview
+        multiview=multiview,
+        octree_resolution=args.octree,
+        guidance_scale=args.guidance,
+        num_inference_steps=args.steps
     )
     
     print("=" * 60)

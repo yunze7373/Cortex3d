@@ -293,8 +293,16 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False):
     # 检测是否在 Docker 容器内
     in_docker = os.path.exists("/.dockerenv") or os.environ.get("AM_I_IN_A_DOCKER_CONTAINER", False)
     
-    # 根据质量选择模型类型
+    # 根据质量选择模型类型和参数
     model_type = "full" if quality in ["high", "ultra"] else "lite"
+    
+    # 质量预设：octree_resolution 越高，mesh 细节越锐利
+    quality_presets = {
+        "balanced": {"octree": 384, "guidance": 5.0, "steps": 50},
+        "high":     {"octree": 512, "guidance": 7.0, "steps": 75},
+        "ultra":    {"octree": 768, "guidance": 7.5, "steps": 100}
+    }
+    preset = quality_presets.get(quality, quality_presets["balanced"])
     
     if in_docker:
         # 容器内直接运行
@@ -310,7 +318,10 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False):
             sys.executable, str(script_path),
             str(image_path),
             "--output", str(output_dir),
-            "--model", model_type
+            "--model", model_type,
+            "--octree", str(preset["octree"]),
+            "--guidance", str(preset["guidance"]),
+            "--steps", str(preset["steps"])
         ]
         if use_multiview:
             cmd.append("--multiview")
@@ -342,7 +353,10 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False):
             "python3", "/workspace/scripts/run_hunyuan3d.py",
             container_image,
             "--output", container_output,
-            "--model", model_type
+            "--model", model_type,
+            "--octree", str(preset["octree"]),
+            "--guidance", str(preset["guidance"]),
+            "--steps", str(preset["steps"])
         ]
         if use_multiview:
             cmd.append("--multiview")
