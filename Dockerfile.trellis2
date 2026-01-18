@@ -106,13 +106,23 @@ RUN pip install --no-cache-dir rembg onnxruntime-gpu || \
 # TRELLIS.2 doesn't have setup.py - use PYTHONPATH instead
 ENV PYTHONPATH="/opt/trellis2:${PYTHONPATH}"
 
+# IMPORTANT: Reinstall PyTorch/TorchVision to correct version
+# (packages like xformers, o_voxel might have upgraded torch)
+RUN pip install --no-cache-dir --force-reinstall \
+    torch==2.4.0 \
+    torchvision==0.19.0 \
+    torchaudio==2.4.0 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# Verify versions
+RUN python3 -c "import torch; import torchvision; \
+    assert torch.__version__.startswith('2.4'), f'Wrong torch: {torch.__version__}'; \
+    assert torchvision.__version__.startswith('0.19'), f'Wrong torchvision: {torchvision.__version__}'; \
+    print(f'✓ torch={torch.__version__}, torchvision={torchvision.__version__}')"
+
 # Setup workspace
 WORKDIR /workspace
 RUN mkdir -p /workspace/outputs/trellis2 /workspace/test_images
-
-# Pre-download the model on first run (optional, makes image large)
-# Uncomment if you want model baked into image:
-# RUN python3 -c "from trellis2.pipelines import Trellis2ImageTo3DPipeline; Trellis2ImageTo3DPipeline.from_pretrained('microsoft/TRELLIS.2-4B')"
 
 # Copy HDRI for PBR rendering
 RUN cp -r /opt/trellis2/assets /workspace/assets || mkdir -p /workspace/assets
