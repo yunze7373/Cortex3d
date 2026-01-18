@@ -296,11 +296,14 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False, 
     # 根据质量选择模型类型和参数
     model_type = "full" if quality in ["high", "ultra"] else "lite"
     
-    # 质量预设：octree_resolution 越高，mesh 细节越锐利
+    # 质量预设：基于腾讯官方网站 (3d.hunyuan.tencent.com) 的参数
+    # octree_resolution: 越高mesh细节越锐利 (官方支持到1024+)
+    # guidance: 5.0-7.5 为推荐范围
+    # steps: 30-50 为推荐范围
     quality_presets = {
-        "balanced": {"octree": 384, "guidance": 5.0, "steps": 50},
-        "high":     {"octree": 512, "guidance": 7.0, "steps": 75},
-        "ultra":    {"octree": 768, "guidance": 7.5, "steps": 100}
+        "balanced": {"octree": 512, "guidance": 5.5, "steps": 50},   # 改进: 384->512
+        "high":     {"octree": 768, "guidance": 6.5, "steps": 75},   # 改进: 512->768
+        "ultra":    {"octree": 1024, "guidance": 7.0, "steps": 100}  # 改进: 768->1024
     }
     preset = quality_presets.get(quality, quality_presets["balanced"])
     
