@@ -68,10 +68,12 @@ def compute_laplacian_matrix(mesh):
 
 def laplacian_sharpen(mesh, strength: float = 0.3, iterations: int = 1):
     """
-    Sharpen mesh using inverse Laplacian method.
+    Sharpen mesh using inverse Laplacian method (VECTORIZED).
     
     Instead of moving vertices towards neighbors (smoothing),
     we move them AWAY from neighbors (sharpening).
+    
+    Uses sparse matrix operations for O(n) performance.
     
     Args:
         mesh: trimesh.Trimesh object
@@ -82,50 +84,48 @@ def laplacian_sharpen(mesh, strength: float = 0.3, iterations: int = 1):
         New trimesh.Trimesh with sharpened vertices
     """
     _ensure_imports()
+    import scipy.sparse as sp
     
-    vertices = mesh.vertices.copy()
+    vertices = mesh.vertices.copy().astype(np.float64)
     n_vertices = len(vertices)
     
-    print(f"[INFO] Applying Laplacian sharpening (strength={strength}, iterations={iterations})...")
+    print(f"[INFO] Applying Laplacian sharpening (strength={strength}, iterations={iterations}, vertices={n_vertices})...")
+    
+    # Build sparse adjacency matrix from edges
+    edges = mesh.edges_unique
+    row = np.concatenate([edges[:, 0], edges[:, 1]])
+    col = np.concatenate([edges[:, 1], edges[:, 0]])
+    data = np.ones(len(row), dtype=np.float64)
+    
+    adjacency = sp.coo_matrix(
+        (data, (row, col)), 
+        shape=(n_vertices, n_vertices)
+    ).tocsr()
+    
+    # Compute degree (number of neighbors per vertex)
+    degrees = np.array(adjacency.sum(axis=1)).flatten()
+    degrees[degrees == 0] = 1  # Avoid division by zero
+    
+    # Normalized adjacency: A_norm[i,j] = A[i,j] / degree[i]
+    # This gives us the averaging matrix
+    inv_degrees = sp.diags(1.0 / degrees)
+    A_norm = inv_degrees @ adjacency
     
     for i in range(iterations):
-        # For each vertex, compute the centroid of its neighbors
-        # Then move AWAY from that centroid (opposite of smoothing)
+        # Compute centroid of neighbors for each vertex: centroid = A_norm @ vertices
+        centroids = A_norm @ vertices
         
-        new_vertices = vertices.copy()
+        # Laplacian vector = centroid - current (points towards centroid)
+        laplacian_vec = centroids - vertices
         
-        # Get vertex neighbors efficiently
-        for v_idx in range(n_vertices):
-            # Find all edges containing this vertex
-            edge_mask = np.any(mesh.edges_unique == v_idx, axis=1)
-            neighbor_edges = mesh.edges_unique[edge_mask]
-            
-            # Get neighbor vertex indices
-            neighbors = neighbor_edges[neighbor_edges != v_idx]
-            
-            if len(neighbors) == 0:
-                continue
-            
-            # Compute centroid of neighbors
-            neighbor_positions = vertices[neighbors]
-            centroid = neighbor_positions.mean(axis=0)
-            
-            # Current position
-            current = vertices[v_idx]
-            
-            # Laplacian vector (pointing towards centroid - this is what smoothing uses)
-            laplacian_vec = centroid - current
-            
-            # For sharpening, we move AWAY from centroid (negative direction)
-            # new_pos = current - strength * laplacian_vec
-            new_vertices[v_idx] = current - strength * laplacian_vec
+        # For sharpening, move AWAY from centroid (negative direction)
+        vertices = vertices - strength * laplacian_vec
         
-        vertices = new_vertices
-        print(f"  Iteration {i+1}/{iterations} complete")
+        print(f"[INFO]   Iteration {i+1}/{iterations} complete")
     
     # Create new mesh with sharpened vertices
     sharpened = trimesh.Trimesh(
-        vertices=vertices,
+        vertices=vertices.astype(np.float32),
         faces=mesh.faces.copy(),
         process=False
     )
@@ -139,8 +139,10 @@ def laplacian_sharpen(mesh, strength: float = 0.3, iterations: int = 1):
 
 def curvature_sharpen(mesh, strength: float = 0.5):
     """
-    Sharpen mesh based on local curvature.
+    Sharpen mesh based on local curvature (VECTORIZED).
     Vertices in high-curvature regions are pushed outward along normals.
+    
+    Uses sparse matrix operations for O(n) performance.
     
     Args:
         mesh: trimesh.Trimesh object  
@@ -150,41 +152,46 @@ def curvature_sharpen(mesh, strength: float = 0.5):
         New trimesh.Trimesh with curvature-enhanced vertices
     """
     _ensure_imports()
+    import scipy.sparse as sp
     
-    print(f"[INFO] Applying curvature-based sharpening (strength={strength})...")
+    n_vertices = len(mesh.vertices)
+    print(f"[INFO] Applying curvature-based sharpening (strength={strength}, vertices={n_vertices})...")
     
-    vertices = mesh.vertices.copy()
+    vertices = mesh.vertices.copy().astype(np.float64)
+    vertex_normals = mesh.vertex_normals.astype(np.float64)
     
-    # Get vertex normals
-    vertex_normals = mesh.vertex_normals
+    # Build sparse adjacency matrix
+    edges = mesh.edges_unique
+    row = np.concatenate([edges[:, 0], edges[:, 1]])
+    col = np.concatenate([edges[:, 1], edges[:, 0]])
+    data = np.ones(len(row), dtype=np.float64)
     
-    # Estimate curvature from normal variations
-    # High curvature = large angle between vertex normal and neighbor normals
-    n_vertices = len(vertices)
-    curvature = np.zeros(n_vertices)
+    adjacency = sp.coo_matrix(
+        (data, (row, col)), 
+        shape=(n_vertices, n_vertices)
+    ).tocsr()
     
-    for v_idx in range(n_vertices):
-        # Find neighbors
-        edge_mask = np.any(mesh.edges_unique == v_idx, axis=1)
-        neighbor_edges = mesh.edges_unique[edge_mask]
-        neighbors = neighbor_edges[neighbor_edges != v_idx]
-        
-        if len(neighbors) == 0:
-            continue
-        
-        # Compute angle between vertex normal and neighbor normals
-        v_normal = vertex_normals[v_idx]
-        n_normals = vertex_normals[neighbors]
-        
-        # Dot product gives cosine of angle
-        dots = np.dot(n_normals, v_normal)
-        
-        # Curvature estimate: 1 - mean(dot) gives higher values for sharper regions
-        curvature[v_idx] = 1.0 - np.mean(dots)
+    # Compute degree (number of neighbors per vertex)
+    degrees = np.array(adjacency.sum(axis=1)).flatten()
+    degrees[degrees == 0] = 1  # Avoid division by zero
+    
+    # Normalized adjacency for averaging
+    inv_degrees = sp.diags(1.0 / degrees)
+    A_norm = inv_degrees @ adjacency
+    
+    # Compute average neighbor normal for each vertex
+    avg_neighbor_normals = A_norm @ vertex_normals  # (n, 3)
+    
+    # Curvature = 1 - dot(vertex_normal, avg_neighbor_normal)
+    # High curvature where normals differ significantly
+    dot_products = np.sum(vertex_normals * avg_neighbor_normals, axis=1)
+    curvature = 1.0 - np.clip(dot_products, -1, 1)
     
     # Normalize curvature
     if curvature.max() > 0:
         curvature = curvature / curvature.max()
+    
+    print(f"[INFO]   Curvature range: {curvature.min():.3f} - {curvature.max():.3f}")
     
     # Push vertices outward along normals, proportional to curvature
     displacement = vertex_normals * (curvature[:, np.newaxis] * strength * 0.01)
@@ -192,7 +199,7 @@ def curvature_sharpen(mesh, strength: float = 0.5):
     
     # Create new mesh
     sharpened = trimesh.Trimesh(
-        vertices=vertices,
+        vertices=vertices.astype(np.float32),
         faces=mesh.faces.copy(),
         process=False
     )
