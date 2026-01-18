@@ -86,8 +86,8 @@ RUN pip install --no-cache-dir \
     tqdm \
     gradio
 
-# Install nvdiffrast
-RUN pip install --no-cache-dir git+https://github.com/NVlabs/nvdiffrast.git
+# Install nvdiffrast (requires --no-build-isolation)
+RUN pip install --no-cache-dir --no-build-isolation git+https://github.com/NVlabs/nvdiffrast.git
 
 # Install custom packages from TRELLIS.2
 # o-voxel (core representation)
