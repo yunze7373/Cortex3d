@@ -417,22 +417,23 @@ def detect_grid_layout(image) -> tuple:
     print(f"[行检测] 单元AR(1行)={cell_ar_1row:.2f}, 单元AR(2行)={cell_ar_2row:.2f}")
     
     # 判断条件：
-    # 1. 中间间隙得分明显高于平均值 (1.1倍即可)
-    # 2. 或者1行的单元格AR太窄 (<0.45)，说明需要2行才能形成合理的单元格
-    # 3. 或者2行的单元格AR更接近理想值 (0.6-1.0)
+    # 必须满足：中间位置得分高于平均值（说明中间有间隙）
+    # 辅助条件：AR 不合理可以降低阈值
+    
+    has_mid_gap = mid_score > avg_row_score  # 基本条件：中间得分高于平均
+    ar_suggests_2rows = cell_ar_1row < 0.45  # AR 暗示可能需要2行
     
     needs_2rows = False
     reason = ""
     
-    if mid_score > avg_row_score * 1.1:
+    if mid_score > avg_row_score * 1.3:
+        # 中间有明显间隙
         needs_2rows = True
-        reason = "中间有间隙"
-    elif cell_ar_1row < 0.45:
+        reason = f"中间有明显间隙(得分比={mid_score/avg_row_score:.2f})"
+    elif has_mid_gap and ar_suggests_2rows:
+        # 中间有轻微间隙 + AR 确认需要2行
         needs_2rows = True
-        reason = f"1行单元格太窄(AR={cell_ar_1row:.2f}<0.45)"
-    elif 0.6 <= cell_ar_2row <= 1.0 and cell_ar_1row < 0.6:
-        needs_2rows = True
-        reason = f"2行AR更合理({cell_ar_2row:.2f} vs {cell_ar_1row:.2f})"
+        reason = f"中间有间隙(得分比={mid_score/avg_row_score:.2f}) + AR暗示({cell_ar_1row:.2f}<0.45)"
     
     if needs_2rows:
         num_rows = 2
@@ -441,7 +442,10 @@ def detect_grid_layout(image) -> tuple:
     else:
         num_rows = 1
         horizontal_gaps = []
-        print("[行检测] 布局为 1 行")
+        if ar_suggests_2rows:
+            print(f"[行检测] AR暗示2行(AR={cell_ar_1row:.2f})，但中间无间隙，保持1行")
+        else:
+            print("[行检测] 布局为 1 行")
     
     # 计算检测到的视图数
     total_views = num_rows * num_cols
