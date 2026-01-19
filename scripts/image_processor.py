@@ -525,26 +525,33 @@ def split_horizontal_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
     split_points = [0] + split_points + [width]
     
     # =========================================================
-    # 切割视图
+    # 切割视图 (每个视图向两侧扩展以捕获延伸的肢体)
     # =========================================================
     views = []
     view_names = ['front', 'right', 'back', 'left']
     
+    # 扩展比例：向每侧扩展视图宽度的 10%
+    overlap_ratio = 0.10
+    
     for i, name in enumerate(view_names):
-        x1 = split_points[i]
-        x2 = split_points[i + 1]
+        base_x1 = split_points[i]
+        base_x2 = split_points[i + 1]
+        view_width = base_x2 - base_x1
+        overlap = int(view_width * overlap_ratio)
+        
+        # 向两侧扩展
+        x1 = max(0, base_x1 - overlap)
+        x2 = min(width, base_x2 + overlap)
         y1 = margin
         y2 = height - margin
         
         # 边界检查
-        x1 = max(0, x1)
-        x2 = min(width, x2)
         y1 = max(0, y1)
         y2 = min(height, y2)
         
         if x2 > x1 and y2 > y1:
             cropped = image[y1:y2, x1:x2].copy()
-            print(f"[INFO] {name} 视图切割区域: x={x1}-{x2} (宽度{x2-x1}px)")
+            print(f"[INFO] {name} 视图切割区域: x={x1}-{x2} (基础宽度{view_width}px, 扩展{overlap}px)")
             views.append((name, cropped))
     
     return views
