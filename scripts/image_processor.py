@@ -409,16 +409,39 @@ def detect_grid_layout(image) -> tuple:
     avg_row_score = np.mean([calculate_gap_score_at_position(i, row_profile, row_edges) 
                              for i in range(0, height, height // 10)])
     
-    print(f"[行检测] 中间位置得分={mid_score:.4f}, 平均得分={avg_row_score:.4f}")
+    # 计算当前选择的列配置在1行和2行时的单元格AR
+    cell_ar_1row = best_candidate['cell_ar_1row'] if best_candidate else 0.5
+    cell_ar_2row = best_candidate['cell_ar_2row'] if best_candidate else 1.0
     
-    if mid_score > avg_row_score * 1.5:  # 中间有明显间隙
+    print(f"[行检测] 中间位置得分={mid_score:.4f}, 平均得分={avg_row_score:.4f}")
+    print(f"[行检测] 单元AR(1行)={cell_ar_1row:.2f}, 单元AR(2行)={cell_ar_2row:.2f}")
+    
+    # 判断条件：
+    # 1. 中间间隙得分明显高于平均值 (1.1倍即可)
+    # 2. 或者1行的单元格AR太窄 (<0.45)，说明需要2行才能形成合理的单元格
+    # 3. 或者2行的单元格AR更接近理想值 (0.6-1.0)
+    
+    needs_2rows = False
+    reason = ""
+    
+    if mid_score > avg_row_score * 1.1:
+        needs_2rows = True
+        reason = "中间有间隙"
+    elif cell_ar_1row < 0.45:
+        needs_2rows = True
+        reason = f"1行单元格太窄(AR={cell_ar_1row:.2f}<0.45)"
+    elif 0.6 <= cell_ar_2row <= 1.0 and cell_ar_1row < 0.6:
+        needs_2rows = True
+        reason = f"2行AR更合理({cell_ar_2row:.2f} vs {cell_ar_1row:.2f})"
+    
+    if needs_2rows:
         num_rows = 2
         horizontal_gaps = [mid_pos]
-        print("[行检测] 检测到水平分割线，布局为 2 行")
+        print(f"[行检测] 检测到需要2行布局: {reason}")
     else:
         num_rows = 1
         horizontal_gaps = []
-        print("[行检测] 未检测到水平分割线，布局为 1 行")
+        print("[行检测] 布局为 1 行")
     
     # 计算检测到的视图数
     total_views = num_rows * num_cols
