@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Cortex3d Hunyuan3D-2.0 Runner
-Uses Tencent Hunyuan3D-2.0 for high-quality image-to-3D generation.
+Cortex3d Hunyuan3D Runner
+Uses Tencent Hunyuan3D for high-quality image-to-3D generation.
+Version is determined by HUNYUAN3D_VERSION environment variable (default: 2.0).
 
 Supports both single-view and multi-view input:
 - Single-view: Uses one front image
@@ -26,6 +27,8 @@ os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
 
 # Add Hunyuan3D to path
 HUNYUAN3D_ROOT = Path(os.environ.get("HUNYUAN3D_ROOT", "/opt/hunyuan3d"))
+# Get version from environment variable (default: 2.0)
+HUNYUAN3D_VERSION = os.environ.get("HUNYUAN3D_VERSION", "2.0")
 if HUNYUAN3D_ROOT.exists():
     sys.path.insert(0, str(HUNYUAN3D_ROOT))
 
@@ -62,7 +65,7 @@ def load_hunyuan3d_pipeline(model_type="lite", multiview=False):
         (shape_pipeline, texture_pipeline)
     """
     mv_suffix = " [Multi-View]" if multiview else " [Single-View]"
-    print(f"[INFO] Loading Hunyuan3D-2.0 model (type: {model_type}){mv_suffix}...")
+    print(f"[INFO] Loading Hunyuan3D-{HUNYUAN3D_VERSION} model (type: {model_type}){mv_suffix}...")
     
     try:
         # Import Hunyuan3D components
@@ -101,7 +104,7 @@ def load_hunyuan3d_pipeline(model_type="lite", multiview=False):
                 print(f"[WARNING] Could not load texture pipeline: {e}")
                 print("[INFO] Will generate shape only.")
         
-        print("[INFO] Hunyuan3D-2.0 pipeline loaded successfully!")
+        print(f"[INFO] Hunyuan3D-{HUNYUAN3D_VERSION} pipeline loaded successfully!")
         return shape_pipeline, texture_pipeline
         
     except ImportError as e:
@@ -341,7 +344,7 @@ def generate_3d(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Hunyuan3D-2.0 Image-to-3D Generation")
+    parser = argparse.ArgumentParser(description=f"Hunyuan3D-{HUNYUAN3D_VERSION} Image-to-3D Generation")
     parser.add_argument("image", type=str, help="Input image path (or prefix for multi-view)")
     parser.add_argument("--output", "-o", type=str, default="outputs/hunyuan3d", help="Output directory")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
@@ -369,7 +372,7 @@ def main():
     args = parser.parse_args()
     
     print("=" * 60)
-    print("Cortex3d Hunyuan3D-2.0 3D Generation")
+    print(f"Cortex3d Hunyuan3D-{HUNYUAN3D_VERSION} 3D Generation")
     print("=" * 60)
     
     # Setup

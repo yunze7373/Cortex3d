@@ -54,6 +54,8 @@ services:
     shm_size: "16gb"
     stdin_open: true
     tty: true
+    environment:
+      - HUNYUAN3D_VERSION=2.0
     deploy:
       resources:
         reservations:
@@ -75,6 +77,8 @@ services:
     shm_size: "16gb"
     stdin_open: true
     tty: true
+    environment:
+      - HUNYUAN3D_VERSION=2.1
     deploy:
       resources:
         reservations:
