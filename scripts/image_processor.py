@@ -267,14 +267,14 @@ def detect_grid_layout(image) -> tuple:
     """
     通用网格布局检测：检测图片中的 rows x cols 布局
     
-    通过分析水平和垂直方向的间隙模式来确定网格结构。
+    使用模式匹配方法：尝试常见布局模式，验证每个预期分割点的质量，选择最佳匹配。
     
     Returns:
-        (rows, cols): 网格的行数和列数
-        例如: (1, 4) = 1x4 横排, (2, 2) = 2x2 田字格, (2, 4) = 2x4 网格
+        (rows, cols, v_gaps, h_gaps)
     """
     _ensure_imports()
     height, width = image.shape[:2]
+    aspect_ratio = width / height
     
     # 转灰度
     if len(image.shape) == 3:
@@ -282,21 +282,8 @@ def detect_grid_layout(image) -> tuple:
     else:
         gray = image.copy()
     
-    # 边缘检测
-    edges = cv2.Canny(gray, 50, 150)
-    
-    # =========================================================
-    # 检测垂直分割线（确定列数）
-    # =========================================================
-    col_density = np.mean(edges, axis=0)  # 每列的边缘密度
-    col_std = np.std(gray, axis=0)  # 每列的标准差
-    
-    # 组合得分：低边缘密度 + 低标准差 = 间隙
-    col_gap_score = (col_density.max() - col_density) / (col_density.max() + 1e-6) + \
-                    (col_std.max() - col_std) / (col_std.max() + 1e-6)
-    
-    # 计算可能的背景色（使用图片四角的平均值）
-    corner_size = min(50, width // 10, height // 10)
+    # 计算背景色
+    corner_size = min(30, width // 15, height // 15)
     corners = [
         gray[:corner_size, :corner_size],
         gray[:corner_size, -corner_size:],
@@ -304,91 +291,103 @@ def detect_grid_layout(image) -> tuple:
         gray[-corner_size:, -corner_size:]
     ]
     background_value = np.median([np.median(c) for c in corners])
-    background_tolerance = 30  # 允许的背景色容差
+    print(f"[网格检测] 背景色: {background_value:.0f}")
     
-    print(f"[网格检测] 检测到背景色: {background_value:.0f}")
+    # 边缘检测
+    edges = cv2.Canny(gray, 50, 150)
     
-    # 寻找间隙峰值（局部最大值）- 使用背景色验证
-    def find_gaps(gap_score, gray_profile, min_distance_ratio=0.1, axis='vertical'):
+    def check_gap_quality(pos, axis='vertical', window=20):
         """
-        找到间隙位置
-        
-        Args:
-            gap_score: 间隙得分数组
-            gray_profile: 灰度值剖面（每列/每行的平均灰度）
-            min_distance_ratio: 最小间隙间距比例
-            axis: 'vertical' 或 'horizontal'
+        检查指定位置的间隙质量
+        返回得分 (0-1)，越高表示越可能是间隙
         """
-        length = len(gap_score)
-        min_distance = int(length * min_distance_ratio)
+        if axis == 'vertical':
+            if pos < window or pos >= width - window:
+                return 0
+            region = gray[:, pos-window:pos+window]
+            edge_region = edges[:, pos-window:pos+window]
+        else:
+            if pos < window or pos >= height - window:
+                return 0
+            region = gray[pos-window:pos+window, :]
+            edge_region = edges[pos-window:pos+window, :]
         
-        # 平滑处理
-        kernel_size = max(5, length // 50)
-        if kernel_size % 2 == 0:
-            kernel_size += 1
-        smoothed = np.convolve(gap_score, np.ones(kernel_size)/kernel_size, mode='same')
+        # 检查1: 区域平均亮度是否接近背景色
+        mean_val = np.mean(region)
+        bg_similarity = 1.0 - min(abs(mean_val - background_value) / 50, 1.0)
         
-        # 找局部最大值（候选间隙）
-        candidates = []
-        for i in range(min_distance, length - min_distance):
-            window_start = max(0, i - min_distance // 2)
-            window_end = min(length, i + min_distance // 2)
-            # 使用更严格的阈值：必须高于平均值的 1.5 倍
-            if smoothed[i] == np.max(smoothed[window_start:window_end]) and smoothed[i] > np.mean(smoothed) * 1.5:
-                candidates.append((i, smoothed[i], gray_profile[i]))
+        # 检查2: 区域标准差是否较低（均匀区域）
+        std_val = np.std(region)
+        uniformity = 1.0 - min(std_val / 50, 1.0)
         
-        # 验证候选间隙是否真的是背景
-        valid_gaps = []
-        for pos, score, gray_val in candidates:
-            # 检查该位置的灰度值是否接近背景色
-            if abs(gray_val - background_value) < background_tolerance:
-                valid_gaps.append(pos)
-                print(f"[网格检测] {axis} 间隙验证通过: pos={pos}, gray={gray_val:.0f}, bg={background_value:.0f}")
-            else:
-                print(f"[网格检测] {axis} 间隙验证失败: pos={pos}, gray={gray_val:.0f} (非背景色)")
+        # 检查3: 边缘密度是否较低
+        edge_density = np.mean(edge_region) / 255
+        low_edge = 1.0 - min(edge_density * 10, 1.0)
         
-        # 合并太近的间隙
-        merged_gaps = []
-        for gap in valid_gaps:
-            if not merged_gaps or gap - merged_gaps[-1] > min_distance:
-                merged_gaps.append(gap)
+        # 综合得分
+        score = (bg_similarity * 0.4 + uniformity * 0.3 + low_edge * 0.3)
+        return score
+    
+    def evaluate_pattern(rows, cols):
+        """评估一个网格模式的匹配质量"""
+        if rows <= 0 or cols <= 0:
+            return 0, [], []
         
-        return merged_gaps
+        # 计算预期的分割点位置
+        v_positions = [int(width * (i / cols)) for i in range(1, cols)]
+        h_positions = [int(height * (i / rows)) for i in range(1, rows)]
+        
+        # 计算每个分割点的间隙质量
+        v_scores = [check_gap_quality(pos, 'vertical') for pos in v_positions]
+        h_scores = [check_gap_quality(pos, 'horizontal') for pos in h_positions]
+        
+        # 总体得分 = 所有分割点得分的平均值
+        all_scores = v_scores + h_scores
+        if not all_scores:
+            return 0.5, [], []  # 1x1 布局
+        
+        avg_score = np.mean(all_scores)
+        min_score = np.min(all_scores) if all_scores else 0
+        
+        # 如果有任何分割点质量太差，降低整体得分
+        if min_score < 0.2:
+            avg_score *= 0.5
+        
+        return avg_score, v_positions, h_positions
     
-    # 计算灰度剖面
-    col_gray_profile = np.mean(gray, axis=0)  # 每列的平均灰度
-    vertical_gaps = find_gaps(col_gap_score, col_gray_profile, min_distance_ratio=0.15, axis='vertical')
-    num_cols = len(vertical_gaps) + 1
+    # 尝试常见的布局模式
+    patterns = [
+        (1, 4),  # 1x4 横排
+        (2, 2),  # 2x2 田字格
+        (2, 4),  # 2x4 网格
+        (4, 2),  # 4x2 网格
+        (1, 3),  # 1x3
+        (3, 3),  # 3x3
+        (1, 2),  # 1x2
+        (2, 1),  # 2x1
+    ]
     
-    # =========================================================
-    # 检测水平分割线（确定行数）
-    # =========================================================
-    row_density = np.mean(edges, axis=1)  # 每行的边缘密度
-    row_std = np.std(gray, axis=1)  # 每行的标准差
+    best_score = 0
+    best_pattern = (1, 4)  # 默认
+    best_v_gaps = []
+    best_h_gaps = []
     
-    # 组合得分
-    row_gap_score = (row_density.max() - row_density) / (row_density.max() + 1e-6) + \
-                    (row_std.max() - row_std) / (row_std.max() + 1e-6)
+    print("[网格检测] 尝试匹配模式...")
+    for rows, cols in patterns:
+        score, v_gaps, h_gaps = evaluate_pattern(rows, cols)
+        print(f"  {rows}x{cols}: 得分={score:.3f}")
+        if score > best_score:
+            best_score = score
+            best_pattern = (rows, cols)
+            best_v_gaps = v_gaps
+            best_h_gaps = h_gaps
     
-    row_gray_profile = np.mean(gray, axis=1)  # 每行的平均灰度
-    horizontal_gaps = find_gaps(row_gap_score, row_gray_profile, min_distance_ratio=0.15, axis='horizontal')
-    num_rows = len(horizontal_gaps) + 1
+    rows, cols = best_pattern
+    print(f"[网格检测] 最佳匹配: {rows}x{cols} (得分={best_score:.3f})")
+    print(f"[网格检测] 垂直分割点: {best_v_gaps}")
+    print(f"[网格检测] 水平分割点: {best_h_gaps}")
     
-    # =========================================================
-    # 验证和修正
-    # =========================================================
-    # 限制在合理范围内
-    num_cols = min(max(1, num_cols), 8)
-    num_rows = min(max(1, num_rows), 8)
-    
-    # 计算检测到的视图数
-    total_views = num_rows * num_cols
-    
-    print(f"[网格检测] 检测到 {num_cols} 列垂直间隙: {vertical_gaps}")
-    print(f"[网格检测] 检测到 {num_rows} 行水平间隙: {horizontal_gaps}")
-    print(f"[网格检测] 布局: {num_rows}x{num_cols} ({total_views} 个视图)")
-    
-    return (num_rows, num_cols, vertical_gaps, horizontal_gaps)
+    return (rows, cols, best_v_gaps, best_h_gaps)
 
 
 def split_universal_grid(image, rows: int, cols: int, v_gaps: list, h_gaps: list, margin: int = 5) -> List[Tuple[str, any]]:
