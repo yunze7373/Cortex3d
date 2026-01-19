@@ -510,10 +510,97 @@ def run_trellis2(image_path, output_dir, quality="balanced"):
     
     return run_command(cmd, cwd=PROJECT_ROOT)
 
+
+def run_hunyuan3d_omni(image_path, output_dir, quality="balanced", control_type=None, control_input=None):
+    """
+    调用 Hunyuan3D-Omni 生成 (多模态控制：pose/point/voxel/bbox)
+    会自动检测环境：如果在本地运行，则通过 Docker Compose 调用容器。
+    
+    Args:
+        image_path: 输入图像路径
+        output_dir: 输出目录
+        quality: 质量预设 (balanced, high, ultra)
+        control_type: 控制类型 (pose, point, voxel, bbox) 或 None
+        control_input: 控制数据文件路径
+    """
+    image_path = Path(image_path)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    logging.info(f"Starting Hunyuan3D-Omni reconstruction... (Quality: {quality})")
+    if control_type:
+        logging.info(f"Control type: {control_type}")
+    
+    # 检测是否在 Docker 容器内
+    in_docker = os.path.exists("/.dockerenv") or os.environ.get("AM_I_IN_A_DOCKER_CONTAINER", False)
+    
+    # 质量预设
+    quality_presets = {
+        "balanced": {"octree": 512, "guidance": 5.5, "steps": 50},
+        "high":     {"octree": 768, "guidance": 6.5, "steps": 75},
+        "ultra":    {"octree": 1024, "guidance": 7.0, "steps": 100}
+    }
+    preset = quality_presets.get(quality, quality_presets["balanced"])
+    
+    if in_docker:
+        # 容器内直接运行
+        script_path = SCRIPT_DIR / "run_hunyuan3d_omni.py"
+        if not script_path.exists():
+            logging.error(f"Hunyuan3D-Omni script not found: {script_path}")
+            return False
+            
+        cmd = [
+            sys.executable, str(script_path),
+            str(image_path),
+            "--output", str(output_dir),
+            "--octree", str(preset["octree"]),
+            "--guidance", str(preset["guidance"]),
+            "--steps", str(preset["steps"])
+        ]
+        if control_type and control_input:
+            cmd.extend(["--control-type", control_type, "--control-input", str(control_input)])
+    else:
+        # 本地运行，通过 Docker Compose 调用 hunyuan3d-omni 容器
+        logging.info("Running locally, dispatching to 'hunyuan3d-omni' container...")
+        
+        # 转换为容器内路径
+        try:
+            rel_image = image_path.absolute().relative_to(PROJECT_ROOT.absolute())
+            rel_output = output_dir.absolute().relative_to(PROJECT_ROOT.absolute())
+        except ValueError:
+            logging.error("Image path must be within project root for Docker mount")
+            return False
+        
+        container_image = f"/workspace/{rel_image.as_posix()}"
+        container_output = f"/workspace/{rel_output.as_posix()}"
+        
+        cmd = [
+            "docker", "compose", "exec", "-T", "hunyuan3d-omni",
+            "python3", "/workspace/scripts/run_hunyuan3d_omni.py",
+            container_image,
+            "--output", container_output,
+            "--octree", str(preset["octree"]),
+            "--guidance", str(preset["guidance"]),
+            "--steps", str(preset["steps"])
+        ]
+        
+        if control_type and control_input:
+            # 转换 control_input 路径
+            try:
+                control_path = Path(control_input)
+                rel_control = control_path.absolute().relative_to(PROJECT_ROOT.absolute())
+                container_control = f"/workspace/{rel_control.as_posix()}"
+            except ValueError:
+                container_control = str(control_input)
+            cmd.extend(["--control-type", control_type, "--control-input", container_control])
+    
+    return run_command(cmd, cwd=PROJECT_ROOT)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Cortex3d Unified Reconstructor (Stage 2)")
     parser.add_argument("image", type=Path, help="Path to input image (front view) OR prefix for multi-view images")
-    parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis", "trellis2", "hunyuan3d", "hunyuan3d-2.1"], default="trellis", help="Reconstruction algorithm")
+    parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis", "trellis2", "hunyuan3d", "hunyuan3d-2.1", "hunyuan3d-omni"], default="trellis", help="Reconstruction algorithm")
     parser.add_argument("--quality", choices=["balanced", "high", "ultra"], default="balanced", help="Quality preset")
     parser.add_argument("--output_dir", type=Path, default=OUTPUTS_DIR, help="Output directory")
     parser.add_argument("--enhance", action="store_true", help="Enhance input image with Real-ESRGAN + GFPGAN before 3D generation")
@@ -523,6 +610,11 @@ def main():
                         help="Apply mesh sharpening post-processing to enhance edge details (Hunyuan3D only)")
     parser.add_argument("--sharpen-strength", type=float, default=1.0,
                         help="Mesh sharpening strength multiplier (0.5-2.0)")
+    # Hunyuan3D-Omni control parameters
+    parser.add_argument("--control-type", choices=["pose", "point", "voxel", "bbox"],
+                        help="Control type for Hunyuan3D-Omni (pose/point/voxel/bbox)")
+    parser.add_argument("--control-input", type=Path,
+                        help="Path to control data file for Hunyuan3D-Omni")
     
     args = parser.parse_args()
     
@@ -640,6 +732,16 @@ def main():
         # TRELLIS.2 output name removes _front suffix
         output_name = image_name.replace('_front', '')
         if run_trellis2(input_image, algo_output_dir, args.quality):
+            success = True
+            result_mesh = algo_output_dir / f"{output_name}.glb"
+    
+    elif args.algo == "hunyuan3d-omni":
+        algo_output_dir = args.output_dir / "hunyuan3d-omni"
+        output_name = image_name.replace('_front', '')
+        control_type = getattr(args, 'control_type', None)
+        control_input = getattr(args, 'control_input', None)
+        if run_hunyuan3d_omni(input_image, algo_output_dir, args.quality,
+                              control_type=control_type, control_input=control_input):
             success = True
             result_mesh = algo_output_dir / f"{output_name}.glb"
         

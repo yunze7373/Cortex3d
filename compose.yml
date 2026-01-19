@@ -111,6 +111,29 @@ services:
               count: all
               capabilities: [gpu]
 
+  hunyuan3d-omni:
+    build:
+      context: .
+      dockerfile: Dockerfile.hunyuan3d-omni
+    image: cortex3d-hunyuan3d-omni:latest
+    container_name: cortex3d-hunyuan3d-omni
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - hf-cache:/root/.cache/huggingface
+    shm_size: "16gb"
+    stdin_open: true
+    tty: true
+    environment:
+      - HUNYUAN3D_VERSION=omni
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
 volumes:
   hf-cache:
 
