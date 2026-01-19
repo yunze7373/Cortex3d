@@ -104,6 +104,75 @@ def find_subject_bbox(image, padding: int = 10):
     return x1, y1, x2, y2
 
 
+def remove_small_fragments(image, min_area_ratio: float = 0.05):
+    """
+    移除图片中的小碎片（如相邻视图的手片段）
+    
+    使用连通组件分析，只保留最大的主体，移除面积小于阈值的碎片。
+    
+    Args:
+        image: BGRA 格式图片（必须有透明通道）
+        min_area_ratio: 碎片面积相对于最大主体的最小比例，小于此值的将被移除
+    
+    Returns:
+        处理后的图片
+    """
+    _ensure_imports()
+    
+    # 检查是否有透明通道
+    if len(image.shape) != 3 or image.shape[2] != 4:
+        print("[WARNING] remove_small_fragments 需要 BGRA 图片")
+        return image
+    
+    # 获取 alpha 通道作为 mask
+    alpha = image[:, :, 3]
+    
+    # 二值化 alpha 通道
+    _, binary = cv2.threshold(alpha, 10, 255, cv2.THRESH_BINARY)
+    
+    # 连通组件分析
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    
+    if num_labels <= 1:
+        # 只有背景，没有前景
+        return image
+    
+    # 找到最大的组件（排除背景 label=0）
+    # stats[:, cv2.CC_STAT_AREA] 包含每个组件的面积
+    areas = stats[1:, cv2.CC_STAT_AREA]  # 排除背景
+    max_area = np.max(areas)
+    max_label = np.argmax(areas) + 1  # +1 因为排除了背景
+    
+    print(f"[碎片检测] 发现 {num_labels - 1} 个连通区域, 最大面积: {max_area}px²")
+    
+    # 创建掩码，只保留大于阈值的组件
+    min_area = max_area * min_area_ratio
+    keep_mask = np.zeros_like(binary)
+    
+    removed_count = 0
+    for label in range(1, num_labels):
+        area = stats[label, cv2.CC_STAT_AREA]
+        if area >= min_area:
+            keep_mask[labels == label] = 255
+        else:
+            removed_count += 1
+            # 获取碎片位置信息
+            x = stats[label, cv2.CC_STAT_LEFT]
+            y = stats[label, cv2.CC_STAT_TOP]
+            w = stats[label, cv2.CC_STAT_WIDTH]
+            h = stats[label, cv2.CC_STAT_HEIGHT]
+            print(f"[碎片移除] 移除碎片: 位置({x},{y}), 尺寸{w}x{h}, 面积{area}px² (< {min_area:.0f})")
+    
+    if removed_count > 0:
+        print(f"[碎片移除] 共移除 {removed_count} 个碎片")
+    
+    # 应用掩码到图片
+    result = image.copy()
+    result[:, :, 3] = cv2.bitwise_and(result[:, :, 3], keep_mask)
+    
+    return result
+
+
 def crop_to_subject(image, target_size: int = 1024, padding: int = 20):
     """
     裁切图片到主体区域，并调整到正方形输出
@@ -641,6 +710,10 @@ def process_quadrant_image(
             print(f"[处理中] 去除 {view_name} 视图背景...")
             try:
                 processed = remove_background(view_image)
+                
+                # 移除小碎片（如相邻视图的手片段）
+                print(f"[处理中] 清理 {view_name} 视图碎片...")
+                processed = remove_small_fragments(processed, min_area_ratio=0.03)
                 
                 # 智能裁切：使用 alpha 通道找到主体边界
                 print(f"[处理中] 智能裁切 {view_name} 视图到主体区域...")
