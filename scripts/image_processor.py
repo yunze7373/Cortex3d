@@ -292,15 +292,17 @@ def detect_layout_smart(image) -> str:
         votes_grid += 1
         print("[DEBUG] 边缘密度投票: Grid (中心较空)")
     
-    # 投票3: 宽高比倾向
-    if aspect_ratio >= 1.8:
-        votes_linear += 1
-        print(f"[DEBUG] 宽高比投票: Linear (AR={aspect_ratio:.2f} >= 1.8)")
-    elif aspect_ratio <= 1.2:
-        votes_grid += 1
-        print(f"[DEBUG] 宽高比投票: Grid (AR={aspect_ratio:.2f} <= 1.2)")
+    # 投票3: 宽高比倾向 (重新调整阈值)
+    # 3:2 横屏 = 1.5, 应该强烈倾向于 linear
+    if aspect_ratio >= 1.4:
+        votes_linear += 2  # 横屏图片给予双票权重
+        print(f"[DEBUG] 宽高比投票: Linear x2 (AR={aspect_ratio:.2f} >= 1.4，横屏)")
+    elif aspect_ratio <= 0.9:
+        votes_grid += 2  # 竖屏图片给予双票权重
+        print(f"[DEBUG] 宽高比投票: Grid x2 (AR={aspect_ratio:.2f} <= 0.9，竖屏)")
     else:
-        print(f"[DEBUG] 宽高比投票: 弃权 (AR={aspect_ratio:.2f})")
+        # 接近正方形，弃权
+        print(f"[DEBUG] 宽高比投票: 弃权 (AR={aspect_ratio:.2f}，接近正方形)")
     
     print(f"[DEBUG] 最终投票: Linear={votes_linear}, Grid={votes_grid}")
     
@@ -309,8 +311,8 @@ def detect_layout_smart(image) -> str:
     elif votes_grid > votes_linear:
         return "grid"
     else:
-        # 平票时，宽高比 > 1.5 优先 linear
-        return "linear" if aspect_ratio > 1.5 else "grid"
+        # 平票时，宽高比 > 1.0 优先 linear (横屏优先横排)
+        return "linear" if aspect_ratio > 1.0 else "grid"
 
 
 def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
