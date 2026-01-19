@@ -537,8 +537,8 @@ def main():
     )
     parser.add_argument(
         "--output", "-o",
-        default="outputs",
-        help="输出目录 (默认: outputs)"
+        default="test_images",
+        help="输出目录 (默认: test_images)"
     )
     parser.add_argument(
         "--no-rembg",
