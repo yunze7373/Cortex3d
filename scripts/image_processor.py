@@ -424,12 +424,16 @@ def split_quadrant_image(image, margin: int = 5) -> List[Tuple[str, tuple]]:
     return detect_layout_and_split(image, margin)
 
 
-def remove_background(image):
+def remove_background(image, model_name: str = "isnet-general-use"):
     """
     使用 rembg 去除图片背景
     
     Args:
         image: BGR 格式的 numpy 数组
+        model_name: rembg 模型名称，可选:
+            - "isnet-general-use" (默认，对复杂前景更好)
+            - "birefnet-general" (最新模型，质量最高但较慢)
+            - "u2net" (经典模型)
     
     Returns:
         BGRA 格式的 numpy 数组（带 alpha 通道）
@@ -440,12 +444,19 @@ def remove_background(image):
             "rembg 未安装。请运行: pip install rembg onnxruntime"
         )
     
+    # 导入 session 管理
+    from rembg import new_session
+    
+    # 创建指定模型的 session
+    session = new_session(model_name)
+    print(f"[INFO] 使用背景移除模型: {model_name}")
+    
     # OpenCV BGR -> PIL RGB
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     pil_image = Image.fromarray(image_rgb)
     
-    # 去除背景
-    result = remove_bg(pil_image)
+    # 去除背景 (使用指定 session)
+    result = remove_bg(pil_image, session=session)
     
     # PIL RGBA -> OpenCV BGRA
     result_np = np.array(result)
