@@ -79,9 +79,9 @@ def main():
     )
     parser.add_argument(
         "--algo",
-        choices=["hunyuan3d", "hunyuan3d-2.1", "trellis", "trellis2"],
+        choices=["hunyuan3d", "hunyuan3d-2.1", "hunyuan3d-omni", "trellis", "trellis2"],
         default="hunyuan3d",
-        help="3D 生成算法 (默认: hunyuan3d)"
+        help="3D 生成算法 (默认: hunyuan3d, omni支持姿势控制)"
     )
     parser.add_argument(
         "--quality",
@@ -99,6 +99,11 @@ def main():
         "--preview",
         action="store_true",
         help="生成后自动打开预览"
+    )
+    parser.add_argument(
+        "--pose",
+        default=None,
+        help="姿势控制文件路径 (仅 hunyuan3d-omni 支持，例如: poses/t_pose.json)"
     )
     
     parser.add_argument(
@@ -343,6 +348,10 @@ def main():
                 # 添加几何模型Only选项 (跳过纹理生成，速度快很多)
                 if getattr(args, 'geometry_only', False):
                     cmd.append("--no-texture")
+                
+                # 添加姿势控制 (仅 hunyuan3d-omni 支持)
+                if args.algo == "hunyuan3d-omni" and args.pose:
+                    cmd.extend(["--control-type", "pose", "--control-input", str(args.pose)])
                 
                 try:
                     import subprocess
