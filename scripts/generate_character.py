@@ -178,7 +178,7 @@ def main():
         
         # 直接进入 3D 生成
         print("\n" + "═" * 50)
-        print("🚀 启动 3D 生成流水线 (TRELLIS)...")
+        print(f"🚀 启动 3D 生成流水线 ({args.algo.upper()})...")
         print("═" * 50)
         
         reconstructor_script = script_dir / "reconstructor.py"
@@ -186,18 +186,28 @@ def main():
             sys.executable,
             str(reconstructor_script),
             str(front_img),
-            "--algo", "trellis",
+            "--algo", args.algo,
             "--quality", args.quality,
             "--output_dir", str(Path("outputs"))
         ]
+        
+        # 添加几何模型Only选项
+        if getattr(args, 'geometry_only', False):
+            cmd.append("--no-texture")
+        
+        # 添加姿势控制 (仅 hunyuan3d-omni 支持)
+        if args.algo == "hunyuan3d-omni" and args.pose:
+            cmd.extend(["--control-type", "pose", "--control-input", str(args.pose)])
         
         try:
             import subprocess
             subprocess.run(cmd, check=True)
             print("\n[SUCCESS] 3D 生成完成！")
             
-            glb_path = Path("outputs/trellis") / f"{image_id}_front.glb"
-            obj_path = Path("outputs/trellis") / f"{image_id}_front.obj"
+            # 根据算法确定输出路径
+            algo_dir = "hunyuan3d" if args.algo.startswith("hunyuan") else args.algo
+            glb_path = Path(f"outputs/{algo_dir}") / f"{image_id}_front.glb"
+            obj_path = Path(f"outputs/{algo_dir}") / f"{image_id}_front.obj"
             
             print(f"\n生成的3D模型:")
             if glb_path.exists():
