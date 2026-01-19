@@ -317,9 +317,9 @@ def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
     """
     智能检测图片布局类型并切割
     
-    支持两种布局:
-    1. 2x2 田字格 (宽高比接近1:1 或 4:3)
-    2. 1x4 横排 (宽高比约 4:1 或更宽)
+    支持布局:
+    1. 2x2 田字格 (Grid)
+    2. 1x4 横排 (Linear) - 包括宽高比 < 1 的情况（如每个视图是竖长的全身图）
     """
     _ensure_imports()
     height, width = image.shape[:2]
@@ -329,17 +329,18 @@ def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
     
     layout_type = "unknown"
     
-    # 对于极宽的图片 (>= 3.0)，直接判定为横排
-    if aspect_ratio >= 3.0:
+    # 只对极端情况直接判断，其他情况使用智能检测
+    # 因为 1x4 横排可能有各种宽高比（取决于每个视图的形状）
+    if aspect_ratio >= 4.0:
         layout_type = "linear"
-        print("[INFO] 宽高比 >= 3.0，直接判定为横排")
-    # 对于极窄的图片 (< 0.8)，直接判定为竖排/田字格
-    elif aspect_ratio < 0.8:
+        print("[INFO] 宽高比 >= 4.0，直接判定为横排")
+    elif aspect_ratio <= 0.3:
+        # 只有非常窄的图片才直接判定为 Grid（可能是 4x1 竖排）
         layout_type = "grid"
-        print("[INFO] 宽高比 < 0.8，直接判定为田字格")
+        print("[INFO] 宽高比 <= 0.3，直接判定为田字格")
     else:
-        # 其他所有情况 (0.8 - 3.0) -> 使用智能内容检测
-        # 这包括正方形 1:1 (可能是 1x4 紧凑排列) 和常规宽高比
+        # 其他所有情况 (0.3 - 4.0) -> 使用智能内容检测
+        # 这包括宽高比 < 1 的 1x4 横排（每个视图是竖长的全身图）
         print(f"[INFO] 启用智能内容检测...")
         layout_type = detect_layout_smart(image)
     
