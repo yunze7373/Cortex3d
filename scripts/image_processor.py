@@ -396,39 +396,34 @@ def find_dividing_lines(gray_image, axis: str, num_divisions: int) -> List[int]:
 
 def split_horizontal_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
     """
-    切割 1x4 横排布局 - 使用重叠区域避免切到手
+    切割 1x4 横排布局 - 精确切割，不使用重叠区域
     
-    每个区域向两边扩展 15%，确保捕获超出格子边界的手臂等部位。
-    后续的 crop_to_subject 会根据实际主体边界裁切。
+    每个视图精确按 1/4 宽度切割，避免包含相邻视图的内容。
+    后续的 crop_to_subject 会根据实际主体边界进行智能裁切。
     """
     height, width = image.shape[:2]
     cell_width = width // 4
-    
-    # 重叠比例：向每侧扩展 15%
-    overlap = int(cell_width * 0.15)
     
     views = []
     # AI 通常按顺时针生成: Front(0°) → Right(90°) → Back(180°) → Left(270°)
     view_names = ['front', 'right', 'back', 'left']
     
     for i, name in enumerate(view_names):
-        # 计算基础位置
-        base_x1 = i * cell_width
-        base_x2 = (i + 1) * cell_width
-        
-        # 向两侧扩展（允许重叠）
-        x1 = max(0, base_x1 - overlap)
-        x2 = min(width, base_x2 + overlap)
+        # 精确计算每个视图的位置（不扩展）
+        x1 = i * cell_width
+        x2 = (i + 1) * cell_width if i < 3 else width  # 最后一个视图取到图片边缘
         y1 = margin
         y2 = height - margin
         
         # 边界检查
+        x1 = max(0, x1)
+        x2 = min(width, x2)
         y1 = max(0, y1)
         y2 = min(height, y2)
         
         if x2 > x1 and y2 > y1:
             cropped = image[y1:y2, x1:x2].copy()
-            print(f"[INFO] {name} 视图切割区域: x={x1}-{x2} (扩展{overlap}px)")
+            print(f"[INFO] {name} 视图切割区域: x={x1}-{x2} (宽度{x2-x1}px)")
             views.append((name, cropped))
     
     return views
