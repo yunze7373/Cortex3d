@@ -30,59 +30,68 @@ AIPROXY_BASE_URL = os.environ.get("AIPROXY_URL", "https://bot.bigjj.click/aiprox
 
 
 # =============================================================================
-# 四视角角色参考表提示词模板
-# 参考自: 2d图生成提示词/英文4视角提示词sample.md
+# 四视角角色参考表提示词模板 (优化版 v2)
+# 针对常见问题优化：解剖学错误、左右混淆、动作不一致
 # =============================================================================
 
-MULTI_VIEW_PROMPT_TEMPLATE = """Create a {style} character design in 3D rendering style, showing front, back, left side, and right side views in a four-panel layout.
+MULTI_VIEW_PROMPT_TEMPLATE = """Generate a professional 3D character turntable reference sheet with exactly 4 panels arranged horizontally.
 
-CHARACTER DESIGN: 4 views arranged horizontally side by side.
+## OUTPUT REQUIREMENT
+Single image containing 4 panels in a row: [FRONT] [RIGHT] [BACK] [LEFT]
 
-**CAMERA POSITIONS (CRITICAL - READ CAREFULLY):**
-Think of a turntable with the character standing in the center:
-- FRONT VIEW: Camera at 0° (directly facing the character's face)
-- RIGHT SIDE VIEW: Camera at 90° (character has rotated, now showing their RIGHT side - right shoulder, right hip, right ear visible)
-- BACK VIEW: Camera at 180° (showing the character's back, back of head)
-- LEFT SIDE VIEW: Camera at 270° (character has rotated, now showing their LEFT side - left shoulder, left hip, left ear visible)
-
-**IMPORTANT:** Left and Right profile views are NOT mirrors of each other. They show OPPOSITE sides of the body.
-
-CHARACTER DESIGN:
+## CHARACTER
 {character_description}
+Style: {style}
 
-SIDE VIEWS CLARIFICATION:
-• In the LEFT SIDE VIEW: The character's LEFT arm, LEFT leg, LEFT ear are closest to the camera
-• In the RIGHT SIDE VIEW: The character's RIGHT arm, RIGHT leg, RIGHT ear are closest to the camera
-• The character should appear to have ROTATED, not been flipped/mirrored
+## CRITICAL RULES - READ CAREFULLY
 
-POSE CONSISTENCY:
-• Same relaxed standing pose in ALL 4 views
-• Same arm positions, leg positions, and held items in all views
-• If holding a weapon in right hand, it stays in right hand in ALL views
+### TURNTABLE ROTATION (NOT MIRROR!)
+Imagine the character standing on a rotating platform:
+- Panel 1 (FRONT): Platform at 0° - We see the FACE, chest, front of body
+- Panel 2 (RIGHT SIDE): Platform rotated 90° clockwise - We see the RIGHT ear, RIGHT shoulder, RIGHT hip
+- Panel 3 (BACK): Platform rotated 180° - We see back of HEAD, spine, buttocks
+- Panel 4 (LEFT SIDE): Platform rotated 270° clockwise - We see the LEFT ear, LEFT shoulder, LEFT hip
 
-LAYOUT & COMPOSITION:
-• Four-panel horizontal layout
-• Character centered in each panel
-• Clean separation between panels
-• Neutral grey background in all panels
+⚠️ IMPORTANT: Panels 2 and 4 are NOT mirrors! They show OPPOSITE sides of the body!
+- RIGHT SIDE shows: right ear, right arm, right leg
+- LEFT SIDE shows: left ear, left arm, left leg
 
-LIGHTING & SHADING (CRITICAL):
-• Flat, even lighting (albedo texture style)
-• Soft ambient light only
-• NO strong shadows, NO cast shadows, NO harsh contrast
-• NO chiaroscuro, NO dramatic lighting
-• Face must be clearly visible without shadow obstruction
+### ANATOMICAL CORRECTNESS (CRITICAL!)
+- Arms MUST connect to shoulders only
+- Legs MUST connect to hips only
+- Head MUST connect to neck only
+- NO extra limbs, NO twisted body parts
+- Upper body and lower body MUST face the SAME direction in each panel
+- The entire body rotates together as one unit
 
-STYLE & AESTHETIC:
-• 3D digital rendering with cinematic quality
-• Photorealistic CGI, 8k textures
-• Professional character reference sheet
+### POSE CONSISTENCY (CRITICAL!)
+- EXACT same pose in ALL 4 panels - only the viewing angle changes
+- Same arm positions, same leg positions, same head tilt
+- If holding an object in right hand → it stays in right hand in ALL views
+- This is ONE character photographed from 4 angles, NOT 4 different poses
 
-ABSOLUTELY NO TEXT:
-• NO labels, NO words, NO annotations
-• NO "front" "back" "left" "right" text anywhere
-• Completely clean image
+### PANEL LAYOUT
+- 4 equal-width panels arranged horizontally (side by side)
+- Character centered in each panel
+- Same scale/size in all panels
+- Clean separation between panels
+- Neutral gray or white background
+
+### LIGHTING
+- Flat, even studio lighting (no harsh shadows)
+- Face clearly visible without shadow obstruction
+- Consistent lighting direction across all panels
+
+### ABSOLUTELY FORBIDDEN
+- NO text labels (no "front", "back", "left", "right")
+- NO twisted bodies (upper body facing different direction than legs)
+- NO mirror flips (left and right views must show different sides)
+- NO anatomical errors (no extra limbs, no wrong joint positions)
+- NO pose variations between panels
+
+Generate a clean, professional character reference sheet following ALL rules above.
 """
+
 
 
 def build_multiview_prompt(
