@@ -195,6 +195,50 @@ def crop_to_subject(image, target_size: int = 1024, padding: int = 20):
 
 
 
+def detect_layout_smart(image) -> str:
+    """
+    通过边缘检测智能判断布局类型 (Grid vs Linear)
+    
+    原理:
+    - 提取图片水平中心带 (H/2 附近 10% 高度区域)
+    - 1x4 (Linear): 中心带有大量边缘 (因为角色占据整个高度) -> Edge Density High
+    - 2x2 (Grid): 中心带通常是上下两排的空隙 -> Edge Density Low
+    """
+    _ensure_imports()
+    height, width = image.shape[:2]
+    
+    # 转灰度
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+        
+    # Canny 边缘检测
+    edges = cv2.Canny(gray, 50, 150)
+    
+    # 提取中心水平带 (高度的 45% - 55%)
+    center_y = height // 2
+    strip_h = max(20, int(height * 0.1))
+    start_y = center_y - strip_h // 2
+    end_y = center_y + strip_h // 2
+    
+    center_strip = edges[start_y:end_y, :]
+    
+    # 计算边缘密度 (非零像素占比)
+    edge_pixels = np.count_nonzero(center_strip)
+    total_pixels = center_strip.size
+    density = edge_pixels / total_pixels
+    
+    print(f"[DEBUG] 布局检测: 中心带边缘密度 = {density:.4f}")
+    
+    # 阈值判断
+    # 典型值: 1x4 约 0.05-0.10, 2x2 约 0.00-0.02
+    if density > 0.03: 
+        return "linear"  # 1x4 (中间有内容)
+    else:
+        return "grid"    # 2x2 (中间是空隙)
+
+
 def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
     """
     智能检测图片布局类型并切割
@@ -202,13 +246,6 @@ def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
     支持两种布局:
     1. 2x2 田字格 (宽高比接近1:1 或 4:3)
     2. 1x4 横排 (宽高比约 4:1 或更宽)
-    
-    Args:
-        image: 输入图片 (BGR 格式)
-        margin: 切割边界收缩像素
-    
-    Returns:
-        List of (view_name, image) tuples: [front, back, left, right]
     """
     _ensure_imports()
     height, width = image.shape[:2]
@@ -216,16 +253,24 @@ def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
     
     print(f"[INFO] 图片尺寸: {width}x{height}, 宽高比: {aspect_ratio:.2f}")
     
-    # 判断布局类型
-    # 1x4 横排: 宽高比 > 1.5 (如 1408x768 = 1.83)
-    # 2x2 田字格: 宽高比 <= 1.5 (如 1024x1024 = 1.0 或 1024x768 = 1.33)
-    if aspect_ratio > 1.5:
-        # 1x4 横排布局
-        print("[INFO] 检测到 1x4 横排布局")
+    layout_type = "unknown"
+    
+    # 1. 宽高比明确的情况
+    if aspect_ratio >= 2.5:
+        layout_type = "linear" # 极宽，肯定是 1x4
+    elif aspect_ratio <= 1.2:
+        layout_type = "grid"   # 接近正方形，肯定是 2x2
+    else:
+        # 2. 宽高比模糊区间 (1.2 - 2.5) -> 使用智能内容检测
+        # 例如 1408x768 (1.83) 可能是 1x4，也可能是较宽的 2x2
+        print(f"[INFO] 宽高比在模糊区间，启用智能内容检测...")
+        layout_type = detect_layout_smart(image)
+    
+    if layout_type == "linear":
+        print("[INFO] 识别为: 1x4 横排布局 (Linear)")
         return split_horizontal_layout(image, margin)
     else:
-        # 2x2 田字格布局
-        print("[INFO] 检测到 2x2 田字格布局")
+        print("[INFO] 识别为: 2x2 田字格布局 (Grid)")
         return split_grid_layout(image, margin)
 
 
