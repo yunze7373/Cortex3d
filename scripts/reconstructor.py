@@ -373,6 +373,75 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False, 
     return run_command(cmd, cwd=PROJECT_ROOT)
 
 
+def run_hunyuan3d_21(image_path, output_dir, quality="balanced", no_texture=False, sharpen=False, sharpen_strength=1.0):
+    """
+    调用 Hunyuan3D-2.1 生成 (腾讯最新版，10x几何精度提升 + PBR材质)
+    会自动检测环境：如果在本地运行，则通过 Docker Compose 调用容器。
+    """
+    logging.info(f"Starting Hunyuan3D-2.1 reconstruction... (Quality: {quality})")
+    
+    # 检测是否在 Docker 容器内
+    in_docker = os.path.exists("/.dockerenv") or os.environ.get("AM_I_IN_A_DOCKER_CONTAINER", False)
+    
+    # 根据质量选择模型类型和参数
+    model_type = "full" if quality in ["high", "ultra"] else "lite"
+    
+    # 质量预设：基于腾讯官方参数，2.1 版本优化
+    quality_presets = {
+        "balanced": {"octree": 512, "guidance": 5.5, "steps": 50},
+        "high":     {"octree": 768, "guidance": 6.5, "steps": 75},
+        "ultra":    {"octree": 1024, "guidance": 7.0, "steps": 100}
+    }
+    preset = quality_presets.get(quality, quality_presets["balanced"])
+    
+    if in_docker:
+        # 容器内直接运行
+        script_path = SCRIPT_DIR / "run_hunyuan3d.py"
+        if not script_path.exists():
+            logging.error(f"Hunyuan3D script not found: {script_path}")
+            return False
+            
+        cmd = [
+            sys.executable, str(script_path),
+            str(image_path),
+            "--output", str(output_dir),
+            "--model", model_type,
+            "--octree", str(preset["octree"]),
+            "--guidance", str(preset["guidance"]),
+            "--steps", str(preset["steps"])
+        ]
+        if no_texture:
+            cmd.append("--no-texture")
+        if sharpen:
+            cmd.extend(["--sharpen", "--sharpen-strength", str(sharpen_strength)])
+    else:
+        # 本地运行，通过 Docker Compose 调用 hunyuan3d-2.1 容器
+        logging.info("Running locally, dispatching to 'hunyuan3d-2.1' container...")
+        
+        # 转换为容器内路径
+        container_image_path = f"/workspace/{image_path}"
+        container_output_dir = f"/workspace/{output_dir}"
+        
+        cmd = [
+            "docker", "compose", "exec", "-T", "hunyuan3d-2.1",
+            "python3", "/workspace/scripts/run_hunyuan3d.py",
+            container_image_path,
+            "--output", container_output_dir,
+            "--model", model_type,
+            "--octree", str(preset["octree"]),
+            "--guidance", str(preset["guidance"]),
+            "--steps", str(preset["steps"])
+        ]
+        if no_texture:
+            cmd.append("--no-texture")
+        if sharpen:
+            cmd.extend(["--sharpen", "--sharpen-strength", str(sharpen_strength)])
+        
+        logging.info(f"Executing: {' '.join(cmd)}")
+        
+    return run_command(cmd, cwd=PROJECT_ROOT)
+
+
 def run_trellis2(image_path, output_dir, quality="balanced"):
     """
     调用 TRELLIS.2 生成 (微软最新，锐利边缘保留)
@@ -444,7 +513,7 @@ def run_trellis2(image_path, output_dir, quality="balanced"):
 def main():
     parser = argparse.ArgumentParser(description="Cortex3d Unified Reconstructor (Stage 2)")
     parser.add_argument("image", type=Path, help="Path to input image (front view) OR prefix for multi-view images")
-    parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis", "trellis2", "hunyuan3d"], default="trellis", help="Reconstruction algorithm")
+    parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis", "trellis2", "hunyuan3d", "hunyuan3d-2.1"], default="trellis", help="Reconstruction algorithm")
     parser.add_argument("--quality", choices=["balanced", "high", "ultra"], default="balanced", help="Quality preset")
     parser.add_argument("--output_dir", type=Path, default=OUTPUTS_DIR, help="Output directory")
     parser.add_argument("--enhance", action="store_true", help="Enhance input image with Real-ESRGAN + GFPGAN before 3D generation")
@@ -551,6 +620,18 @@ def main():
         sharpen_strength = getattr(args, 'sharpen_strength', 1.0)
         if run_hunyuan3d(input_image, algo_output_dir, args.quality, 
                          no_texture=no_texture, sharpen=sharpen, sharpen_strength=sharpen_strength):
+            success = True
+            result_mesh = algo_output_dir / f"{output_name}.glb"
+    
+    elif args.algo == "hunyuan3d-2.1":
+        algo_output_dir = args.output_dir / "hunyuan3d-2.1"
+        # Hunyuan3D output name removes _front suffix
+        output_name = image_name.replace('_front', '')
+        no_texture = getattr(args, 'no_texture', False)
+        sharpen = getattr(args, 'sharpen', False)
+        sharpen_strength = getattr(args, 'sharpen_strength', 1.0)
+        if run_hunyuan3d_21(input_image, algo_output_dir, args.quality, 
+                           no_texture=no_texture, sharpen=sharpen, sharpen_strength=sharpen_strength):
             success = True
             result_mesh = algo_output_dir / f"{output_name}.glb"
     
