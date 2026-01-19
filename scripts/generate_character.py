@@ -284,7 +284,6 @@ def main():
     # 从参考图片生成多视角图
     # =========================================================================
     if args.from_image:
-        from pathlib import Path
         image_path = Path(args.from_image)
         
         # 如果直接路径不存在，尝试在 reference_images/ 文件夹中查找
