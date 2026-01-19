@@ -424,7 +424,7 @@ def split_quadrant_image(image, margin: int = 5) -> List[Tuple[str, tuple]]:
     return detect_layout_and_split(image, margin)
 
 
-def remove_background(image, model_name: str = "isnet-general-use"):
+def remove_background(image, model_name: str = "birefnet-general"):
     """
     使用 rembg 去除图片背景
     
