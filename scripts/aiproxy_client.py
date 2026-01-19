@@ -57,7 +57,8 @@ def generate_image_via_proxy(
     token: str,
     model: str = DEFAULT_MODEL,
     base_url: str = AIPROXY_BASE_URL,
-    reference_image: str = None
+    reference_image: str = None,
+    resolution: str = "4K"  # 默认请求 4K 分辨率
 ) -> Optional[Tuple[bytes, str]]:
     """
     通过 AiProxy 服务生成图像
@@ -68,6 +69,7 @@ def generate_image_via_proxy(
         model: 模型名称 (默认: nano-banana-pro)
         base_url: AiProxy 服务地址
         reference_image: 参考图片的 base64 data URL (可选，用于图生图)
+        resolution: 图像分辨率，可选 "4K", "2K", "1K" (默认: "4K")
     
     Returns:
         (image_bytes, mime_type) 或 None
@@ -83,7 +85,8 @@ def generate_image_via_proxy(
     
     payload = {
         "prompt": prompt,
-        "model": model
+        "model": model,
+        "image_size": resolution # 传递分辨率参数
     }
     
     # 如果提供了参考图片，添加到 payload（图生图模式）
