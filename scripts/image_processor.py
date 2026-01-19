@@ -263,6 +263,169 @@ def crop_to_subject(image, target_size: int = 1024, padding: int = 20):
     return cropped
 
 
+def detect_grid_layout(image) -> tuple:
+    """
+    通用网格布局检测：检测图片中的 rows x cols 布局
+    
+    通过分析水平和垂直方向的间隙模式来确定网格结构。
+    
+    Returns:
+        (rows, cols): 网格的行数和列数
+        例如: (1, 4) = 1x4 横排, (2, 2) = 2x2 田字格, (2, 4) = 2x4 网格
+    """
+    _ensure_imports()
+    height, width = image.shape[:2]
+    
+    # 转灰度
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+    
+    # 边缘检测
+    edges = cv2.Canny(gray, 50, 150)
+    
+    # =========================================================
+    # 检测垂直分割线（确定列数）
+    # =========================================================
+    col_density = np.mean(edges, axis=0)  # 每列的边缘密度
+    col_std = np.std(gray, axis=0)  # 每列的标准差
+    
+    # 组合得分：低边缘密度 + 低标准差 = 间隙
+    col_gap_score = (col_density.max() - col_density) / (col_density.max() + 1e-6) + \
+                    (col_std.max() - col_std) / (col_std.max() + 1e-6)
+    
+    # 寻找间隙峰值（局部最大值）
+    def find_gaps(gap_score, min_distance_ratio=0.1):
+        """找到间隙位置"""
+        length = len(gap_score)
+        min_distance = int(length * min_distance_ratio)
+        
+        # 平滑处理
+        kernel_size = max(5, length // 50)
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        smoothed = np.convolve(gap_score, np.ones(kernel_size)/kernel_size, mode='same')
+        
+        # 找局部最大值
+        gaps = []
+        for i in range(min_distance, length - min_distance):
+            window_start = max(0, i - min_distance // 2)
+            window_end = min(length, i + min_distance // 2)
+            if smoothed[i] == np.max(smoothed[window_start:window_end]) and smoothed[i] > np.mean(smoothed):
+                gaps.append(i)
+        
+        # 合并太近的间隙
+        merged_gaps = []
+        for gap in gaps:
+            if not merged_gaps or gap - merged_gaps[-1] > min_distance:
+                merged_gaps.append(gap)
+        
+        return merged_gaps
+    
+    vertical_gaps = find_gaps(col_gap_score, min_distance_ratio=0.15)
+    num_cols = len(vertical_gaps) + 1
+    
+    # =========================================================
+    # 检测水平分割线（确定行数）
+    # =========================================================
+    row_density = np.mean(edges, axis=1)  # 每行的边缘密度
+    row_std = np.std(gray, axis=1)  # 每行的标准差
+    
+    # 组合得分
+    row_gap_score = (row_density.max() - row_density) / (row_density.max() + 1e-6) + \
+                    (row_std.max() - row_std) / (row_std.max() + 1e-6)
+    
+    horizontal_gaps = find_gaps(row_gap_score, min_distance_ratio=0.15)
+    num_rows = len(horizontal_gaps) + 1
+    
+    # =========================================================
+    # 验证和修正
+    # =========================================================
+    # 限制在合理范围内
+    num_cols = min(max(1, num_cols), 8)
+    num_rows = min(max(1, num_rows), 8)
+    
+    # 计算检测到的视图数
+    total_views = num_rows * num_cols
+    
+    print(f"[网格检测] 检测到 {num_cols} 列垂直间隙: {vertical_gaps}")
+    print(f"[网格检测] 检测到 {num_rows} 行水平间隙: {horizontal_gaps}")
+    print(f"[网格检测] 布局: {num_rows}x{num_cols} ({total_views} 个视图)")
+    
+    return (num_rows, num_cols, vertical_gaps, horizontal_gaps)
+
+
+def split_universal_grid(image, rows: int, cols: int, v_gaps: list, h_gaps: list, margin: int = 5) -> List[Tuple[str, any]]:
+    """
+    根据检测到的网格布局切割图片
+    
+    Args:
+        image: 输入图片
+        rows: 行数
+        cols: 列数
+        v_gaps: 垂直间隙位置列表
+        h_gaps: 水平间隙位置列表
+        margin: 边距
+    
+    Returns:
+        [(view_name, cropped_image), ...]
+    """
+    _ensure_imports()
+    height, width = image.shape[:2]
+    
+    # 确定分割点
+    x_splits = [0] + v_gaps + [width]
+    y_splits = [0] + h_gaps + [height]
+    
+    # 视图命名规则
+    if rows == 1 and cols == 4:
+        view_names = ['front', 'right', 'back', 'left']
+    elif rows == 2 and cols == 2:
+        view_names = ['front', 'right', 'back', 'left']  # 按田字格顺序
+    elif rows == 2 and cols == 4:
+        # 2x4: 上排4个 + 下排4个
+        view_names = [f'view_{i+1}' for i in range(rows * cols)]
+    else:
+        view_names = [f'view_{i+1}' for i in range(rows * cols)]
+    
+    views = []
+    view_idx = 0
+    
+    # 扩展比例
+    overlap_ratio = 0.10
+    
+    for row in range(rows):
+        for col in range(cols):
+            # 计算基础边界
+            base_x1 = x_splits[col]
+            base_x2 = x_splits[col + 1]
+            base_y1 = y_splits[row]
+            base_y2 = y_splits[row + 1]
+            
+            # 视图尺寸
+            view_width = base_x2 - base_x1
+            view_height = base_y2 - base_y1
+            
+            # 向外扩展
+            x_overlap = int(view_width * overlap_ratio)
+            y_overlap = int(view_height * overlap_ratio)
+            
+            x1 = max(0, base_x1 - x_overlap)
+            x2 = min(width, base_x2 + x_overlap)
+            y1 = max(margin, base_y1 - y_overlap)
+            y2 = min(height - margin, base_y2 + y_overlap)
+            
+            if x2 > x1 and y2 > y1:
+                cropped = image[y1:y2, x1:x2].copy()
+                name = view_names[view_idx] if view_idx < len(view_names) else f'view_{view_idx+1}'
+                print(f"[INFO] {name} 视图切割区域: x={x1}-{x2}, y={y1}-{y2}")
+                views.append((name, cropped))
+            
+            view_idx += 1
+    
+    return views
+
 
 def detect_layout_smart(image) -> str:
     """
@@ -430,8 +593,9 @@ def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
     智能检测图片布局类型并切割
     
     支持布局:
-    1. 2x2 田字格 (Grid)
-    2. 1x4 横排 (Linear) - 包括宽高比 < 1 的情况（如每个视图是竖长的全身图）
+    1. 1x4 横排 (Linear)
+    2. 2x2 田字格 (Grid)
+    3. 2x4 等非标准布局 (Universal Grid)
     """
     _ensure_imports()
     height, width = image.shape[:2]
@@ -439,29 +603,38 @@ def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
     
     print(f"[INFO] 图片尺寸: {width}x{height}, 宽高比: {aspect_ratio:.2f}")
     
-    layout_type = "unknown"
+    # =========================================================
+    # 首先使用通用网格检测来识别布局
+    # =========================================================
+    rows, cols, v_gaps, h_gaps = detect_grid_layout(image)
     
-    # 只对极端情况直接判断，其他情况使用智能检测
-    # 因为 1x4 横排可能有各种宽高比（取决于每个视图的形状）
-    if aspect_ratio >= 4.0:
-        layout_type = "linear"
-        print("[INFO] 宽高比 >= 4.0，直接判定为横排")
-    elif aspect_ratio <= 0.3:
-        # 只有非常窄的图片才直接判定为 Grid（可能是 4x1 竖排）
-        layout_type = "grid"
-        print("[INFO] 宽高比 <= 0.3，直接判定为田字格")
-    else:
-        # 其他所有情况 (0.3 - 4.0) -> 使用智能内容检测
-        # 这包括宽高比 < 1 的 1x4 横排（每个视图是竖长的全身图）
-        print(f"[INFO] 启用智能内容检测...")
-        layout_type = detect_layout_smart(image)
-    
-    if layout_type == "linear":
+    # 根据检测结果决定使用哪种切割方式
+    if rows == 1 and cols == 4:
+        # 标准 1x4 横排
         print("[INFO] 识别为: 1x4 横排布局 (Linear)")
         return split_horizontal_layout(image, margin)
-    else:
+    elif rows == 2 and cols == 2:
+        # 标准 2x2 田字格
         print("[INFO] 识别为: 2x2 田字格布局 (Grid)")
         return split_grid_layout(image, margin)
+    elif rows == 1 and cols >= 2:
+        # 其他横排布局（如 1x3, 1x5 等）
+        print(f"[INFO] 识别为: 1x{cols} 横排布局")
+        return split_universal_grid(image, rows, cols, v_gaps, h_gaps, margin)
+    elif rows >= 2 and cols >= 2:
+        # 非标准网格（如 2x4, 3x3 等）
+        print(f"[INFO] 识别为: {rows}x{cols} 网格布局 ({rows * cols} 个视图)")
+        return split_universal_grid(image, rows, cols, v_gaps, h_gaps, margin)
+    else:
+        # 回退到传统检测
+        print("[INFO] 无法确定布局，使用传统检测...")
+        layout_type = detect_layout_smart(image)
+        if layout_type == "linear":
+            print("[INFO] 回退识别为: 1x4 横排布局 (Linear)")
+            return split_horizontal_layout(image, margin)
+        else:
+            print("[INFO] 回退识别为: 2x2 田字格布局 (Grid)")
+            return split_grid_layout(image, margin)
 
 
 def find_dividing_lines(gray_image, axis: str, num_divisions: int) -> List[int]:
