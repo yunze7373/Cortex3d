@@ -116,6 +116,18 @@ def main():
         action="store_true",
         help="严格复制模式：100%基于原图生成多视角，不允许AI创意改动 (需配合 --from-image 使用)"
     )
+    parser.add_argument(
+        "--preprocess",
+        action="store_true",
+        help="预处理输入图片：去除背景让主体更突出，提高AI生成质量 (需配合 --from-image 使用)"
+    )
+    parser.add_argument(
+        "--preprocess-model",
+        dest="preprocess_model",
+        choices=["birefnet-general", "isnet-general-use", "u2net"],
+        default="birefnet-general",
+        help="预处理使用的背景移除模型 (默认: birefnet-general)"
+    )
     
     parser.add_argument(
         "--style",
@@ -314,7 +326,46 @@ def main():
                 print(f"\n请将图片放入 reference_images/ 文件夹，或提供完整路径")
                 sys.exit(1)
         
-        args.from_image = str(image_path)  # 更新为实际路径
+        # =====================================================================
+        # 预处理：去除背景让主体更突出
+        # =====================================================================
+        if args.preprocess:
+            print(f"\n[预处理] 去除背景，突出主体...")
+            print(f"[模型] {args.preprocess_model}")
+            
+            try:
+                from image_processor import remove_background
+                import cv2
+                import numpy as np
+                
+                # 读取图片
+                img = cv2.imread(str(image_path))
+                if img is None:
+                    print(f"[ERROR] 无法读取图片: {image_path}")
+                    sys.exit(1)
+                
+                # 去除背景
+                processed = remove_background(img, model_name=args.preprocess_model)
+                
+                # 保存预处理后的图片
+                preprocess_dir = Path(args.output) / "preprocessed"
+                preprocess_dir.mkdir(parents=True, exist_ok=True)
+                preprocessed_path = preprocess_dir / f"{image_path.stem}_preprocessed.png"
+                cv2.imwrite(str(preprocessed_path), processed)
+                
+                print(f"[预处理完成] 保存到: {preprocessed_path}")
+                
+                # 使用预处理后的图片
+                image_path = preprocessed_path
+                
+            except ImportError as e:
+                print(f"[WARNING] 预处理依赖缺失: {e}")
+                print("[INFO] 跳过预处理，使用原图继续")
+            except Exception as e:
+                print(f"[WARNING] 预处理失败: {e}")
+                print("[INFO] 跳过预处理，使用原图继续")
+        
+        args.from_image = str(image_path)  # 更新为实际路径（可能已被预处理）
         
         # 严格模式跳过图片分析，直接使用图片
         if args.strict:

@@ -197,46 +197,120 @@ def crop_to_subject(image, target_size: int = 1024, padding: int = 20):
 
 def detect_layout_smart(image) -> str:
     """
-    通过边缘检测智能判断布局类型 (Grid vs Linear)
+    通过多重检测智能判断布局类型 (Grid vs Linear)
     
-    原理:
-    - 提取图片水平中心带 (H/2 附近 10% 高度区域)
-    - 1x4 (Linear): 中心带有大量边缘 (因为角色占据整个高度) -> Edge Density High
-    - 2x2 (Grid): 中心带通常是上下两排的空隙 -> Edge Density Low
+    检测方法:
+    1. 垂直分割线检测：1x4 有 3 条垂直分割线间隔 W/4，2x2 只有 1 条在 W/2
+    2. 水平中心带边缘密度：1x4 中间有内容，2x2 中间是空隙
+    3. 宽高比辅助判断
     """
     _ensure_imports()
     height, width = image.shape[:2]
+    aspect_ratio = width / height
     
     # 转灰度
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     else:
         gray = image
-        
-    # Canny 边缘检测
-    edges = cv2.Canny(gray, 50, 150)
     
-    # 提取中心水平带 (高度的 45% - 55%)
+    # =====================================================================
+    # 方法1: 分析垂直亮度分布，寻找分割线
+    # =====================================================================
+    # 计算每列的平均亮度
+    col_brightness = np.mean(gray, axis=0)
+    
+    # 在期望的分割位置寻找亮度峰值
+    # 1x4 布局的分割线应该在 W/4, W/2, 3W/4
+    # 2x2 布局的垂直分割线只在 W/2
+    
+    def find_peak_near(profile, expected_pos, search_range=0.05):
+        """在期望位置附近寻找亮度峰值"""
+        length = len(profile)
+        range_px = int(length * search_range)
+        start = max(0, expected_pos - range_px)
+        end = min(length, expected_pos + range_px)
+        segment = profile[start:end]
+        if len(segment) == 0:
+            return 0
+        # 返回相对于背景的亮度差异
+        peak_val = np.max(segment)
+        mean_val = np.mean(profile)
+        return peak_val - mean_val
+    
+    # 检查 1x4 的三个分割线位置
+    pos_quarter = width // 4
+    pos_half = width // 2
+    pos_three_quarter = 3 * width // 4
+    
+    peak_q1 = find_peak_near(col_brightness, pos_quarter)
+    peak_half = find_peak_near(col_brightness, pos_half)
+    peak_q3 = find_peak_near(col_brightness, pos_three_quarter)
+    
+    # 计算分割线强度
+    linear_score = (peak_q1 + peak_q3) / 2  # 1x4 特有的两侧分割线
+    grid_score = peak_half  # 2x2 的中间分割线
+    
+    print(f"[DEBUG] 分割线检测: 1/4位置={peak_q1:.1f}, 1/2位置={peak_half:.1f}, 3/4位置={peak_q3:.1f}")
+    print(f"[DEBUG] Linear得分={linear_score:.1f}, Grid得分={grid_score:.1f}")
+    
+    # =====================================================================
+    # 方法2: 水平中心带边缘密度
+    # =====================================================================
+    edges = cv2.Canny(gray, 50, 150)
     center_y = height // 2
     strip_h = max(20, int(height * 0.1))
     start_y = center_y - strip_h // 2
     end_y = center_y + strip_h // 2
-    
     center_strip = edges[start_y:end_y, :]
     
-    # 计算边缘密度 (非零像素占比)
     edge_pixels = np.count_nonzero(center_strip)
     total_pixels = center_strip.size
-    density = edge_pixels / total_pixels
+    edge_density = edge_pixels / total_pixels
     
-    print(f"[DEBUG] 布局检测: 中心带边缘密度 = {density:.4f}")
+    print(f"[DEBUG] 中心带边缘密度 = {edge_density:.4f}")
     
-    # 阈值判断
-    # 典型值: 1x4 约 0.05-0.10, 2x2 约 0.00-0.02
-    if density > 0.03: 
-        return "linear"  # 1x4 (中间有内容)
+    # =====================================================================
+    # 综合判断
+    # =====================================================================
+    votes_linear = 0
+    votes_grid = 0
+    
+    # 投票1: 分割线检测
+    if linear_score > grid_score * 0.5 and peak_q1 > 5 and peak_q3 > 5:
+        votes_linear += 1
+        print("[DEBUG] 分割线检测投票: Linear (检测到 1/4 和 3/4 分割线)")
     else:
-        return "grid"    # 2x2 (中间是空隙)
+        votes_grid += 1
+        print("[DEBUG] 分割线检测投票: Grid")
+    
+    # 投票2: 边缘密度
+    if edge_density > 0.025:
+        votes_linear += 1
+        print("[DEBUG] 边缘密度投票: Linear (中心有内容)")
+    else:
+        votes_grid += 1
+        print("[DEBUG] 边缘密度投票: Grid (中心较空)")
+    
+    # 投票3: 宽高比倾向
+    if aspect_ratio >= 1.8:
+        votes_linear += 1
+        print(f"[DEBUG] 宽高比投票: Linear (AR={aspect_ratio:.2f} >= 1.8)")
+    elif aspect_ratio <= 1.2:
+        votes_grid += 1
+        print(f"[DEBUG] 宽高比投票: Grid (AR={aspect_ratio:.2f} <= 1.2)")
+    else:
+        print(f"[DEBUG] 宽高比投票: 弃权 (AR={aspect_ratio:.2f})")
+    
+    print(f"[DEBUG] 最终投票: Linear={votes_linear}, Grid={votes_grid}")
+    
+    if votes_linear > votes_grid:
+        return "linear"
+    elif votes_grid > votes_linear:
+        return "grid"
+    else:
+        # 平票时，宽高比 > 1.5 优先 linear
+        return "linear" if aspect_ratio > 1.5 else "grid"
 
 
 def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
