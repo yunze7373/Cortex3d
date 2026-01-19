@@ -392,8 +392,13 @@ def main():
                 print(extracted_description[:500] + "..." if len(extracted_description) > 500 else extracted_description)
                 print("-"*50)
                 
-                # 使用提取的描述作为主描述
-                description = extracted_description
+                # 如果用户提供了修改需求，追加到描述中
+                if args.description:
+                    modification_note = f"\n\n**USER MODIFICATION REQUEST**: {args.description}\nApply this modification to the character description above."
+                    description = extracted_description + modification_note
+                    print(f"\n[用户修改需求已融入] {args.description}")
+                else:
+                    description = extracted_description
             else:
                 print("[WARNING] 图片分析失败，使用默认描述")
                 if not args.description:
