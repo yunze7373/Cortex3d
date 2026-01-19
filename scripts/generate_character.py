@@ -280,7 +280,25 @@ def main():
     # 从参考图片生成多视角图
     # =========================================================================
     if args.from_image:
-        print(f"\n[图片参考模式] 分析图片: {args.from_image}")
+        from pathlib import Path
+        image_path = Path(args.from_image)
+        
+        # 如果直接路径不存在，尝试在 reference_images/ 文件夹中查找
+        if not image_path.exists():
+            ref_folder = Path("reference_images")
+            alt_path = ref_folder / args.from_image
+            if alt_path.exists():
+                image_path = alt_path
+                print(f"[INFO] 在 reference_images/ 中找到图片")
+            else:
+                print(f"[ERROR] 图片不存在: {args.from_image}")
+                print(f"        也没有在 reference_images/{args.from_image} 找到")
+                print(f"\n请将图片放入 reference_images/ 文件夹，或提供完整路径")
+                sys.exit(1)
+        
+        args.from_image = str(image_path)  # 更新为实际路径
+        
+        print(f"\\n[图片参考模式] 分析图片: {args.from_image}")
         print("="*50)
         
         from aiproxy_client import analyze_image_for_character
