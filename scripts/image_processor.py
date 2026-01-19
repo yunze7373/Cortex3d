@@ -340,12 +340,42 @@ def detect_layout_smart(image) -> str:
     print(f"[DEBUG] 中心带边缘密度 = {edge_density:.4f}")
     
     # =====================================================================
+    # 方法3: 检测主体排列方式（核心算法）
+    # 通过检测水平/垂直方向的分割线来判断布局
+    # =====================================================================
+    
+    # 检测垂直分割线（用于 1x4 横排）
+    # 在 1/4, 1/2, 3/4 位置检查是否有垂直间隙
+    h_gaps = []
+    for ratio in [0.25, 0.5, 0.75]:
+        col = int(width * ratio)
+        col_start = max(0, col - 10)
+        col_end = min(width, col + 10)
+        gap_region = gray[:, col_start:col_end]
+        # 计算该列区域的标准差（低标准差 = 均匀背景 = 间隙）
+        gap_std = np.std(gap_region)
+        h_gaps.append(gap_std)
+    
+    # 检测水平分割线（用于 2x2 田字格）
+    # 在 1/2 位置检查是否有水平间隙
+    row = height // 2
+    row_start = max(0, row - 10)
+    row_end = min(height, row + 10)
+    gap_region = gray[row_start:row_end, :]
+    v_gap_std = np.std(gap_region)
+    
+    # 计算分割线特征
+    avg_h_gap_std = np.mean(h_gaps)  # 垂直分割线的平均标准差
+    print(f"[DEBUG] 垂直分割线标准差: {h_gaps}, 平均={avg_h_gap_std:.1f}")
+    print(f"[DEBUG] 水平分割线标准差: {v_gap_std:.1f}")
+    
+    # =====================================================================
     # 综合判断
     # =====================================================================
     votes_linear = 0
     votes_grid = 0
     
-    # 投票1: 分割线检测
+    # 投票1: 分割线检测 (原有)
     if linear_score > grid_score * 0.5 and peak_q1 > 5 and peak_q3 > 5:
         votes_linear += 1
         print("[DEBUG] 分割线检测投票: Linear (检测到 1/4 和 3/4 分割线)")
@@ -353,7 +383,7 @@ def detect_layout_smart(image) -> str:
         votes_grid += 1
         print("[DEBUG] 分割线检测投票: Grid")
     
-    # 投票2: 边缘密度
+    # 投票2: 边缘密度 (原有)
     if edge_density > 0.025:
         votes_linear += 1
         print("[DEBUG] 边缘密度投票: Linear (中心有内容)")
@@ -361,17 +391,28 @@ def detect_layout_smart(image) -> str:
         votes_grid += 1
         print("[DEBUG] 边缘密度投票: Grid (中心较空)")
     
-    # 投票3: 宽高比倾向 (重新调整阈值)
-    # 3:2 横屏 = 1.5, 应该强烈倾向于 linear
-    if aspect_ratio >= 1.4:
-        votes_linear += 2  # 横屏图片给予双票权重
-        print(f"[DEBUG] 宽高比投票: Linear x2 (AR={aspect_ratio:.2f} >= 1.4，横屏)")
-    elif aspect_ratio <= 0.9:
-        votes_grid += 2  # 竖屏图片给予双票权重
-        print(f"[DEBUG] 宽高比投票: Grid x2 (AR={aspect_ratio:.2f} <= 0.9，竖屏)")
+    # 投票3: 主体排列检测 (新增 - 最重要)
+    # 比较垂直分割线和水平分割线的质量
+    # 标准差越低说明分割线越清晰
+    if avg_h_gap_std < v_gap_std and avg_h_gap_std < 40:
+        # 垂直分割线更清晰 → 1x4 横排
+        votes_linear += 3  # 给予更高权重
+        print(f"[DEBUG] 主体排列投票: Linear x3 (垂直分割线更清晰)")
+    elif v_gap_std < avg_h_gap_std and v_gap_std < 40:
+        # 水平分割线更清晰 → 2x2 田字格
+        votes_grid += 3
+        print(f"[DEBUG] 主体排列投票: Grid x3 (水平分割线更清晰)")
     else:
-        # 接近正方形，弃权
-        print(f"[DEBUG] 宽高比投票: 弃权 (AR={aspect_ratio:.2f}，接近正方形)")
+        # 无法确定，使用宽高比作为备选
+        if aspect_ratio >= 1.4:
+            votes_linear += 1
+            print(f"[DEBUG] 主体排列投票: Linear (无法确定，AR={aspect_ratio:.2f}>=1.4)")
+        elif aspect_ratio <= 0.7:
+            # 极端竖屏才投 Grid
+            votes_grid += 1
+            print(f"[DEBUG] 主体排列投票: Grid (无法确定，AR={aspect_ratio:.2f}<=0.7)")
+        else:
+            print(f"[DEBUG] 主体排列投票: 弃权 (无法确定)")
     
     print(f"[DEBUG] 最终投票: Linear={votes_linear}, Grid={votes_grid}")
     
@@ -380,8 +421,8 @@ def detect_layout_smart(image) -> str:
     elif votes_grid > votes_linear:
         return "grid"
     else:
-        # 平票时，宽高比 > 1.0 优先 linear (横屏优先横排)
-        return "linear" if aspect_ratio > 1.0 else "grid"
+        # 平票时，优先 linear（因为这是生成脚本的默认输出格式）
+        return "linear"
 
 
 def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
