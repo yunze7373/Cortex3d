@@ -255,15 +255,18 @@ def detect_layout_and_split(image, margin: int = 5) -> List[Tuple[str, any]]:
     
     layout_type = "unknown"
     
-    # 1. 宽高比明确的情况
-    if aspect_ratio >= 2.5:
-        layout_type = "linear" # 极宽，肯定是 1x4
-    elif aspect_ratio <= 1.2:
-        layout_type = "grid"   # 接近正方形，肯定是 2x2
+    # 对于极宽的图片 (>= 3.0)，直接判定为横排
+    if aspect_ratio >= 3.0:
+        layout_type = "linear"
+        print("[INFO] 宽高比 >= 3.0，直接判定为横排")
+    # 对于极窄的图片 (< 0.8)，直接判定为竖排/田字格
+    elif aspect_ratio < 0.8:
+        layout_type = "grid"
+        print("[INFO] 宽高比 < 0.8，直接判定为田字格")
     else:
-        # 2. 宽高比模糊区间 (1.2 - 2.5) -> 使用智能内容检测
-        # 例如 1408x768 (1.83) 可能是 1x4，也可能是较宽的 2x2
-        print(f"[INFO] 宽高比在模糊区间，启用智能内容检测...")
+        # 其他所有情况 (0.8 - 3.0) -> 使用智能内容检测
+        # 这包括正方形 1:1 (可能是 1x4 紧凑排列) 和常规宽高比
+        print(f"[INFO] 启用智能内容检测...")
         layout_type = detect_layout_smart(image)
     
     if layout_type == "linear":
