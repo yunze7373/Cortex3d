@@ -396,22 +396,74 @@ def find_dividing_lines(gray_image, axis: str, num_divisions: int) -> List[int]:
 
 def split_horizontal_layout(image, margin: int = 5) -> List[Tuple[str, any]]:
     """
-    切割 1x4 横排布局 - 精确切割，不使用重叠区域
+    切割 1x4 横排布局 - 智能检测主体边界
     
-    每个视图精确按 1/4 宽度切割，避免包含相邻视图的内容。
-    后续的 crop_to_subject 会根据实际主体边界进行智能裁切。
+    1. 使用边缘检测找到垂直分割线（主体之间的间隙）
+    2. 基于检测到的分割线切割，而不是固定 1/4
+    3. 如果检测失败，回退到固定 1/4 切割
     """
+    _ensure_imports()
     height, width = image.shape[:2]
-    cell_width = width // 4
     
+    # 转换为灰度图进行分析
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+    
+    # =========================================================
+    # 方法1: 使用列像素密度找到分割点
+    # 在主体之间的间隙区域，像素变化较小（背景色）
+    # =========================================================
+    
+    # 计算每列的标准差（变化程度）
+    col_std = np.std(gray, axis=0)
+    
+    # 计算每列的边缘密度
+    edges = cv2.Canny(gray, 50, 150)
+    col_edge_density = np.mean(edges, axis=0)
+    
+    # 综合得分：低标准差 + 低边缘密度 = 可能是分割线
+    # 归一化
+    col_std_norm = (col_std - col_std.min()) / (col_std.max() - col_std.min() + 1e-6)
+    col_edge_norm = (col_edge_density - col_edge_density.min()) / (col_edge_density.max() - col_edge_density.min() + 1e-6)
+    
+    # 分割线得分：越低越可能是分割线
+    gap_score = col_std_norm + col_edge_norm
+    
+    # 寻找3个分割点（将图片分成4份）
+    cell_width = width // 4
+    split_points = []
+    
+    for i in range(1, 4):
+        # 在预期位置附近搜索最佳分割点（±20%范围）
+        expected_pos = i * cell_width
+        search_start = max(0, expected_pos - cell_width // 5)
+        search_end = min(width, expected_pos + cell_width // 5)
+        
+        # 在搜索范围内找到最低分（最可能是间隙）
+        search_range = gap_score[search_start:search_end]
+        if len(search_range) > 0:
+            local_min_idx = np.argmin(search_range)
+            best_split = search_start + local_min_idx
+            split_points.append(best_split)
+            print(f"[智能检测] 第{i}个分割点: 预期{expected_pos}, 实际{best_split} (偏移{best_split - expected_pos}px)")
+        else:
+            split_points.append(expected_pos)
+            print(f"[智能检测] 第{i}个分割点: 使用预期位置{expected_pos}")
+    
+    # 添加边界
+    split_points = [0] + split_points + [width]
+    
+    # =========================================================
+    # 切割视图
+    # =========================================================
     views = []
-    # AI 通常按顺时针生成: Front(0°) → Right(90°) → Back(180°) → Left(270°)
     view_names = ['front', 'right', 'back', 'left']
     
     for i, name in enumerate(view_names):
-        # 精确计算每个视图的位置（不扩展）
-        x1 = i * cell_width
-        x2 = (i + 1) * cell_width if i < 3 else width  # 最后一个视图取到图片边缘
+        x1 = split_points[i]
+        x2 = split_points[i + 1]
         y1 = margin
         y2 = height - margin
         
