@@ -111,6 +111,11 @@ def main():
         default=None,
         help="姿势控制文件路径 (仅 hunyuan3d-omni 支持，例如: poses/t_pose.json)"
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="严格复制模式：100%基于原图生成多视角，不允许AI创意改动 (需配合 --from-image 使用)"
+    )
     
     parser.add_argument(
         "--style",
@@ -336,6 +341,10 @@ def main():
         # 确定是否使用图片参考模式
         ref_image_path = args.from_image if args.from_image else None
         use_ref_prompt = bool(args.from_image)  # 如果有参考图片，使用保留动作的提示词
+        use_strict = bool(args.strict and args.from_image)  # 严格模式需要配合 --from-image
+        
+        if use_strict:
+            print("[MODE] 严格复制模式 (100% 基于原图)")
         
         result = generate_character_multiview(
             character_description=description,
@@ -345,7 +354,8 @@ def main():
             model=model,
             style=style,
             reference_image_path=ref_image_path,
-            use_image_reference_prompt=use_ref_prompt
+            use_image_reference_prompt=use_ref_prompt,
+            use_strict_mode=use_strict
         )
     else:
         # Gemini Generator也需要更新支持style，这里暂时只支持proxy模式的style传递

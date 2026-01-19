@@ -143,6 +143,56 @@ Generate the character maintaining the EXACT pose described, viewed from 4 angle
 """
 
 
+# =============================================================================
+# 严格图片复制模式 (100% 复制原图)
+# 不允许任何创意改动，完全基于原图生成多视角
+# =============================================================================
+
+STRICT_IMAGE_COPY_TEMPLATE = """Generate a 4-panel turntable view of the EXACT character shown in the reference image.
+
+## CRITICAL INSTRUCTION
+⚠️ DO NOT MODIFY ANYTHING FROM THE REFERENCE IMAGE ⚠️
+
+You must create 4 views showing THIS EXACT character:
+- EXACT same face
+- EXACT same hairstyle and hair color
+- EXACT same clothing (every detail, pattern, color)
+- EXACT same accessories (bags, jewelry, hats)
+- EXACT same pose/body position
+- EXACT same proportions
+
+## OUTPUT FORMAT
+Single image with 4 panels horizontally: [FRONT] [RIGHT] [BACK] [LEFT]
+
+## THE 4 VIEWS
+The character ROTATES on a turntable (NOT mirror flip):
+- Panel 1: FRONT view (0°) - same as reference if reference is front
+- Panel 2: RIGHT SIDE view (90°) - character's right side visible
+- Panel 3: BACK view (180°) - back of character
+- Panel 4: LEFT SIDE view (270°) - character's left side visible
+
+## STRICT RULES
+1. This is a COPY task, not a creative task
+2. Preserve every single detail from the reference
+3. Same face, same expression
+4. Same exact outfit - do not change colors, patterns, or style
+5. Same accessories in same positions
+6. Same pose - if walking, show walking from all 4 angles
+7. Neutral gray background in all 4 panels
+8. NO text labels
+
+Generate 4 views of the IDENTICAL character from the reference image.
+"""
+
+
+def build_strict_copy_prompt() -> str:
+    """
+    构建严格复制模式提示词（100%复制原图）
+    不需要额外描述，完全依赖参考图片
+    """
+    return STRICT_IMAGE_COPY_TEMPLATE
+
+
 def build_multiview_prompt(
     character_description: str,
     style: str = "cinematic character"

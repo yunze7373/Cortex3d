@@ -18,7 +18,8 @@ from config import (
     AIPROXY_BASE_URL,
     IMAGE_MODEL,
     build_multiview_prompt,
-    build_image_reference_prompt
+    build_image_reference_prompt,
+    build_strict_copy_prompt
 )
 
 # Lazy imports
@@ -322,7 +323,8 @@ def generate_character_multiview(
     style: str = "cinematic character",
     asset_id: Optional[str] = None,
     reference_image_path: str = None,
-    use_image_reference_prompt: bool = False
+    use_image_reference_prompt: bool = False,
+    use_strict_mode: bool = False
 ) -> Optional[str]:
     """
     生成多视角角色图像并保存
@@ -337,6 +339,7 @@ def generate_character_multiview(
         asset_id: 指定的资产ID (如果不给则自动生成 UUID)
         reference_image_path: 参考图片路径 (可选，用于图生图模式)
         use_image_reference_prompt: 是否使用图片参考专用提示词（保留原图动作）
+        use_strict_mode: 严格复制模式，100%基于原图，不允许AI创意改动
     
     Returns:
         保存的图像路径 或 None
@@ -363,10 +366,15 @@ def generate_character_multiview(
     print(f"[ID]   {asset_id}")
     if reference_image_path:
         print(f"[参考图] {reference_image_path}")
+    if use_strict_mode:
+        print(f"[严格模式] 100%复制原图")
     print("-"*60)
     
     # 构建提示词（根据模式选择不同模板）
-    if use_image_reference_prompt:
+    if use_strict_mode:
+        print("[MODE] 严格复制模式 (100%基于原图，不允许创意改动)")
+        prompt = build_strict_copy_prompt()
+    elif use_image_reference_prompt:
         print("[MODE] 使用图片参考模式提示词 (保留原图动作)")
         prompt = build_image_reference_prompt(character_description)
     else:
