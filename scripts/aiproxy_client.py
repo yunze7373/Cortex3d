@@ -356,7 +356,8 @@ def generate_character_multiview(
     asset_id: Optional[str] = None,
     reference_image_path: str = None,
     use_image_reference_prompt: bool = False,
-    use_strict_mode: bool = False
+    use_strict_mode: bool = False,
+    resolution: str = "2K"  # 图像分辨率: 1K/2K/4K
 ) -> Optional[str]:
     """
     生成多视角角色图像并保存
@@ -372,6 +373,7 @@ def generate_character_multiview(
         reference_image_path: 参考图片路径 (可选，用于图生图模式)
         use_image_reference_prompt: 是否使用图片参考专用提示词（保留原图动作）
         use_strict_mode: 严格复制模式，100%基于原图，不允许AI创意改动
+        resolution: 图像分辨率 1K/2K/4K (默认: 2K)
     
     Returns:
         保存的图像路径 或 None
@@ -437,7 +439,8 @@ def generate_character_multiview(
         prompt=prompt,
         token=token,
         model=model,
-        reference_image=reference_image_data
+        reference_image=reference_image_data,
+        resolution=resolution
     )
     
     if not result:

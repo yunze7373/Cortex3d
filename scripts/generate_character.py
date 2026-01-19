@@ -130,6 +130,13 @@ def main():
     )
     
     parser.add_argument(
+        "--resolution",
+        choices=["1K", "2K", "4K"],
+        default="2K",
+        help="图像分辨率: 1K(快速)/2K(默认)/4K(高清但慢)"
+    )
+    
+    parser.add_argument(
         "--style",
         default=None,
         help="风格描述 (例如: 'cyberpunk', 'fantasy', 'anime'). 默认自动根据描述匹配或使用 'cinematic character'"
@@ -426,7 +433,8 @@ def main():
             style=style,
             reference_image_path=ref_image_path,
             use_image_reference_prompt=use_ref_prompt,
-            use_strict_mode=use_strict
+            use_strict_mode=use_strict,
+            resolution=args.resolution
         )
     else:
         # Gemini Generator也需要更新支持style，这里暂时只支持proxy模式的style传递
