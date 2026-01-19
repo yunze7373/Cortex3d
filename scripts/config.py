@@ -148,36 +148,40 @@ Generate the character maintaining the EXACT pose described, viewed from 4 angle
 # 不允许任何创意改动，完全基于原图生成多视角
 # =============================================================================
 
-STRICT_IMAGE_COPY_TEMPLATE = """Create a 4-panel character turntable reference sheet showing THIS PERSON from the reference image.
+STRICT_IMAGE_COPY_TEMPLATE = """Create a 4-panel CHARACTER TURNTABLE showing THIS PERSON from the reference image.
 
-## CRITICAL: USE THIS EXACT PERSON
-Look at the reference image. Generate 4 views of THIS EXACT PERSON:
-- THIS PERSON's exact face and features
-- THIS PERSON's exact hairstyle and hair color  
-- THIS PERSON's exact clothing and outfit
-- THIS PERSON's exact accessories and items
-- THIS PERSON's exact pose and body position
+## TASK: TURNTABLE ROTATION (90° between each view)
+Imagine THIS PERSON is standing on a rotating platform. The platform rotates exactly 90° between each panel.
 
-## OUTPUT FORMAT
-Single image with 4 panels arranged horizontally:
-[FRONT of THIS PERSON] [RIGHT SIDE of THIS PERSON] [BACK of THIS PERSON] [LEFT SIDE of THIS PERSON]
+## THE 4 DISTINCT VIEWS (MUST BE DIFFERENT)
+Each panel shows THIS PERSON from a COMPLETELY DIFFERENT angle:
 
-## THE 4 VIEWS OF THIS PERSON
-Show THIS PERSON rotating on a turntable:
-- Panel 1: FRONT view of THIS PERSON (facing camera, 0°)
-- Panel 2: RIGHT SIDE view of THIS PERSON (right ear visible, 90°)
-- Panel 3: BACK view of THIS PERSON (back of head visible, 180°)
-- Panel 4: LEFT SIDE view of THIS PERSON (left ear visible, 270°)
+| Panel | Angle | What You See | Key Identifier |
+|-------|-------|--------------|----------------|
+| 1 | 0° (FRONT) | Face visible, looking at camera | BOTH EYES visible |
+| 2 | 90° (RIGHT SIDE) | Profile view, facing right | RIGHT EAR visible, NO face |
+| 3 | 180° (BACK) | Back of head, no face | BACK OF HEAD only |
+| 4 | 270° (LEFT SIDE) | Profile view, facing left | LEFT EAR visible, NO face |
 
-## REQUIREMENTS
-1. All 4 panels must show THIS EXACT SAME PERSON from the reference
-2. Keep THIS PERSON's face, hair, clothes, and accessories identical
-3. Only the viewing angle changes - everything else stays the same
-4. If THIS PERSON is walking in the reference, show walking pose from all angles
-5. Neutral gray background in all panels
-6. No text labels
+## STRICT REQUIREMENTS
+1. ⚠️ EACH VIEW MUST BE UNIQUE - no duplicate angles
+2. ⚠️ Panel 1 and 3 must be OPPOSITE (face vs back of head)
+3. ⚠️ Panel 2 and 4 must be OPPOSITE (right ear vs left ear)
+4. Keep THIS PERSON's face, hair, clothes, and accessories identical across all views
+5. Only the CAMERA POSITION changes, character stays the same
 
-Generate 4 turntable views of THIS PERSON from the reference image.
+## FORBIDDEN
+❌ Two panels showing the face (front) 
+❌ Two panels showing the back
+❌ Two panels showing the same side profile
+❌ Similar angles in adjacent panels
+❌ Text labels on the image
+
+## OUTPUT
+Single horizontal image: [FRONT 0°] [RIGHT 90°] [BACK 180°] [LEFT 270°]
+Gray background. Full body visible in all panels.
+
+Generate 4 DISTINCT turntable views of THIS PERSON.
 """
 
 
