@@ -148,40 +148,36 @@ Generate the character maintaining the EXACT pose described, viewed from 4 angle
 # 不允许任何创意改动，完全基于原图生成多视角
 # =============================================================================
 
-STRICT_IMAGE_COPY_TEMPLATE = """Generate a 4-panel turntable view of the EXACT character shown in the reference image.
+STRICT_IMAGE_COPY_TEMPLATE = """Create a 4-panel character turntable reference sheet showing THIS PERSON from the reference image.
 
-## CRITICAL INSTRUCTION
-⚠️ DO NOT MODIFY ANYTHING FROM THE REFERENCE IMAGE ⚠️
-
-You must create 4 views showing THIS EXACT character:
-- EXACT same face
-- EXACT same hairstyle and hair color
-- EXACT same clothing (every detail, pattern, color)
-- EXACT same accessories (bags, jewelry, hats)
-- EXACT same pose/body position
-- EXACT same proportions
+## CRITICAL: USE THIS EXACT PERSON
+Look at the reference image. Generate 4 views of THIS EXACT PERSON:
+- THIS PERSON's exact face and features
+- THIS PERSON's exact hairstyle and hair color  
+- THIS PERSON's exact clothing and outfit
+- THIS PERSON's exact accessories and items
+- THIS PERSON's exact pose and body position
 
 ## OUTPUT FORMAT
-Single image with 4 panels horizontally: [FRONT] [RIGHT] [BACK] [LEFT]
+Single image with 4 panels arranged horizontally:
+[FRONT of THIS PERSON] [RIGHT SIDE of THIS PERSON] [BACK of THIS PERSON] [LEFT SIDE of THIS PERSON]
 
-## THE 4 VIEWS
-The character ROTATES on a turntable (NOT mirror flip):
-- Panel 1: FRONT view (0°) - same as reference if reference is front
-- Panel 2: RIGHT SIDE view (90°) - character's right side visible
-- Panel 3: BACK view (180°) - back of character
-- Panel 4: LEFT SIDE view (270°) - character's left side visible
+## THE 4 VIEWS OF THIS PERSON
+Show THIS PERSON rotating on a turntable:
+- Panel 1: FRONT view of THIS PERSON (facing camera, 0°)
+- Panel 2: RIGHT SIDE view of THIS PERSON (right ear visible, 90°)
+- Panel 3: BACK view of THIS PERSON (back of head visible, 180°)
+- Panel 4: LEFT SIDE view of THIS PERSON (left ear visible, 270°)
 
-## STRICT RULES
-1. This is a COPY task, not a creative task
-2. Preserve every single detail from the reference
-3. Same face, same expression
-4. Same exact outfit - do not change colors, patterns, or style
-5. Same accessories in same positions
-6. Same pose - if walking, show walking from all 4 angles
-7. Neutral gray background in all 4 panels
-8. NO text labels
+## REQUIREMENTS
+1. All 4 panels must show THIS EXACT SAME PERSON from the reference
+2. Keep THIS PERSON's face, hair, clothes, and accessories identical
+3. Only the viewing angle changes - everything else stays the same
+4. If THIS PERSON is walking in the reference, show walking pose from all angles
+5. Neutral gray background in all panels
+6. No text labels
 
-Generate 4 views of the IDENTICAL character from the reference image.
+Generate 4 turntable views of THIS PERSON from the reference image.
 """
 
 
