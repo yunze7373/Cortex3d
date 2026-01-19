@@ -75,13 +75,25 @@ def main():
     parser.add_argument(
         "--to-3d",
         action="store_true",
-        help="生成后自动转换为 3D 模型 (TRELLIS High Quality)"
+        help="生成后自动转换为 3D 模型"
+    )
+    parser.add_argument(
+        "--algo",
+        choices=["hunyuan3d", "hunyuan3d-2.1", "trellis", "trellis2"],
+        default="hunyuan3d",
+        help="3D 生成算法 (默认: hunyuan3d)"
     )
     parser.add_argument(
         "--quality",
         choices=["balanced", "high", "ultra"],
         default="high",
-        help="3D 模型质量 (默认: high, 推荐: ultra 获取最佳细节)"
+        help="3D 模型质量: balanced(快)/high(均衡)/ultra(最佳但慢)"
+    )
+    parser.add_argument(
+        "--geometry-only", "--fast",
+        dest="geometry_only",
+        action="store_true",
+        help="只生成几何模型, 不生成纹理 (速度快很多)"
     )
     parser.add_argument(
         "--preview",
@@ -323,10 +335,14 @@ def main():
                     sys.executable,
                     str(reconstructor_script),
                     str(front_img),
-                    "--algo", "hunyuan3d",
-                    "--quality", "ultra",  # ultra enables multi-view
+                    "--algo", args.algo,
+                    "--quality", args.quality,
                     "--output_dir", str(Path("outputs"))
                 ]
+                
+                # 添加几何模型Only选项 (跳过纹理生成，速度快很多)
+                if getattr(args, 'geometry_only', False):
+                    cmd.append("--no-texture")
                 
                 try:
                     import subprocess

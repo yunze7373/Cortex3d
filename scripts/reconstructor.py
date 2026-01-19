@@ -297,13 +297,13 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False, 
     model_type = "full" if quality in ["high", "ultra"] else "lite"
     
     # 质量预设：基于腾讯官方网站 (3d.hunyuan.tencent.com) 的参数
-    # octree_resolution: 越高mesh细节越锐利 (官方支持到1024+)
-    # guidance: 5.0-7.5 为推荐范围
-    # steps: 30-50 为推荐范围
+    # octree_resolution: 越高mesh细节越锐利
+    # 注意: RTX 3070 (16GB) 用 octree=1024 会导致 100+ 小时生成时间
+    # 所以对于消费级 GPU，ultra 使用 768
     quality_presets = {
-        "balanced": {"octree": 512, "guidance": 5.5, "steps": 50},   # 改进: 384->512
-        "high":     {"octree": 768, "guidance": 6.5, "steps": 75},   # 改进: 512->768
-        "ultra":    {"octree": 1024, "guidance": 7.0, "steps": 100}  # 改进: 768->1024
+        "balanced": {"octree": 512, "guidance": 5.5, "steps": 50},   # ~15-30分钟
+        "high":     {"octree": 640, "guidance": 6.0, "steps": 60},   # ~30-60分钟
+        "ultra":    {"octree": 768, "guidance": 6.5, "steps": 75}    # ~60-120分钟 (之前1024太慢)
     }
     preset = quality_presets.get(quality, quality_presets["balanced"])
     
