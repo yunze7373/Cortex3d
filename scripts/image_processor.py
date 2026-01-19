@@ -267,14 +267,17 @@ def detect_grid_layout(image) -> tuple:
     """
     通用网格布局检测：检测图片中的 rows x cols 布局
     
-    通过分析水平和垂直方向的间隙模式来确定网格结构。
-    使用严格的间隙检测避免误判主体内部间隙。
+    策略：
+    1. 根据图像宽高比估算合理的列数
+    2. 验证预期位置是否有明显的间隙
+    3. 对于行数，检测是否有水平分割线
     
     Returns:
         (rows, cols, v_gaps, h_gaps): 网格的行数、列数和间隙位置
     """
     _ensure_imports()
     height, width = image.shape[:2]
+    aspect_ratio = width / height
     
     # 转灰度
     if len(image.shape) == 3:
@@ -285,107 +288,143 @@ def detect_grid_layout(image) -> tuple:
     # 边缘检测
     edges = cv2.Canny(gray, 50, 150)
     
-    def find_major_gaps(dimension_size, profile, axis_name, expected_counts=[1, 3, 7]):
-        """
-        找到主要的分割间隙
+    def calculate_gap_score_at_position(pos, profile, edges_profile, window=20):
+        """计算指定位置的间隙得分"""
+        start = max(0, pos - window // 2)
+        end = min(len(profile), pos + window // 2)
         
-        策略：
-        1. 对于常见布局 (1x4, 2x2, 2x4)，尝试预期的间隙数量
-        2. 验证间隙是否均匀分布
-        3. 选择最可能的配置
-        """
-        # 计算间隙得分
-        profile = np.array(profile, dtype=float)
-        edge_density = np.mean(edges, axis=0 if axis_name == 'vertical' else 1)
+        if end <= start:
+            return 0
         
-        # 均匀区域高分（低标准差 + 低边缘 = 可能是背景间隙）
-        # 使用滑动窗口计算局部标准差
-        window_size = max(10, dimension_size // 30)
-        gap_scores = []
+        # 低标准差 + 低边缘密度 = 可能是间隙
+        local_std = np.std(profile[start:end])
+        local_edge = np.mean(edges_profile[start:end])
         
-        for i in range(dimension_size):
-            start = max(0, i - window_size // 2)
-            end = min(dimension_size, i + window_size // 2)
-            local_std = np.std(profile[start:end])
-            local_edge = np.mean(edge_density[start:end])
-            # 低标准差 + 低边缘密度 = 高间隙得分
-            score = 1.0 / (1.0 + local_std) * 1.0 / (1.0 + local_edge)
-            gap_scores.append(score)
+        # 间隙得分（越高越可能是间隙）
+        score = 1.0 / (1.0 + local_std / 50.0) * 1.0 / (1.0 + local_edge / 20.0)
+        return score
+    
+    def find_gaps_for_n_columns(n_cols, img_width, col_profile, col_edges):
+        """尝试将图像分成 n 列，返回间隙位置和总得分"""
+        if n_cols <= 1:
+            return [], 0
         
-        gap_scores = np.array(gap_scores)
+        cell_width = img_width / n_cols
+        gaps = []
+        total_score = 0
         
-        # 平滑处理
-        kernel_size = max(5, dimension_size // 40)
-        if kernel_size % 2 == 0:
-            kernel_size += 1
-        smoothed = np.convolve(gap_scores, np.ones(kernel_size)/kernel_size, mode='same')
-        
-        # 尝试不同的间隙数量配置
-        best_gaps = []
-        best_score = 0
-        
-        for num_gaps in expected_counts:
-            if num_gaps == 0:
-                continue
+        for i in range(1, n_cols):
+            expected_pos = int(i * cell_width)
+            # 在预期位置附近搜索最佳间隙
+            search_range = int(cell_width * 0.2)  # ±20%
+            best_pos = expected_pos
+            best_score = 0
             
-            # 计算预期间隙位置（均匀分布）
-            segment_size = dimension_size / (num_gaps + 1)
-            expected_positions = [int(segment_size * (i + 1)) for i in range(num_gaps)]
+            for offset in range(-search_range, search_range + 1, 5):
+                test_pos = expected_pos + offset
+                if 0 < test_pos < img_width:
+                    score = calculate_gap_score_at_position(test_pos, col_profile, col_edges)
+                    if score > best_score:
+                        best_score = score
+                        best_pos = test_pos
             
-            # 在预期位置附近搜索实际间隙
-            search_range = int(segment_size * 0.25)  # 搜索范围 ±25%
-            found_gaps = []
-            total_score = 0
-            
-            for exp_pos in expected_positions:
-                search_start = max(0, exp_pos - search_range)
-                search_end = min(dimension_size, exp_pos + search_range)
-                
-                if search_end > search_start:
-                    local_scores = smoothed[search_start:search_end]
-                    best_local_idx = np.argmax(local_scores)
-                    best_local_score = local_scores[best_local_idx]
-                    actual_pos = search_start + best_local_idx
-                    found_gaps.append(actual_pos)
-                    total_score += best_local_score
-            
-            # 验证间隙是否有效（得分需要高于阈值）
-            avg_score = total_score / len(found_gaps) if found_gaps else 0
-            threshold = np.mean(smoothed) + np.std(smoothed) * 0.5
-            
-            if avg_score > threshold and avg_score > best_score:
-                best_score = avg_score
-                best_gaps = found_gaps
-                print(f"[{axis_name}] 接受 {num_gaps} 个间隙配置, 平均得分={avg_score:.4f}, 阈值={threshold:.4f}")
+            gaps.append(best_pos)
+            total_score += best_score
         
-        return best_gaps
+        avg_score = total_score / len(gaps) if gaps else 0
+        return gaps, avg_score
     
     # =========================================================
-    # 检测垂直分割线（确定列数）
+    # 根据宽高比估算列数
     # =========================================================
+    # 假设每个视图大约是正方形或略竖长（全身人物）
+    # 典型情况：
+    # - 1x4 横排：AR ≈ 4:3 到 5:3 (1.33 - 1.67)
+    # - 2x2 田字格：AR ≈ 1:1
+    # - 2x4 网格：AR ≈ 4:3 (1.33)
+    
     col_profile = np.std(gray, axis=0)
-    vertical_gaps = find_major_gaps(width, col_profile, 'vertical', expected_counts=[3, 1, 7, 2])
-    num_cols = len(vertical_gaps) + 1
+    col_edges = np.mean(edges, axis=0)
+    
+    # 尝试不同列数配置
+    candidates = []
+    for n_cols in [4, 2, 3, 5, 6, 8]:
+        gaps, score = find_gaps_for_n_columns(n_cols, width, col_profile, col_edges)
+        # 计算每个单元格的宽高比
+        cell_width = width / n_cols
+        # 对于多行情况，单元格高度会减半
+        cell_height_1row = height
+        cell_height_2row = height / 2
+        
+        cell_ar_1row = cell_width / cell_height_1row
+        cell_ar_2row = cell_width / cell_height_2row
+        
+        candidates.append({
+            'cols': n_cols,
+            'gaps': gaps,
+            'score': score,
+            'cell_ar_1row': cell_ar_1row,
+            'cell_ar_2row': cell_ar_2row
+        })
+        print(f"[列检测] {n_cols}列: 得分={score:.4f}, 单元AR(1行)={cell_ar_1row:.2f}, 单元AR(2行)={cell_ar_2row:.2f}")
+    
+    # 选择最佳配置
+    # 优先选择单元格接近正方形或竖长的配置
+    best_candidate = None
+    best_combined_score = 0
+    
+    for c in candidates:
+        # 计算综合得分：间隙得分 + 单元格形状奖励
+        # 理想单元格AR在 0.5-1.2 之间（略竖长到略横长）
+        ar_score_1row = 1.0 if 0.5 <= c['cell_ar_1row'] <= 1.2 else 0.5
+        ar_score_2row = 1.0 if 0.5 <= c['cell_ar_2row'] <= 1.2 else 0.5
+        
+        # 4列通常是首选（标准多视图）
+        preference_bonus = 1.2 if c['cols'] == 4 else 1.0
+        
+        combined_1row = c['score'] * ar_score_1row * preference_bonus
+        combined_2row = c['score'] * ar_score_2row * preference_bonus
+        combined = max(combined_1row, combined_2row)
+        
+        if combined > best_combined_score:
+            best_combined_score = combined
+            best_candidate = c
+    
+    num_cols = best_candidate['cols'] if best_candidate else 4
+    vertical_gaps = best_candidate['gaps'] if best_candidate else []
+    
+    print(f"[列检测] 选择 {num_cols} 列配置")
     
     # =========================================================
     # 检测水平分割线（确定行数）
     # =========================================================
     row_profile = np.std(gray, axis=1)
-    horizontal_gaps = find_major_gaps(height, row_profile, 'horizontal', expected_counts=[1, 3, 0])
-    num_rows = len(horizontal_gaps) + 1
+    row_edges = np.mean(edges, axis=1)
     
-    # =========================================================
-    # 验证和修正
-    # =========================================================
-    # 限制在合理范围内
-    num_cols = min(max(1, num_cols), 8)
-    num_rows = min(max(1, num_rows), 4)
+    # 检测中间是否有水平间隙（2行）
+    mid_pos = height // 2
+    mid_score = calculate_gap_score_at_position(mid_pos, row_profile, row_edges, window=30)
+    
+    # 阈值判断
+    avg_row_score = np.mean([calculate_gap_score_at_position(i, row_profile, row_edges) 
+                             for i in range(0, height, height // 10)])
+    
+    print(f"[行检测] 中间位置得分={mid_score:.4f}, 平均得分={avg_row_score:.4f}")
+    
+    if mid_score > avg_row_score * 1.5:  # 中间有明显间隙
+        num_rows = 2
+        horizontal_gaps = [mid_pos]
+        print("[行检测] 检测到水平分割线，布局为 2 行")
+    else:
+        num_rows = 1
+        horizontal_gaps = []
+        print("[行检测] 未检测到水平分割线，布局为 1 行")
     
     # 计算检测到的视图数
     total_views = num_rows * num_cols
     
-    print(f"[网格检测] 检测到 {num_cols-1} 个垂直间隙: {vertical_gaps}")
-    print(f"[网格检测] 检测到 {num_rows-1} 个水平间隙: {horizontal_gaps}")
+    print(f"[网格检测] 检测到 {len(vertical_gaps)} 个垂直间隙: {vertical_gaps[:5]}...")
+    print(f"[网格检测] 检测到 {len(horizontal_gaps)} 个水平间隙: {horizontal_gaps}")
     print(f"[网格检测] 布局: {num_rows}x{num_cols} ({total_views} 个视图)")
     
     return (num_rows, num_cols, vertical_gaps, horizontal_gaps)
