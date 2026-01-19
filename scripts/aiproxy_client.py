@@ -17,7 +17,8 @@ from typing import Optional, Tuple
 from config import (
     AIPROXY_BASE_URL,
     IMAGE_MODEL,
-    build_multiview_prompt
+    build_multiview_prompt,
+    build_image_reference_prompt
 )
 
 # Lazy imports
@@ -54,7 +55,8 @@ def generate_image_via_proxy(
     prompt: str,
     token: str,
     model: str = DEFAULT_MODEL,
-    base_url: str = AIPROXY_BASE_URL
+    base_url: str = AIPROXY_BASE_URL,
+    reference_image: str = None
 ) -> Optional[Tuple[bytes, str]]:
     """
     通过 AiProxy 服务生成图像
@@ -64,6 +66,7 @@ def generate_image_via_proxy(
         token: AiProxy 客户端认证令牌
         model: 模型名称 (默认: nano-banana-pro)
         base_url: AiProxy 服务地址
+        reference_image: 参考图片的 base64 data URL (可选，用于图生图)
     
     Returns:
         (image_bytes, mime_type) 或 None
@@ -81,6 +84,11 @@ def generate_image_via_proxy(
         "prompt": prompt,
         "model": model
     }
+    
+    # 如果提供了参考图片，添加到 payload（图生图模式）
+    if reference_image:
+        payload["image"] = reference_image
+        print(f"[AiProxy] 使用图生图模式 (image-to-image)")
     
     print(f"[AiProxy] 调用 {endpoint}")
     print(f"[AiProxy] 模型: {model}")
@@ -312,7 +320,9 @@ def generate_character_multiview(
     auto_cut: bool = True,
     model: str = DEFAULT_MODEL,
     style: str = "cinematic character",
-    asset_id: Optional[str] = None
+    asset_id: Optional[str] = None,
+    reference_image_path: str = None,
+    use_image_reference_prompt: bool = False
 ) -> Optional[str]:
     """
     生成多视角角色图像并保存
@@ -325,6 +335,8 @@ def generate_character_multiview(
         model: 模型名称
         style: 风格描述
         asset_id: 指定的资产ID (如果不给则自动生成 UUID)
+        reference_image_path: 参考图片路径 (可选，用于图生图模式)
+        use_image_reference_prompt: 是否使用图片参考专用提示词（保留原图动作）
     
     Returns:
         保存的图像路径 或 None
@@ -349,16 +361,43 @@ def generate_character_multiview(
     print(f"[风格] {style}")
     print(f"[模型] {model}")
     print(f"[ID]   {asset_id}")
+    if reference_image_path:
+        print(f"[参考图] {reference_image_path}")
     print("-"*60)
     
-    # 构建提示词
-    prompt = build_multiview_prompt(character_description, style=style)
+    # 构建提示词（根据模式选择不同模板）
+    if use_image_reference_prompt:
+        print("[MODE] 使用图片参考模式提示词 (保留原图动作)")
+        prompt = build_image_reference_prompt(character_description)
+    else:
+        prompt = build_multiview_prompt(character_description, style=style)
+    
+    # 准备参考图片 (如果提供)
+    reference_image_data = None
+    if reference_image_path:
+        try:
+            ref_path = Path(reference_image_path)
+            if ref_path.exists():
+                with open(ref_path, "rb") as f:
+                    img_bytes = f.read()
+                suffix = ref_path.suffix.lower()
+                if suffix in [".jpg", ".jpeg"]:
+                    mime = "image/jpeg"
+                elif suffix == ".png":
+                    mime = "image/png"
+                else:
+                    mime = "image/jpeg"
+                reference_image_data = f"data:{mime};base64,{base64.b64encode(img_bytes).decode()}"
+                print(f"[参考图] 已加载 ({len(img_bytes)} bytes)")
+        except Exception as e:
+            print(f"[WARNING] 参考图片加载失败: {e}")
     
     # 调用 AiProxy (实际生成)
     result = generate_image_via_proxy(
         prompt=prompt,
         token=token,
-        model=model
+        model=model,
+        reference_image=reference_image_data
     )
     
     if not result:

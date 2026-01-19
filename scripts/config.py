@@ -93,13 +93,62 @@ Generate a clean, professional character reference sheet following ALL rules abo
 """
 
 
+# =============================================================================
+# 图片参考模式专用提示词模板 (保留原图动作)
+# 用于从参考照片生成多视角图时使用
+# =============================================================================
+
+IMAGE_REFERENCE_PROMPT_TEMPLATE = """Generate a 3D character turntable reference sheet with exactly 4 panels, showing the character described below from 4 angles.
+
+## OUTPUT
+Single image with 4 panels horizontally: [FRONT] [RIGHT] [BACK] [LEFT]
+
+## CHARACTER DESCRIPTION (from reference photo)
+{character_description}
+
+## CRITICAL: PRESERVE THE ORIGINAL POSE
+⚠️ The character has a SPECIFIC pose from the reference photo. You MUST preserve this pose:
+- If the character is WALKING → show walking pose from all 4 angles
+- If the character is SITTING → show sitting pose from all 4 angles  
+- If one leg is forward → keep that leg forward in all views
+- If arms are in a specific position → maintain that position
+
+DO NOT change the pose to a generic standing pose!
+
+## TURNTABLE ROTATION
+The 4 panels show the SAME character in the SAME pose, just rotated:
+- Panel 1 (FRONT): 0° - facing camera
+- Panel 2 (RIGHT): 90° - right side visible
+- Panel 3 (BACK): 180° - back visible
+- Panel 4 (LEFT): 270° - left side visible
+
+## ANATOMICAL RULES
+- Arms connect to shoulders only
+- Legs connect to hips only
+- Upper and lower body face the SAME direction
+- NO twisted bodies, NO extra limbs
+
+## PANEL LAYOUT
+- 4 equal panels side by side
+- Same scale in all panels
+- Neutral gray background
+- NO text labels
+
+## LIGHTING
+- Flat, even studio lighting
+- No harsh shadows
+- Face clearly visible
+
+Generate the character maintaining the EXACT pose described, viewed from 4 angles.
+"""
+
 
 def build_multiview_prompt(
     character_description: str,
     style: str = "cinematic character"
 ) -> str:
     """
-    构建多视图角色生成提示词
+    构建多视图角色生成提示词（文字生成模式）
     
     Args:
         character_description: 角色描述（外貌、服装、配件等）
@@ -110,6 +159,21 @@ def build_multiview_prompt(
     """
     return MULTI_VIEW_PROMPT_TEMPLATE.format(
         style=style,
+        character_description=character_description
+    )
+
+
+def build_image_reference_prompt(character_description: str) -> str:
+    """
+    构建图片参考模式专用提示词（保留原图动作）
+    
+    Args:
+        character_description: 从参考图片提取的角色描述
+    
+    Returns:
+        完整的提示词字符串
+    """
+    return IMAGE_REFERENCE_PROMPT_TEMPLATE.format(
         character_description=character_description
     )
 

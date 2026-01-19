@@ -333,13 +333,20 @@ def main():
     # 调用生成器
     if args.mode == "proxy":
         from aiproxy_client import generate_character_multiview
+        
+        # 确定是否使用图片参考模式
+        ref_image_path = args.from_image if args.from_image else None
+        use_ref_prompt = bool(args.from_image)  # 如果有参考图片，使用保留动作的提示词
+        
         result = generate_character_multiview(
             character_description=description,
             token=args.token,
             output_dir=args.output,
             auto_cut=not args.no_cut,
             model=model,
-            style=style
+            style=style,
+            reference_image_path=ref_image_path,
+            use_image_reference_prompt=use_ref_prompt
         )
     else:
         # Gemini Generator也需要更新支持style，这里暂时只支持proxy模式的style传递
