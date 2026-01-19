@@ -59,7 +59,7 @@ def generate_image_via_proxy(
     base_url: str = AIPROXY_BASE_URL,
     reference_image: str = None,
     resolution: str = "2K",  # 默认请求 2K 分辨率 (性价比最高)
-    aspect_ratio: str = "2:3"  # 默认 2:3 适合全身人像四视图
+    aspect_ratio: str = "3:2"  # 默认 3:2 横屏，适合 1x4 横排四视图
 ) -> Optional[Tuple[bytes, str]]:
     """
     通过 AiProxy 服务生成图像
