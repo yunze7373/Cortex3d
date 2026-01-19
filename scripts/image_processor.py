@@ -267,14 +267,14 @@ def detect_grid_layout(image) -> tuple:
     """
     通用网格布局检测：检测图片中的 rows x cols 布局
     
-    使用模式匹配方法：尝试常见布局模式，验证每个预期分割点的质量，选择最佳匹配。
+    通过分析水平和垂直方向的间隙模式来确定网格结构。
+    使用严格的间隙检测避免误判主体内部间隙。
     
     Returns:
-        (rows, cols, v_gaps, h_gaps)
+        (rows, cols, v_gaps, h_gaps): 网格的行数、列数和间隙位置
     """
     _ensure_imports()
     height, width = image.shape[:2]
-    aspect_ratio = width / height
     
     # 转灰度
     if len(image.shape) == 3:
@@ -282,112 +282,113 @@ def detect_grid_layout(image) -> tuple:
     else:
         gray = image.copy()
     
-    # 计算背景色
-    corner_size = min(30, width // 15, height // 15)
-    corners = [
-        gray[:corner_size, :corner_size],
-        gray[:corner_size, -corner_size:],
-        gray[-corner_size:, :corner_size],
-        gray[-corner_size:, -corner_size:]
-    ]
-    background_value = np.median([np.median(c) for c in corners])
-    print(f"[网格检测] 背景色: {background_value:.0f}")
-    
     # 边缘检测
     edges = cv2.Canny(gray, 50, 150)
     
-    def check_gap_quality(pos, axis='vertical', window=20):
+    def find_major_gaps(dimension_size, profile, axis_name, expected_counts=[1, 3, 7]):
         """
-        检查指定位置的间隙质量
-        返回得分 (0-1)，越高表示越可能是间隙
+        找到主要的分割间隙
+        
+        策略：
+        1. 对于常见布局 (1x4, 2x2, 2x4)，尝试预期的间隙数量
+        2. 验证间隙是否均匀分布
+        3. 选择最可能的配置
         """
-        if axis == 'vertical':
-            if pos < window or pos >= width - window:
-                return 0
-            region = gray[:, pos-window:pos+window]
-            edge_region = edges[:, pos-window:pos+window]
-        else:
-            if pos < window or pos >= height - window:
-                return 0
-            region = gray[pos-window:pos+window, :]
-            edge_region = edges[pos-window:pos+window, :]
+        # 计算间隙得分
+        profile = np.array(profile, dtype=float)
+        edge_density = np.mean(edges, axis=0 if axis_name == 'vertical' else 1)
         
-        # 检查1: 区域平均亮度是否接近背景色
-        mean_val = np.mean(region)
-        bg_similarity = 1.0 - min(abs(mean_val - background_value) / 50, 1.0)
+        # 均匀区域高分（低标准差 + 低边缘 = 可能是背景间隙）
+        # 使用滑动窗口计算局部标准差
+        window_size = max(10, dimension_size // 30)
+        gap_scores = []
         
-        # 检查2: 区域标准差是否较低（均匀区域）
-        std_val = np.std(region)
-        uniformity = 1.0 - min(std_val / 50, 1.0)
+        for i in range(dimension_size):
+            start = max(0, i - window_size // 2)
+            end = min(dimension_size, i + window_size // 2)
+            local_std = np.std(profile[start:end])
+            local_edge = np.mean(edge_density[start:end])
+            # 低标准差 + 低边缘密度 = 高间隙得分
+            score = 1.0 / (1.0 + local_std) * 1.0 / (1.0 + local_edge)
+            gap_scores.append(score)
         
-        # 检查3: 边缘密度是否较低
-        edge_density = np.mean(edge_region) / 255
-        low_edge = 1.0 - min(edge_density * 10, 1.0)
+        gap_scores = np.array(gap_scores)
         
-        # 综合得分
-        score = (bg_similarity * 0.4 + uniformity * 0.3 + low_edge * 0.3)
-        return score
+        # 平滑处理
+        kernel_size = max(5, dimension_size // 40)
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        smoothed = np.convolve(gap_scores, np.ones(kernel_size)/kernel_size, mode='same')
+        
+        # 尝试不同的间隙数量配置
+        best_gaps = []
+        best_score = 0
+        
+        for num_gaps in expected_counts:
+            if num_gaps == 0:
+                continue
+            
+            # 计算预期间隙位置（均匀分布）
+            segment_size = dimension_size / (num_gaps + 1)
+            expected_positions = [int(segment_size * (i + 1)) for i in range(num_gaps)]
+            
+            # 在预期位置附近搜索实际间隙
+            search_range = int(segment_size * 0.25)  # 搜索范围 ±25%
+            found_gaps = []
+            total_score = 0
+            
+            for exp_pos in expected_positions:
+                search_start = max(0, exp_pos - search_range)
+                search_end = min(dimension_size, exp_pos + search_range)
+                
+                if search_end > search_start:
+                    local_scores = smoothed[search_start:search_end]
+                    best_local_idx = np.argmax(local_scores)
+                    best_local_score = local_scores[best_local_idx]
+                    actual_pos = search_start + best_local_idx
+                    found_gaps.append(actual_pos)
+                    total_score += best_local_score
+            
+            # 验证间隙是否有效（得分需要高于阈值）
+            avg_score = total_score / len(found_gaps) if found_gaps else 0
+            threshold = np.mean(smoothed) + np.std(smoothed) * 0.5
+            
+            if avg_score > threshold and avg_score > best_score:
+                best_score = avg_score
+                best_gaps = found_gaps
+                print(f"[{axis_name}] 接受 {num_gaps} 个间隙配置, 平均得分={avg_score:.4f}, 阈值={threshold:.4f}")
+        
+        return best_gaps
     
-    def evaluate_pattern(rows, cols):
-        """评估一个网格模式的匹配质量"""
-        if rows <= 0 or cols <= 0:
-            return 0, [], []
-        
-        # 计算预期的分割点位置
-        v_positions = [int(width * (i / cols)) for i in range(1, cols)]
-        h_positions = [int(height * (i / rows)) for i in range(1, rows)]
-        
-        # 计算每个分割点的间隙质量
-        v_scores = [check_gap_quality(pos, 'vertical') for pos in v_positions]
-        h_scores = [check_gap_quality(pos, 'horizontal') for pos in h_positions]
-        
-        # 总体得分 = 所有分割点得分的平均值
-        all_scores = v_scores + h_scores
-        if not all_scores:
-            return 0.5, [], []  # 1x1 布局
-        
-        avg_score = np.mean(all_scores)
-        min_score = np.min(all_scores) if all_scores else 0
-        
-        # 如果有任何分割点质量太差，降低整体得分
-        if min_score < 0.2:
-            avg_score *= 0.5
-        
-        return avg_score, v_positions, h_positions
+    # =========================================================
+    # 检测垂直分割线（确定列数）
+    # =========================================================
+    col_profile = np.std(gray, axis=0)
+    vertical_gaps = find_major_gaps(width, col_profile, 'vertical', expected_counts=[3, 1, 7, 2])
+    num_cols = len(vertical_gaps) + 1
     
-    # 尝试常见的布局模式
-    patterns = [
-        (1, 4),  # 1x4 横排
-        (2, 2),  # 2x2 田字格
-        (2, 4),  # 2x4 网格
-        (4, 2),  # 4x2 网格
-        (1, 3),  # 1x3
-        (3, 3),  # 3x3
-        (1, 2),  # 1x2
-        (2, 1),  # 2x1
-    ]
+    # =========================================================
+    # 检测水平分割线（确定行数）
+    # =========================================================
+    row_profile = np.std(gray, axis=1)
+    horizontal_gaps = find_major_gaps(height, row_profile, 'horizontal', expected_counts=[1, 3, 0])
+    num_rows = len(horizontal_gaps) + 1
     
-    best_score = 0
-    best_pattern = (1, 4)  # 默认
-    best_v_gaps = []
-    best_h_gaps = []
+    # =========================================================
+    # 验证和修正
+    # =========================================================
+    # 限制在合理范围内
+    num_cols = min(max(1, num_cols), 8)
+    num_rows = min(max(1, num_rows), 4)
     
-    print("[网格检测] 尝试匹配模式...")
-    for rows, cols in patterns:
-        score, v_gaps, h_gaps = evaluate_pattern(rows, cols)
-        print(f"  {rows}x{cols}: 得分={score:.3f}")
-        if score > best_score:
-            best_score = score
-            best_pattern = (rows, cols)
-            best_v_gaps = v_gaps
-            best_h_gaps = h_gaps
+    # 计算检测到的视图数
+    total_views = num_rows * num_cols
     
-    rows, cols = best_pattern
-    print(f"[网格检测] 最佳匹配: {rows}x{cols} (得分={best_score:.3f})")
-    print(f"[网格检测] 垂直分割点: {best_v_gaps}")
-    print(f"[网格检测] 水平分割点: {best_h_gaps}")
+    print(f"[网格检测] 检测到 {num_cols-1} 个垂直间隙: {vertical_gaps}")
+    print(f"[网格检测] 检测到 {num_rows-1} 个水平间隙: {horizontal_gaps}")
+    print(f"[网格检测] 布局: {num_rows}x{num_cols} ({total_views} 个视图)")
     
-    return (rows, cols, best_v_gaps, best_h_gaps)
+    return (num_rows, num_cols, vertical_gaps, horizontal_gaps)
 
 
 def split_universal_grid(image, rows: int, cols: int, v_gaps: list, h_gaps: list, margin: int = 5) -> List[Tuple[str, any]]:
