@@ -242,6 +242,10 @@ def main():
     # 获取角色描述
     if args.description:
         description = args.description
+    elif args.from_image:
+        # 使用图片参考模式时，描述是可选的（会从图片分析获取）
+        description = ""
+        print("[INFO] 图片参考模式：将从图片中自动提取描述")
     else:
         print("\n请输入角色描述:")
         print("示例: 赛博朋克女骇客，霓虹灯外套，机械义肢")
