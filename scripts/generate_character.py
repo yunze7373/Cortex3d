@@ -285,9 +285,13 @@ def main():
         
         from aiproxy_client import analyze_image_for_character
         
+        # 用户提供的描述作为指导词（指定分析哪个人物或关注什么细节）
+        user_guidance = args.description if args.description else None
+        
         extracted_description = analyze_image_for_character(
             image_path=args.from_image,
-            token=args.token
+            token=args.token,
+            user_guidance=user_guidance
         )
         
         if extracted_description:
@@ -296,12 +300,8 @@ def main():
             print(extracted_description[:500] + "..." if len(extracted_description) > 500 else extracted_description)
             print("-"*50)
             
-            # 使用提取的描述替代用户输入
+            # 使用提取的描述作为主描述
             description = extracted_description
-            
-            # 如果用户也提供了描述，则追加
-            if args.description:
-                description = f"{extracted_description}. Additional details: {args.description}"
         else:
             print("[WARNING] 图片分析失败，使用默认描述")
             if not args.description:

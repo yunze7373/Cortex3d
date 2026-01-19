@@ -160,6 +160,7 @@ def extract_image_from_reply(reply: str) -> Optional[Tuple[bytes, str]]:
 def analyze_image_for_character(
     image_path: str,
     token: str,
+    user_guidance: str = None,
     base_url: str = AIPROXY_BASE_URL
 ) -> Optional[str]:
     """
@@ -168,6 +169,7 @@ def analyze_image_for_character(
     Args:
         image_path: 参考图片路径
         token: AiProxy 客户端令牌
+        user_guidance: 用户指导词（可选），用于指定分析哪个人物或关注什么细节
         base_url: AiProxy 服务地址
     
     Returns:
@@ -176,6 +178,8 @@ def analyze_image_for_character(
     _ensure_imports()
     
     print(f"[图片分析] 正在分析参考图片: {image_path}")
+    if user_guidance:
+        print(f"[用户指导] {user_guidance}")
     
     # 读取并编码图片
     image_path = Path(image_path)
@@ -199,37 +203,57 @@ def analyze_image_for_character(
     
     b64_image = base64.b64encode(image_bytes).decode("utf-8")
     
-    # 构建分析提示词
-    analysis_prompt = """Analyze this image and extract a detailed character description for 3D modeling.
+    # 构建分析提示词（根据用户指导动态调整）
+    if user_guidance:
+        subject_instruction = f"""
+**USER GUIDANCE**: {user_guidance}
+Please focus on the person/subject specified above. If there are multiple people in the image, 
+only describe the one matching the user's description.
+"""
+    else:
+        subject_instruction = """
+If there are multiple people in the image, describe the most prominent/central one.
+"""
+
+    analysis_prompt = f"""Analyze this image and extract a detailed character description for 3D modeling.
+{subject_instruction}
 
 Please describe in detail:
 
 1. **PHYSICAL APPEARANCE**
    - Gender, approximate age, ethnicity
-   - Height/body type (slim, athletic, etc.)
+   - Height/body type (slim, athletic, curvy, etc.)
    - Face shape, hairstyle, hair color and length
    - Any distinctive facial features
 
-2. **CLOTHING & OUTFIT**
-   - Top: type, style, color, fit (loose/tight), material
-   - Bottom: pants/skirt type, color, fit, length
-   - Footwear: type, color, style
-   - All visible details (buttons, zippers, patterns, logos)
+2. **CLOTHING & OUTFIT** (Be very specific!)
+   - Top: exact type (T-shirt/blouse/jacket), style, color, fit (loose/tight/cropped), visible logos/text
+   - Bottom: pants/skirt/shorts type, color, fit, length, material appearance
+   - Footwear: type, color, heel height, style details
+   - Layer details: what's worn over what
 
-3. **ACCESSORIES**
-   - Bags/purses: type, color, how carried (shoulder/hand/crossbody)
-   - Jewelry: earrings, necklaces, bracelets, rings
-   - Headwear: hats, caps, with any text/logos
-   - Other: watches, belts, glasses, etc.
+3. **ACCESSORIES** (Include everything visible)
+   - Bags: type (crossbody/shoulder/handbag), color, size, how it's carried
+   - Jewelry: earrings, necklaces, bracelets, rings - describe each
+   - Headwear: hats, caps, with any text/logos/brand visible
+   - Other: watches, belts, glasses, scarves, etc.
 
 4. **POSE & BODY LANGUAGE**
-   - Standing/walking/sitting
-   - Arm positions
-   - Leg positions
-   - Head tilt direction
-   - Overall posture and attitude
+   - Standing/walking/sitting/leaning
+   - Weight distribution (which leg)
+   - Arm positions (where are the hands?)
+   - Head direction and tilt
+   - Overall vibe/attitude
 
-Output the description in a single paragraph, in English, focusing on visual details useful for 3D character generation. Be specific about colors, materials, and positions."""
+5. **KEY VISUAL DETAILS FOR 3D** (Important for accurate recreation)
+   - Fabric textures and materials (cotton, silk, denim, leather)
+   - How clothes drape and fold
+   - Any patterns or prints
+   - Color variations and gradients
+
+Output a comprehensive description in a single detailed paragraph, in English. 
+Be extremely specific about colors (not just "blue" but "navy blue" or "light sky blue"), 
+materials, and spatial positions. This will be used to generate a 3D model."""
 
     # 调用 AiProxy 的 VLM 分析功能
     endpoint = f"{base_url.rstrip('/')}/generate"
