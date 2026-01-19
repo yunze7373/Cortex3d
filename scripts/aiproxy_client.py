@@ -91,46 +91,70 @@ def generate_image_via_proxy(
         payload["image"] = reference_image
         print(f"[AiProxy] 使用图生图模式 (image-to-image)")
     
-    print(f"[AiProxy] 调用 {endpoint}")
-    print(f"[AiProxy] 模型: {model}")
+    MAX_RETRIES = 1
     
-    try:
-        response = requests.post(
-            endpoint,
-            headers=headers,
-            json=payload,
-            timeout=120  # 图像生成可能需要较长时间
-        )
+    # 定义回退模型 map
+    FALLBACK_MODELS = {
+        "models/nano-banana-pro-preview": "gemini-2.5-flash-image",
+        "nano-banana-pro-preview": "gemini-2.5-flash-image",
+        IMAGE_MODEL: "gemini-2.5-flash-image"
+    }
+
+    current_model = model
+    
+    for attempt in range(MAX_RETRIES + 1):
+        payload["model"] = current_model
+        print(f"[AiProxy] 调用 {endpoint}")
+        print(f"[AiProxy] 模型: {current_model} (尝试 {attempt+1}/{MAX_RETRIES+1})")
         
-        if response.status_code == 401:
-            print("[ERROR] AiProxy 认证失败 - 请检查 token")
-            return None
-        
-        if response.status_code != 200:
-            print(f"[ERROR] AiProxy 返回错误: {response.status_code}")
-            print(response.text[:500])
-            return None
-        
-        data = response.json()
-        reply = data.get("reply", "")
-        
-        # 从 HTML 响应中提取 base64 图像数据
-        # AiProxy 返回格式: ```html-image-hidden ... <img src="data:image/png;base64,..." ...
-        image_data = extract_image_from_reply(reply)
-        
-        if image_data:
-            return image_data
-        else:
-            print("[WARNING] AiProxy 返回中未找到图像数据")
-            print(f"[DEBUG] 返回内容预览: {reply[:200]}...")
-            return None
+        try:
+            response = requests.post(
+                endpoint,
+                headers=headers,
+                json=payload,
+                timeout=120
+            )
             
-    except requests.exceptions.Timeout:
-        print("[ERROR] AiProxy 请求超时")
-        return None
-    except Exception as e:
-        print(f"[ERROR] AiProxy 请求失败: {e}")
-        return None
+            if response.status_code == 200:
+                data = response.json()
+                reply = data.get("reply", "")
+                image_data = extract_image_from_reply(reply)
+                
+                if image_data:
+                    return image_data
+                else:
+                    print("[WARNING] AiProxy 返回中未找到图像数据")
+                    # 如果这只是看起来像成功的空响应，也许我们应该重试？
+                    # 但通常 200 OK 意味着模型生成了文本但没生成图片
+            
+            elif response.status_code == 401:
+                print("[ERROR] AiProxy 认证失败 - 请检查 token")
+                return None
+            
+            else:
+                print(f"[ERROR] AiProxy 返回错误: {response.status_code}")
+                # 继续下面检查是否需要 fallback
+        
+        except requests.exceptions.Timeout:
+            print("[ERROR] AiProxy 请求超时")
+        except Exception as e:
+            print(f"[ERROR] AiProxy 请求失败: {e}")
+
+        # 如果失败了，检查是否可以回退模型
+        if attempt < MAX_RETRIES:
+            fallback_model = FALLBACK_MODELS.get(current_model)
+            if not fallback_model and "banana" in current_model:
+                 fallback_model = "gemini-2.5-flash-image"
+            
+            if fallback_model and fallback_model != current_model:
+                print(f"⚠️ 模型 {current_model} 调用失败，自动切换到 fallback 模型: {fallback_model}")
+                current_model = fallback_model
+                continue # Retry loop
+        
+        # 如果到了这里还没 continue，说明是最后一次尝试或者无法回退，不再重试
+        break
+
+    return None
 
 
 def extract_image_from_reply(reply: str) -> Optional[Tuple[bytes, str]]:
