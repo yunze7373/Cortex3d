@@ -42,6 +42,12 @@ def main():
         help="角色描述"
     )
     parser.add_argument(
+        "--from-image",
+        dest="from_image",
+        default=None,
+        help="从参考图片提取角色特征生成多视角图 (例如: 街拍照片.jpg)"
+    )
+    parser.add_argument(
         "--mode",
         choices=["proxy", "direct"],
         default="proxy",
@@ -269,6 +275,38 @@ def main():
     if "face" not in description.lower() and "feature" not in description.lower():
          description += enhancements
          print(f"[提示词增强] {description}")
+    
+    # =========================================================================
+    # 从参考图片生成多视角图
+    # =========================================================================
+    if args.from_image:
+        print(f"\n[图片参考模式] 分析图片: {args.from_image}")
+        print("="*50)
+        
+        from aiproxy_client import analyze_image_for_character
+        
+        extracted_description = analyze_image_for_character(
+            image_path=args.from_image,
+            token=args.token
+        )
+        
+        if extracted_description:
+            print(f"\n[提取的描述]")
+            print("-"*50)
+            print(extracted_description[:500] + "..." if len(extracted_description) > 500 else extracted_description)
+            print("-"*50)
+            
+            # 使用提取的描述替代用户输入
+            description = extracted_description
+            
+            # 如果用户也提供了描述，则追加
+            if args.description:
+                description = f"{extracted_description}. Additional details: {args.description}"
+        else:
+            print("[WARNING] 图片分析失败，使用默认描述")
+            if not args.description:
+                print("[ERROR] 图片分析失败且未提供描述，无法继续")
+                sys.exit(1)
     
     # 调用生成器
     if args.mode == "proxy":

@@ -157,23 +157,128 @@ def extract_image_from_reply(reply: str) -> Optional[Tuple[bytes, str]]:
     return None
 
 
-    # 自动切割
-    if auto_cut:
-        try:
-            from image_processor import process_quadrant_image
-            print("\n[INFO] 自动切割四视图...")
-            process_quadrant_image(
-                input_path=str(filepath),
-                output_dir=output_dir,
-                remove_bg_flag=True,
-                margin=5
-            )
-        except ImportError:
-            print("[WARNING] 无法导入 image_processor，跳过自动切割")
-        except Exception as e:
-            print(f"[WARNING] 切割失败: {e}")
+def analyze_image_for_character(
+    image_path: str,
+    token: str,
+    base_url: str = AIPROXY_BASE_URL
+) -> Optional[str]:
+    """
+    使用 AI 分析图片，提取角色的详细描述
     
-    return str(filepath)
+    Args:
+        image_path: 参考图片路径
+        token: AiProxy 客户端令牌
+        base_url: AiProxy 服务地址
+    
+    Returns:
+        角色详细描述文本 或 None
+    """
+    _ensure_imports()
+    
+    print(f"[图片分析] 正在分析参考图片: {image_path}")
+    
+    # 读取并编码图片
+    image_path = Path(image_path)
+    if not image_path.exists():
+        print(f"[ERROR] 图片不存在: {image_path}")
+        return None
+    
+    with open(image_path, "rb") as f:
+        image_bytes = f.read()
+    
+    # 判断 MIME 类型
+    suffix = image_path.suffix.lower()
+    if suffix in [".jpg", ".jpeg"]:
+        mime_type = "image/jpeg"
+    elif suffix == ".png":
+        mime_type = "image/png"
+    elif suffix == ".webp":
+        mime_type = "image/webp"
+    else:
+        mime_type = "image/jpeg"  # 默认
+    
+    b64_image = base64.b64encode(image_bytes).decode("utf-8")
+    
+    # 构建分析提示词
+    analysis_prompt = """Analyze this image and extract a detailed character description for 3D modeling.
+
+Please describe in detail:
+
+1. **PHYSICAL APPEARANCE**
+   - Gender, approximate age, ethnicity
+   - Height/body type (slim, athletic, etc.)
+   - Face shape, hairstyle, hair color and length
+   - Any distinctive facial features
+
+2. **CLOTHING & OUTFIT**
+   - Top: type, style, color, fit (loose/tight), material
+   - Bottom: pants/skirt type, color, fit, length
+   - Footwear: type, color, style
+   - All visible details (buttons, zippers, patterns, logos)
+
+3. **ACCESSORIES**
+   - Bags/purses: type, color, how carried (shoulder/hand/crossbody)
+   - Jewelry: earrings, necklaces, bracelets, rings
+   - Headwear: hats, caps, with any text/logos
+   - Other: watches, belts, glasses, etc.
+
+4. **POSE & BODY LANGUAGE**
+   - Standing/walking/sitting
+   - Arm positions
+   - Leg positions
+   - Head tilt direction
+   - Overall posture and attitude
+
+Output the description in a single paragraph, in English, focusing on visual details useful for 3D character generation. Be specific about colors, materials, and positions."""
+
+    # 调用 AiProxy 的 VLM 分析功能
+    endpoint = f"{base_url.rstrip('/')}/generate"
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    # 使用 Gemini 模型进行图片分析
+    payload = {
+        "prompt": analysis_prompt,
+        "model": "gemini-2.0-flash",  # 使用文本/视觉模型
+        "image": f"data:{mime_type};base64,{b64_image}"
+    }
+    
+    try:
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            print(f"[ERROR] 图片分析失败: {response.status_code}")
+            print(response.text[:300])
+            return None
+        
+        data = response.json()
+        description = data.get("reply", "").strip()
+        
+        if description:
+            # 清理可能的 markdown 格式
+            description = re.sub(r'^```.*\n?', '', description)
+            description = re.sub(r'\n?```$', '', description)
+            print(f"[图片分析] 提取描述成功 ({len(description)} 字符)")
+            return description
+        else:
+            print("[WARNING] AI 未返回描述")
+            return None
+            
+    except Exception as e:
+        print(f"[ERROR] 图片分析请求失败: {e}")
+        return None
+
+
+# 保留旧代码的兼容性（这段代码看起来是重复的，应该删除）
+# 自动切割部分已经在 generate_character_multiview 中实现
 
 
 def generate_character_multiview(
