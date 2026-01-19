@@ -295,9 +295,30 @@ def detect_grid_layout(image) -> tuple:
     col_gap_score = (col_density.max() - col_density) / (col_density.max() + 1e-6) + \
                     (col_std.max() - col_std) / (col_std.max() + 1e-6)
     
-    # 寻找间隙峰值（局部最大值）
-    def find_gaps(gap_score, min_distance_ratio=0.1):
-        """找到间隙位置"""
+    # 计算可能的背景色（使用图片四角的平均值）
+    corner_size = min(50, width // 10, height // 10)
+    corners = [
+        gray[:corner_size, :corner_size],
+        gray[:corner_size, -corner_size:],
+        gray[-corner_size:, :corner_size],
+        gray[-corner_size:, -corner_size:]
+    ]
+    background_value = np.median([np.median(c) for c in corners])
+    background_tolerance = 30  # 允许的背景色容差
+    
+    print(f"[网格检测] 检测到背景色: {background_value:.0f}")
+    
+    # 寻找间隙峰值（局部最大值）- 使用背景色验证
+    def find_gaps(gap_score, gray_profile, min_distance_ratio=0.1, axis='vertical'):
+        """
+        找到间隙位置
+        
+        Args:
+            gap_score: 间隙得分数组
+            gray_profile: 灰度值剖面（每列/每行的平均灰度）
+            min_distance_ratio: 最小间隙间距比例
+            axis: 'vertical' 或 'horizontal'
+        """
         length = len(gap_score)
         min_distance = int(length * min_distance_ratio)
         
@@ -307,23 +328,36 @@ def detect_grid_layout(image) -> tuple:
             kernel_size += 1
         smoothed = np.convolve(gap_score, np.ones(kernel_size)/kernel_size, mode='same')
         
-        # 找局部最大值
-        gaps = []
+        # 找局部最大值（候选间隙）
+        candidates = []
         for i in range(min_distance, length - min_distance):
             window_start = max(0, i - min_distance // 2)
             window_end = min(length, i + min_distance // 2)
-            if smoothed[i] == np.max(smoothed[window_start:window_end]) and smoothed[i] > np.mean(smoothed):
-                gaps.append(i)
+            # 使用更严格的阈值：必须高于平均值的 1.5 倍
+            if smoothed[i] == np.max(smoothed[window_start:window_end]) and smoothed[i] > np.mean(smoothed) * 1.5:
+                candidates.append((i, smoothed[i], gray_profile[i]))
+        
+        # 验证候选间隙是否真的是背景
+        valid_gaps = []
+        for pos, score, gray_val in candidates:
+            # 检查该位置的灰度值是否接近背景色
+            if abs(gray_val - background_value) < background_tolerance:
+                valid_gaps.append(pos)
+                print(f"[网格检测] {axis} 间隙验证通过: pos={pos}, gray={gray_val:.0f}, bg={background_value:.0f}")
+            else:
+                print(f"[网格检测] {axis} 间隙验证失败: pos={pos}, gray={gray_val:.0f} (非背景色)")
         
         # 合并太近的间隙
         merged_gaps = []
-        for gap in gaps:
+        for gap in valid_gaps:
             if not merged_gaps or gap - merged_gaps[-1] > min_distance:
                 merged_gaps.append(gap)
         
         return merged_gaps
     
-    vertical_gaps = find_gaps(col_gap_score, min_distance_ratio=0.15)
+    # 计算灰度剖面
+    col_gray_profile = np.mean(gray, axis=0)  # 每列的平均灰度
+    vertical_gaps = find_gaps(col_gap_score, col_gray_profile, min_distance_ratio=0.15, axis='vertical')
     num_cols = len(vertical_gaps) + 1
     
     # =========================================================
@@ -336,7 +370,8 @@ def detect_grid_layout(image) -> tuple:
     row_gap_score = (row_density.max() - row_density) / (row_density.max() + 1e-6) + \
                     (row_std.max() - row_std) / (row_std.max() + 1e-6)
     
-    horizontal_gaps = find_gaps(row_gap_score, min_distance_ratio=0.15)
+    row_gray_profile = np.mean(gray, axis=1)  # 每行的平均灰度
+    horizontal_gaps = find_gaps(row_gap_score, row_gray_profile, min_distance_ratio=0.15, axis='horizontal')
     num_rows = len(horizontal_gaps) + 1
     
     # =========================================================
