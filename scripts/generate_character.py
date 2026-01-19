@@ -306,33 +306,38 @@ def main():
         
         args.from_image = str(image_path)  # 更新为实际路径
         
-        print(f"\\n[图片参考模式] 分析图片: {args.from_image}")
-        print("="*50)
-        
-        from aiproxy_client import analyze_image_for_character
-        
-        # 用户提供的描述作为指导词（指定分析哪个人物或关注什么细节）
-        user_guidance = args.description if args.description else None
-        
-        extracted_description = analyze_image_for_character(
-            image_path=args.from_image,
-            token=args.token,
-            user_guidance=user_guidance
-        )
-        
-        if extracted_description:
-            print(f"\n[提取的描述]")
-            print("-"*50)
-            print(extracted_description[:500] + "..." if len(extracted_description) > 500 else extracted_description)
-            print("-"*50)
-            
-            # 使用提取的描述作为主描述
-            description = extracted_description
+        # 严格模式跳过图片分析，直接使用图片
+        if args.strict:
+            print(f"\n[严格复制模式] 跳过图片分析，100%基于原图生成")
+            description = "(strict mode - no description needed)"
         else:
-            print("[WARNING] 图片分析失败，使用默认描述")
-            if not args.description:
-                print("[ERROR] 图片分析失败且未提供描述，无法继续")
-                sys.exit(1)
+            print(f"\\n[图片参考模式] 分析图片: {args.from_image}")
+            print("="*50)
+            
+            from aiproxy_client import analyze_image_for_character
+            
+            # 用户提供的描述作为指导词（指定分析哪个人物或关注什么细节）
+            user_guidance = args.description if args.description else None
+            
+            extracted_description = analyze_image_for_character(
+                image_path=args.from_image,
+                token=args.token,
+                user_guidance=user_guidance
+            )
+            
+            if extracted_description:
+                print(f"\n[提取的描述]")
+                print("-"*50)
+                print(extracted_description[:500] + "..." if len(extracted_description) > 500 else extracted_description)
+                print("-"*50)
+                
+                # 使用提取的描述作为主描述
+                description = extracted_description
+            else:
+                print("[WARNING] 图片分析失败，使用默认描述")
+                if not args.description:
+                    print("[ERROR] 图片分析失败且未提供描述，无法继续")
+                    sys.exit(1)
     
     # 调用生成器
     if args.mode == "proxy":
