@@ -367,16 +367,27 @@ def detect_grid_layout(image) -> tuple:
         combined = cv2.bitwise_or(binary, img_edges)
         
         # 3. 形态学膨胀，将同一主体的不同部分（头、躯干、腿）连接起来
-        # 需要较强的膨胀，因为身体部件可能断开
+        # 修正: 减少膨胀次数，避免将相邻的两个小人连在一起
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
-        dilated = cv2.dilate(combined, kernel, iterations=3)
+        dilated = cv2.dilate(combined, kernel, iterations=1)
         
         # 4. 查找轮廓
         contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
         # 5. 过滤小噪声
-        min_area = (img_gray.shape[0] * img_gray.shape[1]) * 0.005  # 0.5% 图像面积
-        valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_area]
+        height, width = img_gray.shape[:2]
+        img_area = height * width
+        min_area = img_area * 0.005  # 0.5% 图像面积
+        
+        valid_contours = []
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area > min_area:
+                # 额外检查: 宽高比 (过于扁平的可能是地面阴影或横线)
+                x, y, w, h = cv2.boundingRect(cnt)
+                aspect = w / h
+                if aspect < 3.0: # 排除极度横向的噪点
+                    valid_contours.append(cnt)
         
         count = len(valid_contours)
         print(f"[主体检测] 估算主体数量: {count} (过滤后)")
@@ -504,9 +515,8 @@ def detect_grid_layout(image) -> tuple:
         
         print(f"[列检测] 选择 {num_cols} 列配置 (检测到主体数: {estimated_subjects})")
         
-        if combined > best_combined_score:
-            best_combined_score = combined
-            best_candidate = c
+        # 修复 NameError bug: 这里不再尝试比较 combined (因为它未定义且逻辑上已经通过 loop 选择了最佳)
+        # 上面的 loop 已经通过 best_combined_score 选出了最优解，所以无需在此处进行额外比较。
     
     num_cols = best_candidate['cols'] if best_candidate else 4
     vertical_gaps = best_candidate['gaps'] if best_candidate else []
