@@ -14,7 +14,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PATH=/usr/local/cuda/bin:$PATH \
     LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH \
     CPATH=/usr/local/cuda/include:$CPATH \
-    LIBRARY_PATH=/usr/local/cuda/lib64:$LIBRARY_PATH
+    LIBRARY_PATH=/usr/local/cuda/lib64:$LIBRARY_PATH \
+    TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;8.9;9.0"
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
