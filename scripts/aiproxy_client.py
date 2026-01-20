@@ -533,11 +533,22 @@ def generate_character_multiview(
     if auto_cut:
         try:
             from image_processor import process_quadrant_image
+            from prompts.views import get_views_by_names, get_views_for_mode
+            
+            # 计算期望的视脚列表
+            if view_mode == "custom" and custom_views:
+                expected_view_objs = get_views_by_names(custom_views)
+            else:
+                expected_view_objs = get_views_for_mode(view_mode)
+            expected_views = [v.name for v in expected_view_objs]
+            
             print("\n[INFO] 自动切割四视图...")
             process_quadrant_image(
                 input_path=str(filepath),
                 output_dir=output_dir,
                 remove_bg_flag=True,
+                expected_views=expected_views
+            )
                 margin=5
             )
             # 记录切割后的文件

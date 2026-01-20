@@ -988,9 +988,75 @@ def detect_grid_split(image) -> Tuple[int, int]:
     return x_split, y_split
 
 
-def split_quadrant_image(image, margin: int = 5) -> List[Tuple[str, tuple]]:
-    """向后兼容的四宫格切割函数 - 现在会自动检测布局类型"""
-    return detect_layout_and_split(image, margin)
+def split_quadrant_image(image, margin: int = 5, expected_views: list = None) -> List[Tuple[str, any]]:
+    """
+    分割四宫格图片
+    
+    Args:
+        image: 输入图片
+        margin: 边距
+        expected_views: 期望的视角名称列表 (用于指导分割)
+    
+    Returns:
+        [(view_name, image), ...]
+    """
+    _ensure_imports()
+    
+    # 如果指定了期望视角，计算期望的行列数
+    expected_layout = None
+    if expected_views:
+        count = len(expected_views)
+        if count == 1:
+            print(f"[布局指导] 单视角模式 (1x1)")
+            # 不需要分割，直接裁剪边距即可
+            h, w = image.shape[:2]
+            if margin > 0:
+                cropped = image[margin:h-margin, margin:w-margin]
+            else:
+                cropped = image
+            return [(expected_views[0], cropped)]
+        
+        # 尝试从 prompts.views 导入辅助函数
+        try:
+            from prompts.views import get_layout_for_views
+            rows, cols, _ = get_layout_for_views(count)
+            expected_layout = (rows, cols)
+            print(f"[布局指导] 期望布局: {rows}x{cols} ({count} 视图)")
+        except ImportError:
+            # 简单的回退逻辑
+            if count <= 4: expected_layout = (1, 4)
+            elif count <= 6: expected_layout = (2, 3)
+            elif count <= 8: expected_layout = (2, 4)
+    
+    # 检测布局 (传入期望的列数作为提示)
+    # 注意: detect_grid_layout 目前签名不支持 expected_cols，这里暂时只使用其返回值进行校验
+    # 如果需要支持 expected_cols，需要修改 detect_grid_layout
+    layout_type, rows, cols, v_gaps, h_gaps = detect_grid_layout(image)
+    
+    # 如果检测结果与期望严重不符，优先使用期望
+    if expected_layout:
+        exp_rows, exp_cols = expected_layout
+        if rows != exp_rows or cols != exp_cols:
+            print(f"[警告] 检测到的布局 ({rows}x{cols}) 与期望 ({exp_rows}x{exp_cols}) 不符")
+            if exp_rows == 1 and exp_cols == count:
+                print(f"[修正] 强制使用 {exp_cols} 列分割")
+                rows, cols = exp_rows, exp_cols
+            elif exp_rows == 2 and exp_cols * 2 == count:
+                print(f"[修正] 强制使用 {exp_rows}x{exp_cols} 布局")
+                rows, cols = exp_rows, exp_cols
+
+    # 调用通用分割
+    views = split_universal_grid(image, rows, cols, v_gaps, h_gaps, margin=margin)
+    
+    # 如果产生了正确数量的视图，应用期望的名称
+    if expected_views and len(views) == len(expected_views):
+        print(f"[命名] 应用期望的视图名称: {expected_views}")
+        new_views = []
+        for i, (old_name, img) in enumerate(views):
+            new_views.append((expected_views[i], img))
+        return new_views
+        
+    return views
 
 
 def remove_background(image, model_name: str = "birefnet-general"):
@@ -1041,7 +1107,8 @@ def process_quadrant_image(
     input_path: str,
     output_dir: str,
     remove_bg_flag: bool = True,
-    margin: int = 5
+    margin: int = 5,
+    expected_views: List[str] = None
 ) -> List[str]:
     """
     处理四宫格图片的主函数
@@ -1073,7 +1140,7 @@ def process_quadrant_image(
     input_stem = Path(input_path).stem
     
     # 分割图片
-    views = split_quadrant_image(image, margin=margin)
+    views = split_quadrant_image(image, margin=margin, expected_views=expected_views)
     
     output_files = []
     

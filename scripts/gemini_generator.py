@@ -157,7 +157,20 @@ def generate_character_views(
         
         # 自动切割
         if auto_cut:
-            cut_and_save(str(filepath), output_dir)
+            try:
+                from prompts.views import get_views_by_names, get_views_for_mode
+                
+                # 计算期望的视脚列表
+                if view_mode == "custom" and custom_views:
+                    expected_view_objs = get_views_by_names(custom_views)
+                else:
+                    expected_view_objs = get_views_for_mode(view_mode)
+                expected_views = [v.name for v in expected_view_objs]
+                
+                cut_and_save(str(filepath), output_dir, expected_views=expected_views)
+            except Exception as e:
+                print(f"[WARNING] 无法计算期望视角: {e}, 使用默认切割")
+                cut_and_save(str(filepath), output_dir)
         
         return str(filepath)
         
@@ -328,7 +341,7 @@ Requirements:
         return None
 
 
-def cut_and_save(image_path: str, output_dir: str):
+def cut_and_save(image_path: str, output_dir: str, expected_views: list = None):
     """
     调用 image_processor 切割图像
     """
@@ -343,6 +356,7 @@ def cut_and_save(image_path: str, output_dir: str):
             input_path=image_path,
             output_dir=output_dir,
             remove_bg_flag=True,
+            expected_views=expected_views
             margin=5
         )
     except ImportError:
