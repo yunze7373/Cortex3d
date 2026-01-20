@@ -435,10 +435,10 @@ def run_hunyuan3d_21(image_path, output_dir, quality="balanced", no_texture=Fals
             "--model", model_type,
             "--octree", str(preset["octree"]),
             "--guidance", str(preset["guidance"]),
-           use_multiview:
-            cmd.append("--multiview")
-        if  "--steps", str(preset["steps"])
+            "--steps", str(preset["steps"])
         ]
+        if use_multiview:
+            cmd.append("--multiview")
         if no_texture:
             cmd.append("--no-texture")
         if sharpen:
