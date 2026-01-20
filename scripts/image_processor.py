@@ -143,34 +143,56 @@ def remove_small_fragments(image, min_area_ratio: float = 0.05):
     max_area = np.max(areas)
     max_label = np.argmax(areas) + 1  # +1 因为排除了背景
     
-    print(f"[碎片检测] 发现 {num_labels - 1} 个连通区域, 最大面积: {max_area}px²")
+    print(f"[碎片检测] 发现 {num_labels-1} 个连通区域, 最大面积: {max_area}px²")
     
-    # 创建掩码，只保留大于阈值的组件
-    min_area = max_area * min_area_ratio
-    keep_mask = np.zeros_like(binary)
+    # 创建新的 mask
+    new_mask = np.zeros_like(alpha)
+    
+    # 只保留主体
+    # 策略升级:
+    # 1. 保留最大组件 (Main Subject)
+    # 2. 移除任何接触图片边界的非最大组件 (Edge Artifacts - 肯定是邻居伸过来的)
+    # 3. 移除任何面积小于阈值的内部噪点
     
     removed_count = 0
-    for label in range(1, num_labels):
-        area = stats[label, cv2.CC_STAT_AREA]
-        if area >= min_area:
-            keep_mask[labels == label] = 255
-        else:
-            removed_count += 1
-            # 获取碎片位置信息
-            x = stats[label, cv2.CC_STAT_LEFT]
-            y = stats[label, cv2.CC_STAT_TOP]
-            w = stats[label, cv2.CC_STAT_WIDTH]
-            h = stats[label, cv2.CC_STAT_HEIGHT]
-            print(f"[碎片移除] 移除碎片: 位置({x},{y}), 尺寸{w}x{h}, 面积{area}px² (< {min_area:.0f})")
+    height, width = image.shape[:2]
     
+    for i in range(1, num_labels):
+        area = stats[i, cv2.CC_STAT_AREA]
+        
+        # 如果是最大组件，保留
+        if i == max_label:
+            new_mask[labels == i] = 255
+            continue
+            
+        # 检查是否接触边界
+        x, y, w, h = stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP], stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
+        touches_border = (x <= 1) or (y <= 1) or (x + w >= width - 1) or (y + h >= height - 1)
+        
+        is_small = area < (max_area * min_area_ratio)
+        
+        if touches_border:
+            # 接触边界的非主体，直接移除 (认为是邻居伪影)
+            print(f"[碎片移除] 移除边缘伪影: 位置({x},{y}), 面积{area}px²")
+            removed_count += 1
+        elif is_small:
+            # 内部小噪点，移除
+            print(f"[碎片移除] 移除小碎片: 位置({x},{y}), 面积{area}px² (< {int(max_area * min_area_ratio)})")
+            removed_count += 1
+        else:
+            # 内部大组件 (可能是独立的漂浮物)，保留
+            # 如果希望只保留唯一的最大主体，可以把这里也移除
+            print(f"[碎片保留] 保留独立组件: 位置({x},{y}), 面积{area}px²")
+            new_mask[labels == i] = 255
+            
     if removed_count > 0:
         print(f"[碎片移除] 共移除 {removed_count} 个碎片")
     
-    # 应用掩码到图片
-    result = image.copy()
-    result[:, :, 3] = cv2.bitwise_and(result[:, :, 3], keep_mask)
+    # 应用新 mask
+    cleaned_image = image.copy()
+    cleaned_image[:, :, 3] = cv2.bitwise_and(alpha, new_mask)
     
-    return result
+    return cleaned_image
 
 
 def crop_to_subject(image, target_size: int = 1024, padding: int = 20):
