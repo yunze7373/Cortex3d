@@ -568,15 +568,24 @@ def refine_mesh(
         output_path = output_dir / f"{output_name}.glb"
         
         logging.info(f"\n💾 保存细化网格: {output_path}")
-        outputs[0].export(str(output_path))
+        
+        # UltraShape 返回的是列表，需要正确访问 mesh
+        if isinstance(outputs, (list, tuple)):
+            mesh = outputs[0]
+            # 如果还是列表，继续解包
+            if isinstance(mesh, (list, tuple)):
+                mesh = mesh[0]
+        else:
+            mesh = outputs
+        
+        mesh.export(str(output_path))
         
         # 也保存为 OBJ 格式（兼容性）
         obj_path = output_dir / f"{output_name}.obj"
-        outputs[0].export(str(obj_path))
+        mesh.export(str(obj_path))
         logging.info(f"  - OBJ 格式: {obj_path}")
         
         # 输出统计信息
-        mesh = outputs[0]
         logging.info("\n" + "="*60)
         logging.info("✅ 细化完成！")
         logging.info(f"  - 顶点数: {len(mesh.vertices):,}")
