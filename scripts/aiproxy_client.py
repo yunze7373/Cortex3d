@@ -547,8 +547,7 @@ def generate_character_multiview(
                 input_path=str(filepath),
                 output_dir=output_dir,
                 remove_bg_flag=True,
-                expected_views=expected_views
-            )
+                expected_views=expected_views,
                 margin=5
             )
             # 记录切割后的文件
