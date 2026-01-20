@@ -449,7 +449,7 @@ def run_hunyuan3d_21(image_path, output_dir, quality="balanced", no_texture=Fals
     return run_command(cmd, cwd=PROJECT_ROOT)
 
 
-def run_trellis2(image_path, output_dir, quality="balanced"):
+def run_trellis2(image_path, output_dir, quality="balanced", no_texture=False):
     """
     调用 TRELLIS 生成 (微软官方，高质量结构化潜在表示)
     会自动检测环境：如果在本地运行，则通过 Docker Compose 调用容器。
@@ -460,6 +460,7 @@ def run_trellis2(image_path, output_dir, quality="balanced"):
         image_path: 输入图像路径
         output_dir: 输出目录
         quality: 质量预设 (balanced, high, ultra)
+        no_texture: Whether to skip/minimize texture generation
         
     Returns:
         bool: 是否成功
@@ -474,9 +475,9 @@ def run_trellis2(image_path, output_dir, quality="balanced"):
     
     # Quality presets for decimation and texture
     quality_presets = {
-        "balanced": {"decimation": 500000, "texture_size": 2048},
-        "high":     {"decimation": 1000000, "texture_size": 4096},
-        "ultra":    {"decimation": 2000000, "texture_size": 4096}
+        "balanced": {"decimation": 500000, "texture_size": 2048, "ss_steps": 12, "slat_steps": 12},
+        "high":     {"decimation": 1000000, "texture_size": 4096, "ss_steps": 25, "slat_steps": 25},
+        "ultra":    {"decimation": 2000000, "texture_size": 4096, "ss_steps": 50, "slat_steps": 50}
     }
     preset = quality_presets.get(quality, quality_presets["balanced"])
     
@@ -487,12 +488,15 @@ def run_trellis2(image_path, output_dir, quality="balanced"):
         # Running inside trellis2 container -> call script directly
         logging.info("Running inside TRELLIS container...")
         cmd = [
-            "python3", "/workspace/scripts/run_trellis2.py",
             str(image_path),
             "--output", str(output_dir),
             "--decimation", str(preset["decimation"]),
-            "--texture-size", str(preset["texture_size"])
+            "--texture-size", str(preset["texture_size"]),
+            "--ss-steps", str(preset["ss_steps"]),
+            "--slat-steps", str(preset["slat_steps"])
         ]
+        if no_texture:
+            cmd.append("--no-texture")
     else:
         # Running locally -> use Docker Compose
         logging.info("Running locally, dispatching to 'trellis2' container...")
@@ -514,8 +518,12 @@ def run_trellis2(image_path, output_dir, quality="balanced"):
             container_image,
             "--output", container_output,
             "--decimation", str(preset["decimation"]),
-            "--texture-size", str(preset["texture_size"])
+            "--texture-size", str(preset["texture_size"]),
+            "--ss-steps", str(preset["ss_steps"]),
+            "--slat-steps", str(preset["slat_steps"])
         ]
+        if no_texture:
+            cmd.append("--no-texture")
     
     return run_command(cmd, cwd=PROJECT_ROOT)
 
@@ -604,6 +612,72 @@ def run_hunyuan3d_omni(image_path, output_dir, quality="balanced", control_type=
             cmd.extend(["--control-type", control_type, "--control-input", container_control])
     
     return run_command(cmd, cwd=PROJECT_ROOT)
+
+
+def run_ultrashape(image_path, mesh_path, output_dir, preset="balanced"):
+    """
+    Call UltraShape to refine the mesh.
+    Automatically handles Docker execution.
+    """
+    image_path = Path(image_path)
+    mesh_path = Path(mesh_path)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    logging.info(f"Starting UltraShape refinement... (Preset: {preset})")
+    
+    # Check if running inside container
+    in_docker = os.path.exists("/.dockerenv") or os.environ.get("AM_I_IN_A_DOCKER_CONTAINER", False)
+    
+    if in_docker:
+        # Check if we have ultrashape module
+        try:
+            import ultrashape
+            has_ultrashape = True
+        except ImportError:
+            has_ultrashape = False
+        
+        if has_ultrashape:
+             script_path = SCRIPT_DIR / "run_ultrashape.py"
+             cmd = [
+                sys.executable, str(script_path),
+                "--image", str(image_path),
+                "--mesh", str(mesh_path),
+                "--output", str(output_dir),
+                "--preset", preset
+             ]
+             return run_command(cmd, cwd=PROJECT_ROOT)
+        else:
+             logging.error("Cannot run UltraShape: Not in ultrashape container and module not found.")
+             return False
+    else:
+        # Running locally -> use Docker Compose to call ultrashape container
+        logging.info("Running locally, dispatching to 'ultrashape' container...")
+        
+        # Convert paths to container paths
+        try:
+            rel_image = image_path.absolute().relative_to(PROJECT_ROOT.absolute())
+            rel_mesh = mesh_path.absolute().relative_to(PROJECT_ROOT.absolute())
+            rel_output = output_dir.absolute().relative_to(PROJECT_ROOT.absolute())
+        except ValueError:
+            logging.error("Paths must be within project root for Docker mount")
+            return False
+            
+        container_image = f"/workspace/{rel_image.as_posix()}"
+        container_mesh = f"/workspace/{rel_mesh.as_posix()}"
+        container_output = f"/workspace/{rel_output.as_posix()}"
+        
+        cmd = [
+            "docker", "compose", "exec", "-T", "ultrashape",
+            "python3", "/workspace/scripts/run_ultrashape.py",
+            "--image", container_image,
+            "--mesh", container_mesh,
+            "--output", container_output,
+            "--preset", preset
+        ]
+        
+        return run_command(cmd, cwd=PROJECT_ROOT)
+
 
 
 def main():
@@ -745,7 +819,8 @@ def main():
         algo_output_dir = args.output_dir / "trellis2"
         # TRELLIS.2 output name removes _front suffix
         output_name = image_name.replace('_front', '')
-        if run_trellis2(input_image, algo_output_dir, args.quality):
+        no_texture = getattr(args, 'no_texture', False)
+        if run_trellis2(input_image, algo_output_dir, args.quality, no_texture=no_texture):
             success = True
             result_mesh = algo_output_dir / f"{output_name}.glb"
     
@@ -770,45 +845,20 @@ def main():
             logging.info("="*60 + "\n")
             
             try:
-                ultrashape_script = SCRIPT_DIR / "run_ultrashape.py"
-                if not ultrashape_script.exists():
-                    logging.error(f"UltraShape script not found: {ultrashape_script}")
-                    logging.warning("Skipping refinement, using original mesh")
-                else:
-                    # Call UltraShape refinement
-                    refine_output = args.output_dir / "ultrashape"
-                    refine_cmd = [
-                        sys.executable,
-                        str(ultrashape_script),
-                        "--image", str(input_image),
-                        "--mesh", str(result_mesh),
-                        "--output", str(refine_output),
-                        "--preset", args.refine_preset
-                    ]
-                    
-                    logging.info(f"Running: {' '.join(refine_cmd)}")
-                    refine_result = subprocess.run(
-                        refine_cmd,
-                        check=True,
-                        capture_output=True,
-                        text=True
-                    )
-                    
-                    # Find refined mesh
-                    refined_glb = refine_output / f"{result_mesh.stem}_refined.glb"
-                    if refined_glb.exists():
+                # Call properly wrapped UltraShape runner
+                refine_output_dir = args.output_dir / "ultrashape"
+                if run_ultrashape(input_image, result_mesh, refine_output_dir, args.refine_preset):
+                     refined_glb = refine_output_dir / f"{result_mesh.stem}_refined.glb"
+                     if refined_glb.exists():
                         logging.info(f"✅ Refinement successful: {refined_glb}")
                         result_mesh = refined_glb  # Use refined mesh as final output
-                    else:
-                        logging.warning("Refined mesh not found, using original")
-                        
-            except subprocess.CalledProcessError as e:
-                logging.error(f"UltraShape refinement failed: {e}")
-                logging.error(f"stderr: {e.stderr}")
-                logging.warning("Continuing with original mesh")
+                     else:
+                        logging.warning("Refinement command succeeded but output file not found.")
+                else:
+                    logging.error("Refinement failed.")
+
             except Exception as e:
-                logging.error(f"Error during refinement: {e}")
-                logging.warning("Continuing with original mesh")
+                logging.error(f"Refinement error: {e}")
         
         # Copy to a Latest location for stage4 to pick up easily
         latest_path = args.output_dir / "latest.obj"

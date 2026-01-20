@@ -121,7 +121,10 @@ def generate_3d(
     envmap=None,
     decimation_target: int = 500000,
     texture_size: int = 2048,
-    seed: int = 42
+    ss_steps: int = 12,
+    slat_steps: int = 12,
+    seed: int = 42,
+    no_texture: bool = False
 ):
     """
     Generate 3D model from image using TRELLIS.2.
@@ -134,7 +137,10 @@ def generate_3d(
         envmap: Environment map for PBR rendering
         decimation_target: Target face count for mesh simplification
         texture_size: Texture resolution
+        ss_steps: Sampling steps for sparse structure
+        slat_steps: Sampling steps for structured latent
         seed: Random seed
+        no_texture: If True, minimize texture generation steps
     
     Returns:
         Path to generated GLB file
@@ -145,12 +151,21 @@ def generate_3d(
     torch.manual_seed(seed)
     np.random.seed(seed)
     
+    # Prepare texture params
+    tex_params = {}
+    if no_texture:
+        print("[INFO] Texture generation minimized (steps=1) due to --no-texture")
+        tex_params = {'steps': 1}
+
     # Generate (using TRELLIS.2 pipeline API)
     with torch.inference_mode():
         mesh = pipeline.run(
             image,
             seed=seed,
-            preprocess_image=False  # We already preprocessed
+            preprocess_image=False,  # We already preprocessed
+            sparse_structure_sampler_params={'steps': ss_steps},
+            shape_slat_sampler_params={'steps': slat_steps},
+            tex_slat_sampler_params=tex_params
         )[0]  # Returns list of MeshWithVoxel
     
     print(f"[INFO] 3D model generated!")
@@ -238,8 +253,14 @@ def main():
                         help="Target face count for mesh simplification")
     parser.add_argument("--texture-size", type=int, default=2048,
                         help="Texture resolution (1024, 2048, 4096)")
+    parser.add_argument("--ss-steps", type=int, default=12,
+                        help="Sampling steps for sparse structure")
+    parser.add_argument("--slat-steps", type=int, default=12,
+                        help="Sampling steps for structured latent")
     parser.add_argument("--hdri", type=str, default=None,
                         help="Path to HDRI for PBR rendering")
+    parser.add_argument("--no-texture", action="store_true",
+                        help="Minimize texture generation steps for speed")
     
     args = parser.parse_args()
     
@@ -275,7 +296,10 @@ def main():
         envmap=envmap,
         decimation_target=args.decimation,
         texture_size=args.texture_size,
-        seed=args.seed
+        ss_steps=args.ss_steps,
+        slat_steps=args.slat_steps,
+        seed=args.seed,
+        no_texture=args.no_texture
     )
     
     print("=" * 60)
