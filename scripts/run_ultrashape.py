@@ -196,17 +196,30 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
     conditioner.load_state_dict(weights['conditioner'], strict=True)
     
     # 移动到设备并强制 float32
-    vae.eval().to(device).float()
-    dit.eval().to(device).float()
-    conditioner.eval().to(device).float()
+    vae.to(device).float()
+    dit.to(device).float()
+    conditioner.to(device).float()
     
-    # 递归确保所有参数和缓冲区都是 float32
-    for model in [vae, dit, conditioner]:
-        for param in model.parameters():
+    # 递归强制所有子模块、参数和缓冲区都是 float32
+    def force_float32(module):
+        """递归强制模块所有组件转换为 float32"""
+        module.float()
+        for child in module.children():
+            force_float32(child)
+        for param in module.parameters(recurse=False):
             param.data = param.data.float()
-        for buffer in model.buffers():
-            if buffer is not None:
-                buffer.data = buffer.data.float()
+        for buffer in module.buffers(recurse=False):
+            buffer.data = buffer.data.float()
+    
+    logging.info("  - 强制转换所有模型组件为 float32...")
+    force_float32(vae)
+    force_float32(dit)
+    force_float32(conditioner)
+    
+    # 设置为评估模式
+    vae.eval()
+    dit.eval()
+    conditioner.eval()
     
     # 启用 FlashVDM 加速（如果可用）
     if hasattr(vae, 'enable_flashvdm_decoder'):
