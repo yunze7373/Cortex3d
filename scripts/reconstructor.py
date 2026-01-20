@@ -444,8 +444,10 @@ def run_hunyuan3d_21(image_path, output_dir, quality="balanced", no_texture=Fals
 
 def run_trellis2(image_path, output_dir, quality="balanced"):
     """
-    调用 TRELLIS.2 生成 (微软最新，锐利边缘保留)
+    调用 TRELLIS 生成 (微软官方，高质量结构化潜在表示)
     会自动检测环境：如果在本地运行，则通过 Docker Compose 调用容器。
+    
+    Note: 尽管函数名为 trellis2，实际使用的是官方 microsoft/TRELLIS 仓库
     
     Args:
         image_path: 输入图像路径
@@ -459,9 +461,9 @@ def run_trellis2(image_path, output_dir, quality="balanced"):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    logging.info(f"[TRELLIS.2] Sharp Edge 3D Generation...")
-    logging.info(f"[TRELLIS.2] Input: {image_path}")
-    logging.info(f"[TRELLIS.2] Quality: {quality}")
+    logging.info(f"[TRELLIS] High Quality 3D Generation...")
+    logging.info(f"[TRELLIS] Input: {image_path}")
+    logging.info(f"[TRELLIS] Quality: {quality}")
     
     # Quality presets for decimation and texture
     quality_presets = {
@@ -476,7 +478,7 @@ def run_trellis2(image_path, output_dir, quality="balanced"):
     
     if in_container:
         # Running inside trellis2 container -> call script directly
-        logging.info("Running inside TRELLIS.2 container...")
+        logging.info("Running inside TRELLIS container...")
         cmd = [
             "python3", "/workspace/scripts/run_trellis2.py",
             str(image_path),
