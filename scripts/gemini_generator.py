@@ -56,10 +56,13 @@ def generate_character_views(
     api_key: str,
     model_name: str = DEFAULT_MODEL,
     output_dir: str = "test_images",
-    auto_cut: bool = True
+    auto_cut: bool = True,
+    style: str = "cinematic character",
+    view_mode: str = "4-view",
+    custom_views: list = None
 ) -> Optional[str]:
     """
-    使用 Gemini API 生成四视图角色图像
+    使用 Gemini API 生成多视图角色图像
     
     Args:
         character_description: 角色描述
@@ -67,6 +70,9 @@ def generate_character_views(
         model_name: 模型名称
         output_dir: 输出目录
         auto_cut: 是否自动切割
+        style: 风格描述
+        view_mode: 视角模式 (4-view, 6-view, 8-view, custom)
+        custom_views: 自定义视角列表
     
     Returns:
         生成的图片路径
@@ -81,13 +87,20 @@ def generate_character_views(
     print("="*60)
     print(f"[模型] {model_name}")
     print(f"[角色描述] {character_description[:100]}...")
+    print(f"[风格] {style}")
+    print(f"[视角模式] {view_mode}")
     print("-"*60)
     
     # 创建模型
     model = genai.GenerativeModel(model_name)
     
     # 构建提示词
-    full_prompt = build_multiview_prompt(character_description)
+    full_prompt = build_multiview_prompt(
+        character_description, 
+        style=style,
+        view_mode=view_mode,
+        custom_views=custom_views
+    )
     
     print("[INFO] 正在生成图像... (可能需要 30-60 秒)")
     
@@ -240,11 +253,11 @@ def generate_with_gemini_vision(
     
     prompt = f"""Generate an image: A professional 3D character modeling reference sheet.
 
-Layout: 4-panel grid (2x2):
-- Top-left: Front view
-- Top-right: Back view  
-- Bottom-left: Left side view
-- Bottom-right: Right side view
+Layout: 4 panels arranged horizontally in a single row:
+- Panel 1 (Left): Front view (0°) - Face visible
+- Panel 2: Right side view (90°) - Right ear visible
+- Panel 3: Back view (180°) - Back of head visible
+- Panel 4 (Right): Left side view (270°) - Left ear visible
 
 Character: {character_description}
 
@@ -255,7 +268,8 @@ Requirements:
 - Hyper-realistic 3D CGI style
 - 8K quality textures
 - No text or watermarks
-- Character must be identical in all 4 views"""
+- Character must be identical in all 4 views
+- Same pose in all panels"""
 
     try:
         response = model.generate_content(

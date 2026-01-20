@@ -34,18 +34,18 @@ except ImportError:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Cortex3d - 从描述生成多视角角色图像"
+        description="Cortex3d - Generate multi-view character images from description"
     )
     parser.add_argument(
         "description",
         nargs="?",
-        help="角色描述"
+        help="Character description"
     )
     parser.add_argument(
         "--from-image",
         dest="from_image",
         default=None,
-        help="从参考图片提取角色特征生成多视角图 (例如: 街拍照片.jpg)"
+        help="Extract character features from reference image. Example: photo.jpg"
     )
     parser.add_argument(
         "--mode",
@@ -56,97 +56,135 @@ def main():
     parser.add_argument(
         "--token",
         default=os.environ.get("AIPROXY_TOKEN"),
-        help="AiProxy 令牌 (proxy模式)"
+        help="AiProxy token (for proxy mode)"
     )
     parser.add_argument(
         "--api-key",
         default=os.environ.get("GEMINI_API_KEY"),
-        help="Gemini API Key (direct模式)"
+        help="Gemini API Key (for direct mode)"
     )
     parser.add_argument(
         "--model",
         default=None,
-        help="模型名称 (默认: proxy模式用nano-banana-pro, direct模式用gemini-2.0-flash-exp)"
+        help="Model name. Default: nano-banana-pro for proxy, gemini-2.0-flash-exp for direct"
     )
     parser.add_argument(
         "--output", "-o",
         default="test_images",
-        help="输出目录"
+        help="Output directory"
     )
     parser.add_argument(
         "--no-cut",
         action="store_true",
-        help="不自动切割"
+        help="Disable auto-cutting"
     )
     parser.add_argument(
         "--to-3d",
         action="store_true",
-        help="生成后自动转换为 3D 模型"
+        help="Auto-convert to 3D model after generation"
     )
     parser.add_argument(
         "--algo",
         choices=["hunyuan3d", "hunyuan3d-2.1", "hunyuan3d-omni", "trellis", "trellis2"],
         default="hunyuan3d",
-        help="3D 生成算法 (默认: hunyuan3d, omni支持姿势控制)"
+        help="3D algorithm. Default: hunyuan3d. Use omni for pose control"
     )
     parser.add_argument(
         "--quality",
         choices=["balanced", "high", "ultra"],
         default="high",
-        help="3D 模型质量: balanced(快)/high(均衡)/ultra(最佳但慢)"
+        help="3D quality: balanced(fast)/high(default)/ultra(best but slow)"
     )
     parser.add_argument(
         "--geometry-only", "--fast",
         dest="geometry_only",
         action="store_true",
-        help="只生成几何模型, 不生成纹理 (速度快很多)"
+        help="Generate geometry only, no texture (much faster)"
     )
     parser.add_argument(
         "--preview",
         action="store_true",
-        help="生成后自动打开预览"
+        help="Auto-open preview after generation"
     )
     parser.add_argument(
         "--pose",
         default=None,
-        help="姿势控制文件路径 (仅 hunyuan3d-omni 支持，例如: poses/t_pose.json)"
+        help="Pose control file path (only for hunyuan3d-omni). Example: poses/t_pose.json"
     )
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="严格复制模式：100%基于原图生成多视角，不允许AI创意改动 (需配合 --from-image 使用)"
+        help="Strict copy mode: generate multi-view 100%% based on reference image, no AI creativity. Use with --from-image"
     )
     parser.add_argument(
         "--preprocess",
         action="store_true",
-        help="预处理输入图片：去除背景让主体更突出，提高AI生成质量 (需配合 --from-image 使用)"
+        help="Preprocess input image: remove background for better AI quality. Use with --from-image"
     )
     parser.add_argument(
         "--preprocess-model",
         dest="preprocess_model",
         choices=["birefnet-general", "isnet-general-use", "u2net"],
         default="birefnet-general",
-        help="预处理使用的背景移除模型 (默认: birefnet-general)"
+        help="Background removal model for preprocessing. Default: birefnet-general"
     )
     
     parser.add_argument(
         "--resolution",
         choices=["1K", "2K", "4K"],
         default="2K",
-        help="图像分辨率: 1K(快速)/2K(默认)/4K(高清但慢)"
+        help="Image resolution: 1K(fast)/2K(default)/4K(high quality but slow)"
     )
     
     parser.add_argument(
         "--style",
         default=None,
-        help="风格描述 (例如: 'cyberpunk', 'fantasy', 'anime'). 默认自动根据描述匹配或使用 'cinematic character'"
+        help="Style description (e.g. 'cyberpunk', 'fantasy', 'anime'). Default: auto-match or 'cinematic character'"
     )
     
     parser.add_argument(
         "--from-id",
         dest="from_id",
         default=None,
-        help="跳过2D生成，使用已有的图片ID直接生成3D模型 (例如: a7af1af9-a592-4499-a456-2bea8428fe49)"
+        help="Skip 2D generation, use existing image ID for 3D. Example: a7af1af9-a592-4499-a456-2bea8428fe49"
+    )
+    
+    # =========================================================================
+    # Multi-view mode parameters
+    # =========================================================================
+    parser.add_argument(
+        "--views",
+        choices=["4", "6", "8"],
+        default="4",
+        help="Number of views: 4(default)=standard, 6=with 45-degree angles, 8=with top/bottom"
+    )
+    
+    parser.add_argument(
+        "--custom-views",
+        dest="custom_views",
+        nargs="+",
+        default=None,
+        metavar="VIEW",
+        help="Custom view list (overrides --views). Options: front, front_right, right, back, left, front_left, top, bottom"
+    )
+    
+    # =========================================================================
+    # Negative prompt parameters
+    # =========================================================================
+    parser.add_argument(
+        "--no-negative",
+        dest="no_negative",
+        action="store_true",
+        help="Disable negative prompts"
+    )
+    
+    parser.add_argument(
+        "--negative-categories",
+        dest="negative_categories",
+        nargs="+",
+        default=["anatomy", "quality", "layout"],
+        choices=["anatomy", "quality", "layout"],
+        help="Negative prompt categories (default: anatomy quality layout)"
     )
     
     args = parser.parse_args()
@@ -421,8 +459,18 @@ def main():
         use_ref_prompt = bool(args.from_image)  # 如果有参考图片，使用保留动作的提示词
         use_strict = bool(args.strict and args.from_image)  # 严格模式需要配合 --from-image
         
+        # 确定视角模式
+        view_mode = f"{args.views}-view"  # "4" -> "4-view"
+        custom_views = args.custom_views
+        if custom_views:
+            view_mode = "custom"
+        
         if use_strict:
             print("[MODE] 严格复制模式 (100% 基于原图)")
+        
+        print(f"[视角模式] {view_mode}")
+        if custom_views:
+            print(f"[自定义视角] {custom_views}")
         
         result = generate_character_multiview(
             character_description=description,
@@ -434,22 +482,32 @@ def main():
             reference_image_path=ref_image_path,
             use_image_reference_prompt=use_ref_prompt,
             use_strict_mode=use_strict,
-            resolution=args.resolution
+            resolution=args.resolution,
+            view_mode=view_mode,
+            custom_views=custom_views,
+            use_negative_prompt=not args.no_negative,
+            negative_categories=args.negative_categories
         )
     else:
         # Gemini Generator也需要更新支持style，这里暂时只支持proxy模式的style传递
         # 或稍微修改一下 gemini_generator 的调用假设它有 style (需要去检查 gemini_generator.py)
         # 检查 gemini_generator.py 发现它可能需要单独更新，暂时只更新 proxy 路径因为它是默认推荐
         from gemini_generator import generate_character_views
-        # 注意：如果 gemini_generator 还没更新支持 style，这里会报错。
-        # 为了安全，先检查一下 gemini_generator。
-        # 假设暂时不传 style给 gemini (或者稍后更新它)
+        # 确定视角模式
+        view_mode = f"{args.views}-view"
+        custom_views = args.custom_views
+        if custom_views:
+            view_mode = "custom"
+            
         result = generate_character_views(
             character_description=description,
             api_key=args.api_key,
             model_name=model,
             output_dir=args.output,
-            auto_cut=not args.no_cut
+            auto_cut=not args.no_cut,
+            style=style,
+            view_mode=view_mode,
+            custom_views=custom_views
         )
     
     if result:

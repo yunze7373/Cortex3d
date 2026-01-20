@@ -59,7 +59,8 @@ def generate_image_via_proxy(
     base_url: str = AIPROXY_BASE_URL,
     reference_image: str = None,
     resolution: str = "2K",  # 默认请求 2K 分辨率 (性价比最高)
-    aspect_ratio: str = "3:2"  # 默认 3:2 横屏，适合 1x4 横排四视图
+    aspect_ratio: str = "3:2",  # 默认 3:2 横屏，适合 1x4 横排四视图
+    negative_prompt: str = None  # 负面提示词
 ) -> Optional[Tuple[bytes, str]]:
     """
     通过 AiProxy 服务生成图像
@@ -71,7 +72,8 @@ def generate_image_via_proxy(
         base_url: AiProxy 服务地址
         reference_image: 参考图片的 base64 data URL (可选，用于图生图)
         resolution: 图像分辨率，可选 "4K", "2K", "1K" (默认: "2K")
-        aspect_ratio: 宽高比，可选 "1:1", "2:3", "3:2", "16:9" 等 (默认: "2:3")
+        aspect_ratio: 宽高比，可选 "1:1", "2:3", "3:2", "16:9" 等 (默认: "3:2")
+        negative_prompt: 负面提示词，用于指定不希望出现的内容
     
     Returns:
         (image_bytes, mime_type) 或 None
@@ -91,6 +93,11 @@ def generate_image_via_proxy(
         "image_size": resolution,
         "aspect_ratio": aspect_ratio
     }
+    
+    # 添加负面提示词（如果提供）
+    if negative_prompt:
+        payload["negative_prompt"] = negative_prompt
+        print(f"[AiProxy] 负面提示词: {negative_prompt[:80]}...")
     
     print(f"[AiProxy] 请求参数: image_size={resolution}, aspect_ratio={aspect_ratio}")
     
@@ -357,7 +364,11 @@ def generate_character_multiview(
     reference_image_path: str = None,
     use_image_reference_prompt: bool = False,
     use_strict_mode: bool = False,
-    resolution: str = "2K"  # 图像分辨率: 1K/2K/4K
+    resolution: str = "2K",  # 图像分辨率: 1K/2K/4K
+    view_mode: str = "4-view",  # 视角模式: 4-view, 6-view, 8-view, custom
+    custom_views: list = None,  # 自定义视角列表
+    use_negative_prompt: bool = True,  # 是否使用负面提示词
+    negative_categories: list = None  # 负面提示词类别
 ) -> Optional[str]:
     """
     生成多视角角色图像并保存
@@ -374,6 +385,10 @@ def generate_character_multiview(
         use_image_reference_prompt: 是否使用图片参考专用提示词（保留原图动作）
         use_strict_mode: 严格复制模式，100%基于原图，不允许AI创意改动
         resolution: 图像分辨率 1K/2K/4K (默认: 2K)
+        view_mode: 视角模式 4-view/6-view/8-view/custom (默认: 4-view)
+        custom_views: 自定义视角列表 (仅 custom 模式)
+        use_negative_prompt: 是否使用负面提示词 (默认: True)
+        negative_categories: 负面提示词类别 ["anatomy", "quality", "layout"]
     
     Returns:
         保存的图像路径 或 None
@@ -391,6 +406,11 @@ def generate_character_multiview(
         # 为了简洁和唯一性，直接用 UUID4 string
         asset_id = str(uuid.uuid4())
         
+    # 获取视角配置
+    from config import get_view_config, get_negative_prompt
+    views, rows, cols, aspect_ratio = get_view_config(view_mode, custom_views)
+    view_count = len(views) if views else 4
+    
     print("="*60)
     print(f"Cortex3d - Asset Generation [{asset_id}]")
     print("="*60)
@@ -398,11 +418,22 @@ def generate_character_multiview(
     print(f"[风格] {style}")
     print(f"[模型] {model}")
     print(f"[ID]   {asset_id}")
+    print(f"[视角] {view_mode} ({view_count} 个视角)")
+    print(f"[布局] {rows}x{cols}, 宽高比: {aspect_ratio}")
+    if custom_views:
+        print(f"[自定义视角] {custom_views}")
     if reference_image_path:
         print(f"[参考图] {reference_image_path}")
     if use_strict_mode:
         print(f"[严格模式] 100%复制原图")
     print("-"*60)
+    
+    # 获取负面提示词
+    negative_prompt = None
+    if use_negative_prompt:
+        negative_prompt = get_negative_prompt(negative_categories)
+        if negative_prompt:
+            print(f"[负面提示词] {negative_prompt[:60]}...")
     
     # 构建提示词（根据模式选择不同模板）
     if use_strict_mode:
@@ -412,7 +443,12 @@ def generate_character_multiview(
         print("[MODE] 使用图片参考模式提示词 (保留原图动作)")
         prompt = build_image_reference_prompt(character_description)
     else:
-        prompt = build_multiview_prompt(character_description, style=style)
+        prompt = build_multiview_prompt(
+            character_description, 
+            style=style,
+            view_mode=view_mode,
+            custom_views=custom_views
+        )
     
     # 准备参考图片 (如果提供)
     reference_image_data = None
@@ -440,7 +476,9 @@ def generate_character_multiview(
         token=token,
         model=model,
         reference_image=reference_image_data,
-        resolution=resolution
+        resolution=resolution,
+        aspect_ratio=aspect_ratio,
+        negative_prompt=negative_prompt
     )
     
     if not result:

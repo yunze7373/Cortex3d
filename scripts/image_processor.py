@@ -525,9 +525,22 @@ def split_universal_grid(image, rows: int, cols: int, v_gaps: list, h_gaps: list
         view_names = ['front', 'right', 'back', 'left']
     elif rows == 2 and cols == 2:
         view_names = ['front', 'right', 'back', 'left']  # 按田字格顺序
+    elif rows == 2 and cols == 3:
+        # 2x3 (6视角): 
+        # Row 1: front, front_right, right
+        # Row 2: back, left, front_left
+        view_names = ['front', 'front_right', 'right', 'back', 'left', 'front_left']
     elif rows == 2 and cols == 4:
-        # 2x4: 上排4个 + 下排4个
-        view_names = [f'view_{i+1}' for i in range(rows * cols)]
+        # 2x4 (8视角):
+        # Row 1: front, front_right, right, back
+        # Row 2: left, front_left, top, bottom
+        view_names = ['front', 'front_right', 'right', 'back', 'left', 'front_left', 'top', 'bottom']
+    elif rows == 1 and cols == 6:
+        # 1x6 (6视角横排)
+        view_names = ['front', 'front_right', 'right', 'back', 'left', 'front_left']
+    elif rows == 1 and cols == 8:
+        # 1x8 (8视角横排)
+        view_names = ['front', 'front_right', 'right', 'back', 'left', 'front_left', 'top', 'bottom']
     else:
         view_names = [f'view_{i+1}' for i in range(rows * cols)]
     
