@@ -97,6 +97,8 @@ services:
     volumes:
       - ./:/workspace
       - hf-cache:/root/.cache/huggingface
+      - ./patches/trellis2/config.py:/opt/trellis2/trellis2/modules/sparse/config.py
+      - ./patches/trellis2/full_attn.py:/opt/trellis2/trellis2/modules/sparse/attention/full_attn.py
     shm_size: "24gb"
     stdin_open: true
     tty: true
