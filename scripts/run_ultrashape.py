@@ -103,7 +103,7 @@ def check_dependencies():
 def apply_dtype_fix():
     """
     修复 UltraShape 混合精度问题
-    RuntimeError: mat1 and mat2 must have the same dtype
+    RuntimeError: expected scalar type Float but found Half
     """
     try:
         import torch.nn as nn
@@ -130,23 +130,35 @@ def apply_dtype_fix():
         
         F.scaled_dot_product_attention = patched_sdpa
         
-        # 2. 修复所有线性层，确保输入输出都是 float32
+        # 2. 修复所有线性层
         original_linear_forward = nn.Linear.forward
         
         def patched_linear_forward(self, input):
             """强制线性层输入输出为 float32"""
-            # 确保权重和偏置是 float32
             if self.weight.dtype != torch.float32:
                 self.weight.data = self.weight.data.float()
             if self.bias is not None and self.bias.dtype != torch.float32:
                 self.bias.data = self.bias.data.float()
-            # 确保输入是 float32
             input = input.float()
             return original_linear_forward(self, input)
         
         nn.Linear.forward = patched_linear_forward
         
-        logging.info("✓ UltraShape dtype 修复补丁已应用 (SDPA + Linear)")
+        # 3. 修复 LayerNorm 层
+        original_layernorm_forward = nn.LayerNorm.forward
+        
+        def patched_layernorm_forward(self, input):
+            """强制 LayerNorm 输入输出为 float32"""
+            if self.weight is not None and self.weight.dtype != torch.float32:
+                self.weight.data = self.weight.data.float()
+            if self.bias is not None and self.bias.dtype != torch.float32:
+                self.bias.data = self.bias.data.float()
+            input = input.float()
+            return original_layernorm_forward(self, input)
+        
+        nn.LayerNorm.forward = patched_layernorm_forward
+        
+        logging.info("✓ UltraShape dtype 修复补丁已应用 (SDPA + Linear + LayerNorm)")
         
     except Exception as e:
         logging.warning(f"⚠ dtype 补丁应用失败: {e}")
