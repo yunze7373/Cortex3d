@@ -231,9 +231,9 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
     for model in [vae, dit, conditioner]:
         for param in model.parameters():
             param.data = param.data.float()
-        for buffer_name, buffer in model.named_buffers():
+        for buffer in model.buffers():
             if buffer is not None:
-                model.register_buffer(buffer_name, buffer.float())
+                buffer.data = buffer.data.float()
     
     # 启用 FlashVDM 加速（如果可用）
     if hasattr(vae, 'enable_flashvdm_decoder'):
