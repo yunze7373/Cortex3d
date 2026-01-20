@@ -53,7 +53,8 @@ QUALITY_PRESETS = {
         "steps": 20,
         "num_latents": 4096,
         "octree_res": 384,
-        "chunk_size": 1024,
+        "chunk_size": 512,
+        "num_surface_points": 102400,  # 减少采样点
         "description": "低内存模式（~1分钟，6GB VRAM）",
         "low_vram": True
     },
@@ -61,28 +62,33 @@ QUALITY_PRESETS = {
         "steps": 12,
         "num_latents": 8192,
         "octree_res": 512,
-        "chunk_size": 2048,
+        "chunk_size": 1024,
+        "num_surface_points": 204800,
         "description": "快速预览（~30秒，8GB VRAM）"
     },
     "balanced": {
-        "steps": 30,
-        "num_latents": 12288,
-        "octree_res": 640,
-        "chunk_size": 2048,
-        "description": "标准质量（~2分钟，12GB VRAM）"
+        "steps": 25,
+        "num_latents": 8192,
+        "octree_res": 512,
+        "chunk_size": 1024,
+        "num_surface_points": 204800,
+        "description": "标准质量（~2分钟，10GB VRAM）",
+        "low_vram": True  # 强制启用 CPU offload
     },
     "high": {
         "steps": 50,
-        "num_latents": 32768,
-        "octree_res": 1024,
-        "chunk_size": 8000,
-        "description": "高质量（~5分钟，24GB VRAM）"
+        "num_latents": 16384,
+        "octree_res": 768,
+        "chunk_size": 4000,
+        "num_surface_points": 409600,
+        "description": "高质量（~5分钟，20GB VRAM）"
     },
     "ultra": {
         "steps": 100,
         "num_latents": 32768,
-        "octree_res": 2048,
-        "chunk_size": 10000,
+        "octree_res": 1024,
+        "chunk_size": 8000,
+        "num_surface_points": 409600,
         "description": "超高质量（~10分钟，32GB VRAM）"
     }
 }
@@ -297,22 +303,35 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
     if low_vram:
         pipeline.enable_model_cpu_offload()
         logging.info("  ✓ 低显存模式已启用（CPU offloading）")
+        
+        # 尝试启用梯度检查点（如果可用）
+        try:
+            if hasattr(dit, 'enable_gradient_checkpointing'):
+                dit.enable_gradient_checkpointing()
+                logging.info("  ✓ 梯度检查点已启用")
+        except Exception as e:
+            logging.debug(f"  - 梯度检查点不可用: {e}")
     
     logging.info("✓ UltraShape 流水线加载完成")
     return pipeline, config
 
 
-def load_surface_from_mesh(mesh_path, normalize_scale=0.99):
+def load_surface_from_mesh(mesh_path, normalize_scale=0.99, num_points=409600):
     """从网格文件加载表面点云"""
     from ultrashape.surface_loaders import SharpEdgeSurfaceLoader
     
     logging.info(f"正在加载网格: {mesh_path}")
     
-    # 初始化表面加载器
-    # 60万点采样（30万均匀 + 30万尖锐边缘）
+    # 初始化表面加载器 - 可配置采样点数
+    # 分配：50% 均匀采样 + 50% 尖锐边缘采样
+    num_sharp = num_points // 2
+    num_uniform = num_points - num_sharp
+    
+    logging.info(f"  - 采样点数: {num_points} (均匀: {num_uniform}, 边缘: {num_sharp})")
+    
     loader = SharpEdgeSurfaceLoader(
-        num_sharp_points=204800,   # 尖锐边缘采样点数
-        num_uniform_points=204800  # 均匀采样点数
+        num_sharp_points=num_sharp,
+        num_uniform_points=num_uniform
     )
     
     # 加载并采样网格
@@ -379,6 +398,7 @@ def refine_mesh(
         num_latents = num_latents or preset_config["num_latents"]
         octree_res = octree_res or preset_config["octree_res"]
         chunk_size = chunk_size or preset_config["chunk_size"]
+        num_surface_points = preset_config.get("num_surface_points", 409600)
         
         # 如果预设启用低显存模式，强制开启
         if preset_config.get("low_vram", False):
@@ -390,6 +410,7 @@ def refine_mesh(
         num_latents = num_latents or 16384
         octree_res = octree_res or 768
         chunk_size = chunk_size or 4000
+        num_surface_points = 409600
     
     # 设备配置
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -447,7 +468,7 @@ def refine_mesh(
     logging.info(f"📐 体素分辨率: {voxel_res}")
     
     # 加载表面点云
-    surface_pcd = load_surface_from_mesh(mesh_path, normalize_scale=scale)
+    surface_pcd = load_surface_from_mesh(mesh_path, normalize_scale=scale, num_points=num_surface_points)
     
     # 体素化条件
     logging.info(f"🧊 生成体素条件 (Token 数: {num_latents})...")
@@ -487,9 +508,12 @@ def refine_mesh(
             gc.collect()
             torch.cuda.empty_cache()
             logging.info("  🧹 清理显存完成")
+            
+            # 设置 PyTorch 内存分配器为更保守的模式
+            torch.cuda.set_per_process_memory_fraction(0.95)
         
         # 强制禁用 AMP，确保全程 float32
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.cuda.amp.autocast(enabled=False), torch.no_grad():
             # 确保输入张量也是 float32
             if voxel_cond.dtype != torch.float32:
                 voxel_cond = voxel_cond.float()
@@ -497,6 +521,9 @@ def refine_mesh(
             # 低显存模式：现在才移到 GPU
             if low_vram and voxel_cond.device.type != 'cuda':
                 voxel_cond = voxel_cond.to(device)
+                # 立即清理
+                gc.collect()
+                torch.cuda.empty_cache()
             
             outputs = pipeline(
                 image=image,
