@@ -612,6 +612,11 @@ def main():
                         help="Apply mesh sharpening post-processing to enhance edge details (Hunyuan3D only)")
     parser.add_argument("--sharpen-strength", type=float, default=1.0,
                         help="Mesh sharpening strength multiplier (0.5-2.0)")
+    # UltraShape refinement
+    parser.add_argument("--refine", action="store_true",
+                        help="Apply UltraShape geometric refinement after generation (high-fidelity geometry)")
+    parser.add_argument("--refine-preset", choices=["fast", "balanced", "high", "ultra"], default="balanced",
+                        help="UltraShape quality preset (fast: 30s/8GB, balanced: 2min/16GB, high: 5min/24GB)")
     # Hunyuan3D-Omni control parameters
     parser.add_argument("--control-type", choices=["pose", "point", "voxel", "bbox"],
                         help="Control type for Hunyuan3D-Omni (pose/point/voxel/bbox)")
@@ -749,19 +754,77 @@ def main():
         
     if success and result_mesh and result_mesh.exists():
         logging.info(f"Reconstruction completed successfully. Mesh: {result_mesh}")
+        
+        # Apply UltraShape refinement if requested
+        if args.refine:
+            logging.info("\n" + "="*60)
+            logging.info("🎨 Applying UltraShape geometric refinement...")
+            logging.info(f"   Preset: {args.refine_preset}")
+            logging.info("="*60 + "\n")
+            
+            try:
+                ultrashape_script = SCRIPT_DIR / "run_ultrashape.py"
+                if not ultrashape_script.exists():
+                    logging.error(f"UltraShape script not found: {ultrashape_script}")
+                    logging.warning("Skipping refinement, using original mesh")
+                else:
+                    # Call UltraShape refinement
+                    refine_output = args.output_dir / "ultrashape"
+                    refine_cmd = [
+                        sys.executable,
+                        str(ultrashape_script),
+                        "--image", str(input_image),
+                        "--mesh", str(result_mesh),
+                        "--output", str(refine_output),
+                        "--preset", args.refine_preset
+                    ]
+                    
+                    logging.info(f"Running: {' '.join(refine_cmd)}")
+                    refine_result = subprocess.run(
+                        refine_cmd,
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    # Find refined mesh
+                    refined_glb = refine_output / f"{result_mesh.stem}_refined.glb"
+                    if refined_glb.exists():
+                        logging.info(f"✅ Refinement successful: {refined_glb}")
+                        result_mesh = refined_glb  # Use refined mesh as final output
+                    else:
+                        logging.warning("Refined mesh not found, using original")
+                        
+            except subprocess.CalledProcessError as e:
+                logging.error(f"UltraShape refinement failed: {e}")
+                logging.error(f"stderr: {e.stderr}")
+                logging.warning("Continuing with original mesh")
+            except Exception as e:
+                logging.error(f"Error during refinement: {e}")
+                logging.warning("Continuing with original mesh")
+        
         # Copy to a Latest location for stage4 to pick up easily
         latest_path = args.output_dir / "latest.obj"
+        latest_glb = args.output_dir / "latest.glb"
         try:
             if latest_path.exists():
                 latest_path.unlink()
-            shutil.copy(result_mesh, latest_path)
-            logging.info(f"Updated latest mesh: {latest_path}")
+            if latest_glb.exists():
+                latest_glb.unlink()
+            
+            # Copy appropriate format
+            if result_mesh.suffix == '.glb':
+                shutil.copy(result_mesh, latest_glb)
+                logging.info(f"Updated latest mesh: {latest_glb}")
+            else:
+                shutil.copy(result_mesh, latest_path)
+                logging.info(f"Updated latest mesh: {latest_path}")
         except PermissionError:
-            logging.warning(f"Permission denied: Cannot update {latest_path}. (Owned by root?)")
-            logging.warning("To fix, run: sudo rm output/latest.obj")
+            logging.warning(f"Permission denied: Cannot update latest mesh. (Owned by root?)")
+            logging.warning("To fix, run: sudo rm output/latest.*")
             # Don't exit 1, because generation IS successful
         except Exception as e:
-            logging.warning(f"Failed to update latest.obj: {e}")
+            logging.warning(f"Failed to update latest mesh: {e}")
             
         sys.exit(0)
     else:

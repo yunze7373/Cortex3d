@@ -1,0 +1,117 @@
+# ==============================================================================
+# UltraShape 1.0 Dockerfile
+# 基于 PKU-YuanGroup/UltraShape-1.0 (https://github.com/PKU-YuanGroup/UltraShape-1.0)
+# 用于高保真 3D 几何细化 - 可作为任何 3D 重建模型的后处理器
+# ==============================================================================
+
+FROM nvidia/cuda:12.1.0-devel-ubuntu22.04
+
+# 基础环境配置
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    git \
+    wget \
+    curl \
+    python3.10 \
+    python3-pip \
+    python3.10-dev \
+    build-essential \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 创建工作目录
+WORKDIR /opt/ultrashape
+
+# 克隆 UltraShape 仓库
+RUN git clone https://github.com/PKU-YuanGroup/UltraShape-1.0.git . && \
+    echo "✓ UltraShape 仓库克隆完成"
+
+# 升级 pip
+RUN pip3 install --upgrade pip setuptools wheel
+
+# 安装 PyTorch (CUDA 12.1)
+RUN pip3 install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 \
+    --index-url https://download.pytorch.org/whl/cu121 && \
+    echo "✓ PyTorch 2.5.1 安装完成"
+
+# 安装 UltraShape 依赖
+RUN pip3 install -r requirements.txt && \
+    echo "✓ UltraShape 依赖安装完成"
+
+# 安装 cubvh (Marching Cubes 加速)
+RUN pip3 install git+https://github.com/ashawkey/cubvh --no-build-isolation && \
+    echo "✓ cubvh 安装完成"
+
+# 可选：安装训练依赖（如果需要训练或数据处理）
+# RUN pip3 install --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git@stable"
+# RUN pip3 install https://data.pyg.org/whl/torch-2.5.0%2Bcu121/torch_cluster-1.6.3%2Bpt25cu121-cp310-cp310-linux_x86_64.whl
+# ===================================================================
+# 模型权重下载策略
+# ===================================================================
+# 方式 1:构建时自动下载(需要 git-lfs,构建时间长)
+# RUN apt-get update && apt-get install -y git-lfs && \
+#     git lfs install && \
+#     git lfs clone https://huggingface.co/infinith/UltraShape /tmp/weights && \
+#     mkdir -p /workspace/checkpoints && \
+#     cp /tmp/weights/*.pt /workspace/checkpoints/ && \
+#     rm -rf /tmp/weights
+
+# 方式 2:运行时挂载(推荐,灵活)
+# 在 docker-compose.yml 中挂载本地权重:
+# volumes:
+#   - ./models/ultrashape:/workspace/checkpoints:ro
+# 
+# 手动下载命令:
+# git lfs clone https://huggingface.co/infinith/UltraShape models/ultrashape
+
+# 创建权重目录占位符
+RUN mkdir -p /workspace/checkpoints && \
+    echo "请将 ultrashape_v1.pt 放置在此目录" > /workspace/checkpoints/README.txt
+# ===================================================================
+# 验证安装
+RUN python3 -c "import torch; print(f'PyTorch {torch.__version__} (CUDA: {torch.cuda.is_available()})')" && \
+    python3 -c "from ultrashape.pipelines import UltraShapePipeline; print('✓ UltraShape 模块加载成功')"
+
+# 创建必要目录
+RUN mkdir -p /workspace/outputs /workspace/checkpoints /workspace/test_images
+
+# 复制 Cortex3d 集成脚本(在容器启动时从挂载卷获取)
+# 注意: scripts 目录通过 docker-compose.yml 挂载
+
+# 工作目录
+WORKDIR /workspace
+
+# 暴露 Gradio 端口
+EXPOSE 7860
+
+# 入口脚本(检查权重并启动)
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "🚀 启动 UltraShape 容器..."\n\
+if [ ! -f "/workspace/checkpoints/ultrashape_v1.pt" ]; then\n\
+    echo ""\n\
+    echo "⚠️  错误:模型权重未找到!"\n\
+    echo ""\n\
+    echo "请下载模型权重:"\n\
+    echo "  方式 1(推荐): git lfs clone https://huggingface.co/infinith/UltraShape models/ultrashape"\n\
+    echo "  方式 2: 访问 https://huggingface.co/infinith/UltraShape/tree/main"\n\
+    echo "         下载 ultrashape_v1.pt 到 models/ultrashape/"\n\
+    echo ""\n\
+    echo "然后重新启动容器: docker compose up ultrashape"\n\
+    echo ""\n\
+    exit 1\n\
+fi\n\
+echo "✓ 模型权重已加载"\n\
+echo "🎨 启动 Gradio UI: http://localhost:7863"\n\
+exec "$@"\n\
+' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+# 默认命令:启动 Gradio UI(官方自带界面)
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python3", "/opt/ultrashape/scripts/gradio_app.py", \
+     "--ckpt", "/workspace/checkpoints/ultrashape_v1.pt"]

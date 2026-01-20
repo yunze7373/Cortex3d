@@ -1,0 +1,450 @@
+#!/usr/bin/env python3
+"""
+UltraShape 通用细化模块
+支持细化任何 3D 重建模型的输出：InstantMesh、TripoSR、TRELLIS.2、Hunyuan3D 等
+
+用法:
+    # 细化单个网格文件
+    python run_ultrashape.py --image image.png --mesh mesh.glb --output outputs/refined
+    
+    # 细化 InstantMesh 输出
+    python run_ultrashape.py --image image.png --mesh outputs/instantmesh/latest.obj
+    
+    # 快速预览模式（低显存）
+    python run_ultrashape.py --image image.png --mesh mesh.glb --preset fast
+    
+    # 高质量模式
+    python run_ultrashape.py --image image.png --mesh mesh.glb --preset high
+"""
+
+import os
+import sys
+import argparse
+import logging
+from pathlib import Path
+import gc
+
+import torch
+import numpy as np
+from PIL import Image
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# 路径配置
+SCRIPT_DIR = Path(__file__).parent.absolute()
+PROJECT_ROOT = SCRIPT_DIR.parent
+ULTRASHAPE_ROOT = Path("/opt/ultrashape")  # Docker 容器内路径
+
+# 添加 UltraShape 到 Python 路径
+if ULTRASHAPE_ROOT.exists():
+    sys.path.insert(0, str(ULTRASHAPE_ROOT))
+    logging.info(f"✓ UltraShape 模块路径: {ULTRASHAPE_ROOT}")
+else:
+    logging.warning(f"⚠ UltraShape 未安装在 {ULTRASHAPE_ROOT}")
+    logging.warning("  提示: 请使用 'make build-ultrashape' 构建 Docker 容器")
+
+# 质量预设配置
+QUALITY_PRESETS = {
+    "fast": {
+        "steps": 12,
+        "num_latents": 8192,
+        "octree_res": 512,
+        "chunk_size": 2048,
+        "description": "快速预览（~30秒，8GB VRAM）"
+    },
+    "balanced": {
+        "steps": 30,
+        "num_latents": 16384,
+        "octree_res": 768,
+        "chunk_size": 4000,
+        "description": "标准质量（~2分钟，16GB VRAM）"
+    },
+    "high": {
+        "steps": 50,
+        "num_latents": 32768,
+        "octree_res": 1024,
+        "chunk_size": 8000,
+        "description": "高质量（~5分钟，24GB VRAM）"
+    },
+    "ultra": {
+        "steps": 100,
+        "num_latents": 32768,
+        "octree_res": 2048,
+        "chunk_size": 10000,
+        "description": "超高质量（~10分钟，32GB VRAM）"
+    }
+}
+
+
+def check_dependencies():
+    """检查必要依赖"""
+    try:
+        from omegaconf import OmegaConf
+        from ultrashape.pipelines import UltraShapePipeline
+        from ultrashape.surface_loaders import SharpEdgeSurfaceLoader
+        from ultrashape.utils.misc import instantiate_from_config
+        from ultrashape.utils import voxelize_from_point
+        logging.info("✓ UltraShape 依赖加载成功")
+        return True
+    except ImportError as e:
+        logging.error(f"✗ 缺少依赖: {e}")
+        logging.error("  请确保在正确的 Docker 容器中运行")
+        return False
+
+
+def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=False):
+    """加载 UltraShape 流水线"""
+    from omegaconf import OmegaConf
+    from ultrashape.utils.misc import instantiate_from_config
+    from ultrashape.pipelines import UltraShapePipeline
+    
+    logging.info("正在加载 UltraShape 模型...")
+    
+    # 加载配置
+    config = OmegaConf.load(config_path)
+    
+    # 实例化模型组件
+    logging.info("  - 加载 VAE...")
+    vae = instantiate_from_config(config.model.params.vae_config)
+    
+    logging.info("  - 加载 DiT...")
+    dit = instantiate_from_config(config.model.params.dit_config)
+    
+    logging.info("  - 加载调度器...")
+    scheduler = instantiate_from_config(config.model.params.scheduler_config)
+    
+    logging.info("  - 加载条件编码器...")
+    conditioner = instantiate_from_config(config.model.params.conditioner_config)
+    
+    logging.info("  - 加载图像处理器...")
+    image_processor = instantiate_from_config(config.model.params.image_processor_cfg)
+    
+    # 加载权重
+    logging.info(f"  - 加载权重: {ckpt_path}")
+    if not Path(ckpt_path).exists():
+        raise FileNotFoundError(f"权重文件不存在: {ckpt_path}")
+    
+    weights = torch.load(ckpt_path, map_location='cpu')
+    
+    vae.load_state_dict(weights['vae'], strict=True)
+    dit.load_state_dict(weights['dit'], strict=True)
+    conditioner.load_state_dict(weights['conditioner'], strict=True)
+    
+    # 移动到设备
+    vae.eval().to(device)
+    dit.eval().to(device)
+    conditioner.eval().to(device)
+    
+    # 启用 FlashVDM 加速（如果可用）
+    if hasattr(vae, 'enable_flashvdm_decoder'):
+        vae.enable_flashvdm_decoder()
+        logging.info("  ✓ FlashVDM 加速已启用")
+    
+    # 创建流水线
+    logging.info("  - 创建推理流水线...")
+    pipeline = UltraShapePipeline(
+        vae=vae,
+        model=dit,
+        scheduler=scheduler,
+        conditioner=conditioner,
+        image_processor=image_processor
+    )
+    
+    # 低显存优化
+    if low_vram:
+        pipeline.enable_model_cpu_offload()
+        logging.info("  ✓ 低显存模式已启用（CPU offloading）")
+    
+    logging.info("✓ UltraShape 流水线加载完成")
+    return pipeline, config
+
+
+def load_surface_from_mesh(mesh_path, normalize_scale=0.99):
+    """从网格文件加载表面点云"""
+    from ultrashape.surface_loaders import SharpEdgeSurfaceLoader
+    
+    logging.info(f"正在加载网格: {mesh_path}")
+    
+    # 初始化表面加载器
+    # 60万点采样（30万均匀 + 30万尖锐边缘）
+    loader = SharpEdgeSurfaceLoader(
+        num_sharp_points=204800,   # 尖锐边缘采样点数
+        num_uniform_points=204800  # 均匀采样点数
+    )
+    
+    # 加载并采样网格
+    surface_pcd = loader(str(mesh_path))
+    
+    # 归一化
+    if normalize_scale != 1.0:
+        surface_pcd = surface_pcd * normalize_scale
+    
+    logging.info(f"  ✓ 表面点云加载完成: {surface_pcd.shape}")
+    return surface_pcd
+
+
+def refine_mesh(
+    image_path,
+    mesh_path,
+    output_dir,
+    ckpt_path="checkpoints/ultrashape_v1.pt",
+    config_path="configs/infer_dit_refine.yaml",
+    preset="balanced",
+    steps=None,
+    num_latents=None,
+    octree_res=None,
+    chunk_size=None,
+    guidance_scale=5.0,
+    scale=0.99,
+    seed=42,
+    low_vram=False,
+    remove_bg=False
+):
+    """
+    UltraShape 细化主函数
+    
+    Args:
+        image_path: 参考图像路径
+        mesh_path: 粗糙网格路径（.glb/.obj）
+        output_dir: 输出目录
+        preset: 质量预设 (fast/balanced/high/ultra)
+        steps: 推理步数（覆盖预设）
+        num_latents: 潜在 token 数量（覆盖预设）
+        octree_res: Marching Cubes 分辨率（覆盖预设）
+        chunk_size: 批处理块大小（覆盖预设）
+        low_vram: 低显存模式
+    """
+    
+    # 检查依赖
+    if not check_dependencies():
+        return None
+    
+    from ultrashape.utils import voxelize_from_point
+    from ultrashape.rembg import BackgroundRemover
+    import trimesh
+    
+    # 设置随机种子
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    
+    # 应用质量预设
+    if preset in QUALITY_PRESETS:
+        preset_config = QUALITY_PRESETS[preset]
+        logging.info(f"📊 使用质量预设: {preset} - {preset_config['description']}")
+        
+        steps = steps or preset_config["steps"]
+        num_latents = num_latents or preset_config["num_latents"]
+        octree_res = octree_res or preset_config["octree_res"]
+        chunk_size = chunk_size or preset_config["chunk_size"]
+    else:
+        logging.warning(f"未知预设 '{preset}'，使用默认值")
+        steps = steps or 30
+        num_latents = num_latents or 16384
+        octree_res = octree_res or 768
+        chunk_size = chunk_size or 4000
+    
+    # 设备配置
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logging.info(f"🖥️  设备: {device}")
+    
+    # 确保路径存在
+    mesh_path = Path(mesh_path)
+    image_path = Path(image_path)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    if not mesh_path.exists():
+        raise FileNotFoundError(f"网格文件不存在: {mesh_path}")
+    if not image_path.exists():
+        raise FileNotFoundError(f"图像文件不存在: {image_path}")
+    
+    # 加载配置路径
+    config_path = ULTRASHAPE_ROOT / config_path
+    ckpt_path = ULTRASHAPE_ROOT / ckpt_path
+    
+    if not config_path.exists():
+        logging.error(f"配置文件不存在: {config_path}")
+        return None
+    
+    # 加载流水线
+    pipeline, config = load_ultrashape_pipeline(
+        config_path=str(config_path),
+        ckpt_path=str(ckpt_path),
+        device=device,
+        low_vram=low_vram
+    )
+    
+    # 获取体素分辨率
+    voxel_res = config.model.params.vae_config.params.voxel_query_res
+    logging.info(f"📐 体素分辨率: {voxel_res}")
+    
+    # 加载表面点云
+    surface_pcd = load_surface_from_mesh(mesh_path, normalize_scale=scale)
+    
+    # 体素化条件
+    logging.info(f"🧊 生成体素条件 (Token 数: {num_latents})...")
+    voxel_cond = voxelize_from_point(
+        surface_pcd,
+        voxel_resolution=voxel_res,
+        num_latents=num_latents
+    )
+    logging.info(f"  ✓ 体素条件: {voxel_cond.shape}")
+    
+    # 加载图像
+    logging.info(f"🖼️  加载图像: {image_path}")
+    image = Image.open(image_path)
+    
+    # 移除背景（如果需要）
+    if remove_bg or image.mode != 'RGBA':
+        logging.info("  - 移除背景...")
+        rembg = BackgroundRemover()
+        image = rembg(image)
+    
+    # 运行细化
+    logging.info("\n" + "="*60)
+    logging.info("🚀 开始 UltraShape 细化...")
+    logging.info(f"  - 推理步数: {steps}")
+    logging.info(f"  - 引导强度: {guidance_scale}")
+    logging.info(f"  - 八叉树分辨率: {octree_res}")
+    logging.info(f"  - 块大小: {chunk_size}")
+    logging.info("="*60 + "\n")
+    
+    try:
+        outputs = pipeline(
+            image=image,
+            voxel_cond=voxel_cond,
+            num_inference_steps=steps,
+            guidance_scale=guidance_scale,
+            octree_resolution=octree_res,
+            num_chunks=chunk_size,
+            output_type="trimesh",
+            enable_pbar=True
+        )
+        
+        # 保存结果
+        output_name = mesh_path.stem + "_refined"
+        output_path = output_dir / f"{output_name}.glb"
+        
+        logging.info(f"\n💾 保存细化网格: {output_path}")
+        outputs[0].export(str(output_path))
+        
+        # 也保存为 OBJ 格式（兼容性）
+        obj_path = output_dir / f"{output_name}.obj"
+        outputs[0].export(str(obj_path))
+        logging.info(f"  - OBJ 格式: {obj_path}")
+        
+        # 输出统计信息
+        mesh = outputs[0]
+        logging.info("\n" + "="*60)
+        logging.info("✅ 细化完成！")
+        logging.info(f"  - 顶点数: {len(mesh.vertices):,}")
+        logging.info(f"  - 面数: {len(mesh.faces):,}")
+        logging.info(f"  - 输出路径: {output_path}")
+        logging.info("="*60 + "\n")
+        
+        # 清理显存
+        gc.collect()
+        torch.cuda.empty_cache()
+        
+        return str(output_path)
+        
+    except Exception as e:
+        logging.error(f"✗ 细化失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="UltraShape 通用细化模块 - 支持所有 3D 重建模型",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+使用示例:
+  # 细化 InstantMesh 输出
+  python run_ultrashape.py --image test.png --mesh outputs/instantmesh/latest.obj
+  
+  # 细化 TRELLIS.2 输出（高质量）
+  python run_ultrashape.py --image test.png --mesh outputs/trellis2/mesh.glb --preset high
+  
+  # 细化 Hunyuan3D 输出（快速预览）
+  python run_ultrashape.py --image test.png --mesh outputs/hunyuan3d/mesh.glb --preset fast --low-vram
+  
+  # 自定义参数
+  python run_ultrashape.py --image test.png --mesh mesh.glb --steps 100 --octree-res 2048
+        """
+    )
+    
+    # 必需参数
+    parser.add_argument("--image", required=True, help="参考图像路径")
+    parser.add_argument("--mesh", required=True, help="输入网格路径（.glb/.obj）")
+    
+    # 输出配置
+    parser.add_argument("--output", default="outputs/ultrashape", help="输出目录")
+    parser.add_argument("--ckpt", default="checkpoints/ultrashape_v1.pt", help="模型权重路径")
+    parser.add_argument("--config", default="configs/infer_dit_refine.yaml", help="配置文件路径")
+    
+    # 质量预设
+    parser.add_argument(
+        "--preset",
+        choices=["fast", "balanced", "high", "ultra"],
+        default="balanced",
+        help="质量预设 (fast: 8GB/30s, balanced: 16GB/2min, high: 24GB/5min, ultra: 32GB/10min)"
+    )
+    
+    # 高级参数（覆盖预设）
+    parser.add_argument("--steps", type=int, help="推理步数（覆盖预设）")
+    parser.add_argument("--num-latents", type=int, help="潜在 token 数量（覆盖预设）")
+    parser.add_argument("--octree-res", type=int, help="Marching Cubes 分辨率（覆盖预设）")
+    parser.add_argument("--chunk-size", type=int, help="批处理块大小（覆盖预设）")
+    parser.add_argument("--guidance-scale", type=float, default=5.0, help="CFG 引导强度")
+    parser.add_argument("--scale", type=float, default=0.99, help="网格归一化比例")
+    parser.add_argument("--seed", type=int, default=42, help="随机种子")
+    
+    # 优化选项
+    parser.add_argument("--low-vram", action="store_true", help="启用低显存模式（CPU offloading）")
+    parser.add_argument("--remove-bg", action="store_true", help="自动移除图像背景")
+    
+    args = parser.parse_args()
+    
+    # 显示预设信息
+    if args.preset:
+        preset_info = QUALITY_PRESETS.get(args.preset, {})
+        print(f"\n{'='*60}")
+        print(f"🎯 质量预设: {args.preset.upper()}")
+        print(f"   {preset_info.get('description', 'N/A')}")
+        print(f"{'='*60}\n")
+    
+    # 执行细化
+    result = refine_mesh(
+        image_path=args.image,
+        mesh_path=args.mesh,
+        output_dir=args.output,
+        ckpt_path=args.ckpt,
+        config_path=args.config,
+        preset=args.preset,
+        steps=args.steps,
+        num_latents=args.num_latents,
+        octree_res=args.octree_res,
+        chunk_size=args.chunk_size,
+        guidance_scale=args.guidance_scale,
+        scale=args.scale,
+        seed=args.seed,
+        low_vram=args.low_vram,
+        remove_bg=args.remove_bg
+    )
+    
+    if result:
+        print(f"\n🎉 细化成功！输出: {result}")
+        return 0
+    else:
+        print("\n❌ 细化失败")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -138,6 +138,34 @@ services:
               count: all
               capabilities: [gpu]
 
+  # UltraShape Service (Universal Geometry Refiner)
+  # 可细化任何模型的输出：InstantMesh、TripoSR、TRELLIS.2、Hunyuan3D 等
+  ultrashape:
+    build:
+      context: .
+      dockerfile: Dockerfile.ultrashape
+    image: cortex3d-ultrashape:latest
+    container_name: cortex3d-ultrashape
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+      - ./models/ultrashape:/workspace/checkpoints:ro
+      - hf-cache:/root/.cache/huggingface
+    shm_size: "16gb"
+    stdin_open: true
+    tty: true
+    ports:
+      - "7863:7860"
+    environment:
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
 volumes:
   hf-cache:
 

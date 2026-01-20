@@ -141,6 +141,99 @@ stage4-trellis2:
 check:
 	docker compose exec $(SVC) python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ OK:', torch.cuda.get_device_name(0))"
 
+# === UltraShape Targets (Universal Geometry Refiner) ===
+# UltraShape 可以细化任何模型的输出，提升几何质量
+
+.PHONY: build-ultrashape
+build-ultrashape:
+	@echo "🔨 构建 UltraShape 容器..."
+	docker compose build ultrashape
+
+# 启动 UltraShape Gradio UI（交互式细化）
+.PHONY: run-ultrashape-ui
+run-ultrashape-ui:
+	@echo "🎨 启动 UltraShape Gradio UI..."
+	@echo "   访问 http://localhost:7863"
+	docker compose up ultrashape
+
+# 细化任意网格（通用命令）
+# 用法: make refine-mesh IMAGE=test.png MESH=outputs/xxx/mesh.glb PRESET=balanced
+.PHONY: refine-mesh
+refine-mesh:
+	@echo "✨ UltraShape 细化网格..."
+	docker compose exec ultrashape python3 /workspace/scripts/run_ultrashape.py \
+		--image /workspace/test_images/$(IMAGE) \
+		--mesh /workspace/$(MESH) \
+		--output /workspace/outputs/ultrashape \
+		--preset $(or $(PRESET),balanced)
+
+# 快速细化（低显存，30秒）
+.PHONY: refine-fast
+refine-fast:
+	@echo "⚡ 快速细化模式..."
+	docker compose exec ultrashape python3 /workspace/scripts/run_ultrashape.py \
+		--image /workspace/test_images/$(IMAGE) \
+		--mesh /workspace/$(MESH) \
+		--output /workspace/outputs/ultrashape \
+		--preset fast \
+		--low-vram
+
+# 高质量细化（5分钟）
+.PHONY: refine-high
+refine-high:
+	@echo "🎯 高质量细化模式..."
+	docker compose exec ultrashape python3 /workspace/scripts/run_ultrashape.py \
+		--image /workspace/test_images/$(IMAGE) \
+		--mesh /workspace/$(MESH) \
+		--output /workspace/outputs/ultrashape \
+		--preset high
+
+# === 集成流水线：模型生成 + UltraShape 细化 ===
+
+# InstantMesh → UltraShape
+.PHONY: pipeline-instantmesh-refined
+pipeline-instantmesh-refined:
+	@echo "🔄 InstantMesh + UltraShape 完整流水线..."
+	$(MAKE) reconstruct IMAGE=$(IMAGE)
+	$(MAKE) refine-mesh IMAGE=$(IMAGE) MESH=outputs/latest.obj PRESET=balanced
+
+# TRELLIS.2 → UltraShape
+.PHONY: pipeline-trellis2-refined
+pipeline-trellis2-refined:
+	@echo "🔄 TRELLIS.2 + UltraShape 完整流水线..."
+	$(MAKE) reconstruct-trellis2 IMAGE=$(IMAGE)
+	@TRELLIS_MESH=$$(find outputs/trellis2 -name "*.glb" | head -1); \
+	$(MAKE) refine-mesh IMAGE=$(IMAGE) MESH=$$TRELLIS_MESH PRESET=balanced
+
+# Hunyuan3D-Omni → UltraShape
+.PHONY: pipeline-hunyuan-refined
+pipeline-hunyuan-refined:
+	@echo "🔄 Hunyuan3D-Omni + UltraShape 完整流水线..."
+	$(MAKE) reconstruct-hunyuan3d-omni IMAGE=$(IMAGE)
+	@HUNYUAN_MESH=$$(find outputs/hunyuan3d_omni -name "*.glb" | head -1); \
+	$(MAKE) refine-mesh IMAGE=$(IMAGE) MESH=$$HUNYUAN_MESH PRESET=balanced
+
+# TripoSR → UltraShape
+.PHONY: pipeline-triposr-refined
+pipeline-triposr-refined:
+	@echo "🔄 TripoSR + UltraShape 完整流水线..."
+	$(MAKE) test-triposr IMAGE=$(IMAGE)
+	@TRIPOSR_MESH=$$(find outputs/triposr -name "*.obj" -o -name "*.glb" | head -1); \
+	$(MAKE) refine-mesh IMAGE=$(IMAGE) MESH=$$TRIPOSR_MESH PRESET=balanced
+
+# 批量细化已有模型输出
+.PHONY: refine-existing
+refine-existing:
+	@echo "🎯 细化指定目录下的网格..."
+	@for mesh in outputs/$(DIR)/*.glb outputs/$(DIR)/*.obj; do \
+		if [ -f "$$mesh" ]; then \
+			echo "细化: $$mesh"; \
+			$(MAKE) refine-mesh IMAGE=$(IMAGE) MESH=$$mesh PRESET=$(or $(PRESET),fast); \
+		fi; \
+	done
+
+# === Docker 清理命令 ===
+
 # 临时修复缺少 GL 库的问题 (避免重建镜像)
 # 增加 xvfb 用于模拟 X11 环境
 fix-gl:
