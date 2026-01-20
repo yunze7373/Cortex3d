@@ -135,9 +135,9 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
     conditioner.load_state_dict(weights['conditioner'], strict=True)
     
     # 移动到设备
-    vae.eval().to(device)
-    dit.eval().to(device)
-    conditioner.eval().to(device)
+    vae.eval().to(device).float()
+    dit.eval().to(device).float()
+    conditioner.eval().to(device).float()
     
     # 启用 FlashVDM 加速（如果可用）
     if hasattr(vae, 'enable_flashvdm_decoder'):
