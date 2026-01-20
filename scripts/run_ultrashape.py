@@ -70,14 +70,14 @@ QUALITY_PRESETS = {
         "max_memory_gb": 8
     },
     "balanced": {
-        "steps": 30,
-        "num_latents": 12288,
-        "octree_res": 640,
-        "chunk_size": 2048,
-        "num_surface_points": 204800,
-        "description": "标准质量（~2分钟，峰值14GB VRAM，适合16GB显卡）",
+        "steps": 25,
+        "num_latents": 10240,
+        "octree_res": 512,
+        "chunk_size": 1536,
+        "num_surface_points": 163840,
+        "description": "标准质量（~2分钟，峰值12GB VRAM，适合16GB显卡）",
         "low_vram": True,
-        "max_memory_gb": 14  # 严格峰值控制
+        "max_memory_gb": 12
     },
     "high": {
         "steps": 50,
@@ -430,8 +430,8 @@ def refine_mesh(
         torch.cuda.set_per_process_memory_fraction(max_memory_gb / 16.0)  # 假设16GB显卡
         logging.info(f"  🔒 严格限制显存: {max_memory_gb}GB (峰值保护)")
         
-        # 设置 PyTorch 缓存分配器为保守模式
-        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
+        # 设置 PyTorch 缓存分配器：避免碎片化 + 保守模式
+        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,max_split_size_mb:128'
     
     # 确保路径存在
     mesh_path = Path(mesh_path)
