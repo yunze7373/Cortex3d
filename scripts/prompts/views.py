@@ -34,37 +34,37 @@ ALL_VIEWS: Dict[str, ViewConfig] = {
         name="right", 
         angle=90, 
         display_name="RIGHT",
-        description="Platform at 90° - We see the RIGHT ear, RIGHT shoulder, RIGHT hip (profile view)"
+        description="Platform at 90° - Profile view facing LEFT, we see the RIGHT side of body, RIGHT ear, RIGHT arm"
     ),
     "back_right": ViewConfig(
         name="back_right", 
         angle=135, 
         display_name="BACK-RIGHT",
-        description="Platform at 135° - We see BACK-RIGHT angle, back of right ear, right shoulder blade"
+        description="Platform at 135° - Back-3/4 view, facing AWAY-LEFT, we see the back of right side"
     ),
     "back": ViewConfig(
         name="back", 
         angle=180, 
         display_name="BACK",
-        description="Platform at 180° - We see back of HEAD, spine, buttocks, NO face visible"
+        description="Platform at 180° - Strictly from behind, we see back of HEAD, spine, buttocks"
     ),
     "back_left": ViewConfig(
         name="back_left", 
         angle=225, 
         display_name="BACK-LEFT",
-        description="Platform at 225° - We see BACK-LEFT angle, back of left ear, left shoulder blade"
+        description="Platform at 225° - Back-3/4 view, facing AWAY-RIGHT, we see the back of left side"
     ),
     "left": ViewConfig(
         name="left", 
         angle=270, 
         display_name="LEFT",
-        description="Platform at 270° - We see the LEFT ear, LEFT shoulder, LEFT hip (profile view)"
+        description="Platform at 270° - Profile view facing RIGHT, we see the LEFT side of body, LEFT ear, LEFT arm"
     ),
     "front_left": ViewConfig(
         name="front_left", 
         angle=315, 
         display_name="FRONT-LEFT",
-        description="Platform at 315° - We see FRONT-LEFT angle, left cheek visible, left shoulder prominent"
+        description="Platform at 315° - Front-3/4 view, facing RIGHT, we see the left side of face and body"
     ),
     "top": ViewConfig(
         name="top", 
