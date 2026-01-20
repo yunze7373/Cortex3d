@@ -288,6 +288,47 @@ def detect_grid_layout(image) -> tuple:
     # 边缘检测
     edges = cv2.Canny(gray, 50, 150)
     
+    # =========================================================
+    # 快速检测: 2x2 田字格（十字分割线）
+    # =========================================================
+    # 如果宽高比接近 1:1 且中心有明显的十字交叉线，直接判定为 2x2
+    if 0.8 <= aspect_ratio <= 1.25:
+        mid_x = width // 2
+        mid_y = height // 2
+        
+        # 检测垂直中心线
+        v_strip = gray[:, mid_x-15:mid_x+15]  # 中心垂直条带
+        v_std = np.std(v_strip)  # 条带内标准差
+        v_edge_count = np.sum(edges[:, mid_x-15:mid_x+15] > 0)
+        
+        # 检测水平中心线
+        h_strip = gray[mid_y-15:mid_y+15, :]  # 中心水平条带
+        h_std = np.std(h_strip)  # 条带内标准差
+        h_edge_count = np.sum(edges[mid_y-15:mid_y+15, :] > 0)
+        
+        # 比较中心线与整体
+        overall_std = np.std(gray)
+        
+        # 十字线特征: 中心条带标准差低于整体（较均匀）
+        v_is_divider = v_std < overall_std * 0.7
+        h_is_divider = h_std < overall_std * 0.7
+        
+        print(f"[2x2检测] AR={aspect_ratio:.2f}, 垂直中心std={v_std:.1f}, 水平中心std={h_std:.1f}, 整体std={overall_std:.1f}")
+        
+        if v_is_divider and h_is_divider:
+            print("[2x2检测] 检测到明显的十字分割线，判定为 2x2 田字格")
+            num_rows = 2
+            num_cols = 2
+            vertical_gaps = [mid_x]
+            horizontal_gaps = [mid_y]
+            total_views = num_rows * num_cols
+            
+            print(f"[网格检测] 检测到 {len(vertical_gaps)} 个垂直间隙: {vertical_gaps}")
+            print(f"[网格检测] 检测到 {len(horizontal_gaps)} 个水平间隙: {horizontal_gaps}")
+            print(f"[网格检测] 布局: {num_rows}x{num_cols} ({total_views} 个视图)")
+            
+            return (num_rows, num_cols, vertical_gaps, horizontal_gaps)
+    
     def calculate_gap_score_at_position(pos, profile, edges_profile, window=20):
         """计算指定位置的间隙得分"""
         start = max(0, pos - window // 2)
