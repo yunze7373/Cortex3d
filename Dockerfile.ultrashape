@@ -52,6 +52,10 @@ RUN pip3 install psutil ninja packaging
 RUN pip3 install --no-build-isolation -r requirements.txt && \
     echo "✓ UltraShape 依赖安装完成"
 
+# 安装 Gradio UI 依赖（官方仓库未包含）
+RUN pip3 install gradio && \
+    echo "✓ Gradio UI 安装完成"
+
 # 安装 cubvh (Marching Cubes 加速)
 RUN pip3 install git+https://github.com/ashawkey/cubvh --no-build-isolation && \
     echo "✓ cubvh 安装完成"
