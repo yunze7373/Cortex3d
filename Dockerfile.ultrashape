@@ -123,4 +123,6 @@ exec "$@"\n\
 # 默认命令:启动 Gradio UI(官方自带界面)
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python3", "/opt/ultrashape/scripts/gradio_app.py", \
-     "--ckpt", "/workspace/checkpoints/ultrashape_v1.pt"]
+     "--ckpt", "/workspace/checkpoints/ultrashape_v1.pt", \
+     "--server_name", "0.0.0.0", \
+     "--server_port", "7860"]
