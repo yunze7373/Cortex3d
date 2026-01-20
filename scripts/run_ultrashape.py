@@ -335,16 +335,18 @@ def refine_mesh(
     logging.info("="*60 + "\n")
     
     try:
-        outputs = pipeline(
-            image=image,
-            voxel_cond=voxel_cond,
-            num_inference_steps=steps,
-            guidance_scale=guidance_scale,
-            octree_resolution=octree_res,
-            num_chunks=chunk_size,
-            output_type="trimesh",
-            enable_pbar=True
-        )
+        # 强制禁用 AMP，确保全程 float32
+        with torch.cuda.amp.autocast(enabled=False):
+            outputs = pipeline(
+                image=image,
+                voxel_cond=voxel_cond,
+                num_inference_steps=steps,
+                guidance_scale=guidance_scale,
+                octree_resolution=octree_res,
+                num_chunks=chunk_size,
+                output_type="trimesh",
+                enable_pbar=True
+            )
         
         # 保存结果
         output_name = mesh_path.stem + "_refined"
