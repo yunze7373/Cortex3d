@@ -539,18 +539,22 @@ def split_universal_grid(image, rows: int, cols: int, v_gaps: list, h_gaps: list
     _ensure_imports()
     height, width = image.shape[:2]
     
+    print(f"[DEBUG_SPLIT] split_universal_grid called with rows={rows}, cols={cols}")
+    print(f"[DEBUG_SPLIT] v_gaps len={len(v_gaps)}, h_gaps len={len(h_gaps)}")
+
     # 校验并修复间隙列表
-    # 如果传入的间隙数量与行列数不匹配（通常发生在强制修正布局时），则重新计算均匀分布的间隙
-    
     # 垂直间隙应为 cols - 1 个
     if len(v_gaps) != cols - 1:
-        print(f"[布局修正] 垂直间隙数量 ({len(v_gaps)}) 与列数 ({cols}) 不匹配，使用均匀分割")
+        print(f"[布局修正] 垂直间隙数量 ({len(v_gaps)}) 与列数 ({cols}) 不匹配，强制重算")
         v_gaps = [int(width * i / cols) for i in range(1, cols)]
         
     # 水平间隙应为 rows - 1 个
     if len(h_gaps) != rows - 1:
-        print(f"[布局修正] 水平间隙数量 ({len(h_gaps)}) 与行数 ({rows}) 不匹配，使用均匀分割")
+        print(f"[布局修正] 水平间隙数量 ({len(h_gaps)}) 与行数 ({rows}) 不匹配，强制重算")
         h_gaps = [int(height * i / rows) for i in range(1, rows)]
+    
+    print(f"[DEBUG_SPLIT] Fixed v_gaps: {v_gaps}")
+    print(f"[DEBUG_SPLIT] Fixed h_gaps: {h_gaps}")
     
     # 确定分割点
     x_splits = [0] + v_gaps + [width]
