@@ -351,60 +351,43 @@ def detect_grid_layout(image) -> tuple:
             
             return (num_rows, num_cols, vertical_gaps, horizontal_gaps)
     
-    def calculate_gap_score_at_position(pos, profile, edges_profile, window=20):
-        """计算指定位置的间隙得分"""
-        start = max(0, pos - window // 2)
-        end = min(len(profile), pos + window // 2)
+    def detect_subject_count(img_gray, img_edges):
+        """
+        通过形态学操作估算主体数量
+        """
+        # 1. 二值化 (假设背景较亮或较均匀)
+        # 使用自适应阈值处理光照不均
+        binary = cv2.adaptiveThreshold(
+            img_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+            cv2.THRESH_BINARY_INV, 21, 5
+        )
         
-        if end <= start:
-            return 0
+        # 2. 结合边缘信息
+        # 边缘也是主体的重要特征
+        combined = cv2.bitwise_or(binary, img_edges)
         
-        # 低标准差 + 低边缘密度 = 可能是间隙
-        local_std = np.std(profile[start:end])
-        local_edge = np.mean(edges_profile[start:end])
+        # 3. 形态学膨胀，将同一主体的不同部分（头、躯干、腿）连接起来
+        # 需要较强的膨胀，因为身体部件可能断开
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
+        dilated = cv2.dilate(combined, kernel, iterations=3)
         
-        # 间隙得分（越高越可能是间隙）
-        score = 1.0 / (1.0 + local_std / 50.0) * 1.0 / (1.0 + local_edge / 20.0)
-        return score
-    
-    def find_gaps_for_n_columns(n_cols, img_width, col_profile, col_edges):
-        """尝试将图像分成 n 列，返回间隙位置和总得分"""
-        if n_cols <= 1:
-            return [], 0
+        # 4. 查找轮廓
+        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        cell_width = img_width / n_cols
-        gaps = []
-        total_score = 0
+        # 5. 过滤小噪声
+        min_area = (img_gray.shape[0] * img_gray.shape[1]) * 0.005  # 0.5% 图像面积
+        valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_area]
         
-        for i in range(1, n_cols):
-            expected_pos = int(i * cell_width)
-            # 在预期位置附近搜索最佳间隙
-            search_range = int(cell_width * 0.2)  # ±20%
-            best_pos = expected_pos
-            best_score = 0
-            
-            for offset in range(-search_range, search_range + 1, 5):
-                test_pos = expected_pos + offset
-                if 0 < test_pos < img_width:
-                    score = calculate_gap_score_at_position(test_pos, col_profile, col_edges)
-                    if score > best_score:
-                        best_score = score
-                        best_pos = test_pos
-            
-            gaps.append(best_pos)
-            total_score += best_score
-        
-        avg_score = total_score / len(gaps) if gaps else 0
-        return gaps, avg_score
-    
+        count = len(valid_contours)
+        print(f"[主体检测] 估算主体数量: {count} (过滤后)")
+        return count
+
     # =========================================================
     # 根据宽高比估算列数
     # =========================================================
-    # 假设每个视图大约是正方形或略竖长（全身人物）
-    # 典型情况：
-    # - 1x4 横排：AR ≈ 4:3 到 5:3 (1.33 - 1.67)
-    # - 2x2 田字格：AR ≈ 1:1
-    # - 2x4 网格：AR ≈ 4:3 (1.33)
+    
+    # 估算主体数量作为强力参考
+    estimated_subjects = detect_subject_count(gray, edges)
     
     col_profile = np.std(gray, axis=0)
     col_edges = np.mean(edges, axis=0)
@@ -432,22 +415,48 @@ def detect_grid_layout(image) -> tuple:
         print(f"[列检测] {n_cols}列: 得分={score:.4f}, 单元AR(1行)={cell_ar_1row:.2f}, 单元AR(2行)={cell_ar_2row:.2f}")
     
     # 选择最佳配置
-    # 优先选择单元格接近正方形或竖长的配置
     best_candidate = None
     best_combined_score = 0
     
     for c in candidates:
         # 计算综合得分：间隙得分 + 单元格形状奖励
-        # 理想单元格AR在 0.5-1.2 之间（略竖长到略横长）
-        ar_score_1row = 1.0 if 0.5 <= c['cell_ar_1row'] <= 1.2 else 0.5
-        ar_score_2row = 1.0 if 0.5 <= c['cell_ar_2row'] <= 1.2 else 0.5
+        # 理想单元格AR在 0.2-0.8 之间（竖长）- 注意：之前是0.5-1.2，但对于多行(2x4)，AR可能是在 0.37 (1x4) vs 0.75 (2x4)
+        
+        ar_score_1row = 1.0 if 0.2 <= c['cell_ar_1row'] <= 0.8 else 0.5
+        ar_score_2row = 1.0 if 0.2 <= c['cell_ar_2row'] <= 0.8 else 0.5
         
         # 4列通常是首选（标准多视图）
         preference_bonus = 1.2 if c['cols'] == 4 else 1.0
         
-        combined_1row = c['score'] * ar_score_1row * preference_bonus
-        combined_2row = c['score'] * ar_score_2row * preference_bonus
-        combined = max(combined_1row, combined_2row)
+        # 主体数量匹配奖励 (关键修正!)
+        # 如果检测到的主体数量与配置的总视图数接近，给予巨大奖励
+        # 1行配置的总视图数 = cols
+        subj_score_1row = 3.0 if abs(estimated_subjects - c['cols']) <= 1 else 1.0
+        # 2行配置的总视图数 = cols * 2
+        subj_score_2row = 3.0 if abs(estimated_subjects - c['cols'] * 2) <= 1 else 1.0
+        
+        combined_1row = c['score'] * ar_score_1row * preference_bonus * subj_score_1row
+        combined_2row = c['score'] * ar_score_2row * preference_bonus * subj_score_2row
+        
+        # 记录每种行数配置的得分
+        c['score_1row'] = combined_1row
+        c['score_2row'] = combined_2row
+        
+        current_best = max(combined_1row, combined_2row)
+        
+        if current_best > best_combined_score:
+            best_combined_score = current_best
+            best_candidate = c
+            best_candidate['chosen_rows'] = 1 if combined_1row >= combined_2row else 2
+            
+    # 如果主体检测明确指示了数量（如8个），即使得分不是最高，也要考虑强制覆盖
+    # (上面的 subj_score 奖励已经很大了，通常足够覆盖)
+            
+    if best_candidate:
+        num_cols = best_candidate['cols']
+        vertical_gaps = best_candidate['gaps']
+        
+        print(f"[列检测] 选择 {num_cols} 列配置 (检测到主体数: {estimated_subjects})")
         
         if combined > best_combined_score:
             best_combined_score = combined
