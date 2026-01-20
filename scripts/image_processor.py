@@ -458,21 +458,22 @@ def detect_grid_layout(image) -> tuple:
     print(f"[行检测] 单元AR(1行)={cell_ar_1row:.2f}, 单元AR(2行)={cell_ar_2row:.2f}")
     
     # 判断条件：
-    # 必须满足：中间位置得分高于平均值（说明中间有间隙）
-    # 辅助条件：AR 不合理可以降低阈值
+    # 必须满足：中间位置得分明显高于平均值（说明中间有间隙）
+    # 辅助条件：AR 不合理可以降低阈值，但在 1x4 全身特定情况下 AR 本来就很小，所以要小心
     
-    has_mid_gap = mid_score > avg_row_score  # 基本条件：中间得分高于平均
+    # 提高基准阈值：从 1.0 提高到 1.10，避免噪音误判
+    has_mid_gap = mid_score > avg_row_score * 1.10
     ar_suggests_2rows = cell_ar_1row < 0.45  # AR 暗示可能需要2行
     
     needs_2rows = False
     reason = ""
     
-    if mid_score > avg_row_score * 1.3:
-        # 中间有明显间隙
+    if mid_score > avg_row_score * 1.35:
+        # 中间有非常明显间隙 (提高到 1.35)
         needs_2rows = True
         reason = f"中间有明显间隙(得分比={mid_score/avg_row_score:.2f})"
     elif has_mid_gap and ar_suggests_2rows:
-        # 中间有轻微间隙 + AR 确认需要2行
+        # 中间有一定间隙 + AR 确认需要2行
         needs_2rows = True
         reason = f"中间有间隙(得分比={mid_score/avg_row_score:.2f}) + AR暗示({cell_ar_1row:.2f}<0.45)"
     
