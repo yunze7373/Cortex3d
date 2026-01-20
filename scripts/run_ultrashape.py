@@ -138,7 +138,20 @@ def apply_dtype_fix():
         
         F.scaled_dot_product_attention = patched_sdpa
         
-        # 2. 修复所有线性层
+        # 2. 修复 F.linear 函数（MoE 层使用）
+        original_f_linear = F.linear
+        
+        def patched_f_linear(input, weight, bias=None):
+            """强制 F.linear 输入权重都为 float32"""
+            input = input.float()
+            weight = weight.float()
+            if bias is not None:
+                bias = bias.float()
+            return original_f_linear(input, weight, bias)
+        
+        F.linear = patched_f_linear
+        
+        # 3. 修复所有 nn.Linear 模块
         original_linear_forward = nn.Linear.forward
         
         def patched_linear_forward(self, input):
@@ -152,7 +165,7 @@ def apply_dtype_fix():
         
         nn.Linear.forward = patched_linear_forward
         
-        # 3. 修复 LayerNorm 层
+        # 4. 修复 LayerNorm 层
         original_layernorm_forward = nn.LayerNorm.forward
         
         def patched_layernorm_forward(self, input):
@@ -166,7 +179,7 @@ def apply_dtype_fix():
         
         nn.LayerNorm.forward = patched_layernorm_forward
         
-        logging.info("✓ UltraShape dtype 修复补丁已应用 (SDPA + Linear + LayerNorm)")
+        logging.info("✓ UltraShape dtype 修复补丁已应用 (SDPA + F.linear + nn.Linear + LayerNorm)")
         
     except Exception as e:
         logging.warning(f"⚠ dtype 补丁应用失败: {e}")
