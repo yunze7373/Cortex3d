@@ -53,24 +53,24 @@ else:
 # 质量预设配置
 QUALITY_PRESETS = {
     "lowmem": {
-        "steps": 20,
+        "steps": 15,
+        "num_latents": 3072,
+        "octree_res": 320,
+        "chunk_size": 768,
+        "num_surface_points": 81920,
+        "description": "低内存模式（~1分钟，峰值5GB VRAM，适合16GB显卡）",
+        "low_vram": True,
+        "max_memory_gb": 5
+    },
+    "fast": {
+        "steps": 10,
         "num_latents": 4096,
         "octree_res": 384,
         "chunk_size": 1024,
         "num_surface_points": 102400,
-        "description": "低内存模式（~1分钟，6GB VRAM）",
+        "description": "快速预览（~30秒，峰值6GB VRAM）",
         "low_vram": True,
         "max_memory_gb": 6
-    },
-    "fast": {
-        "steps": 12,
-        "num_latents": 8192,
-        "octree_res": 512,
-        "chunk_size": 2048,
-        "num_surface_points": 204800,
-        "description": "快速预览（~30秒，8GB VRAM）",
-        "low_vram": True,
-        "max_memory_gb": 8
     },
     "balanced": {
         "steps": 20,
