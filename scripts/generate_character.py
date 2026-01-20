@@ -139,7 +139,20 @@ def main():
     parser.add_argument(
         "--style",
         default=None,
-        help="Style description (e.g. 'cyberpunk', 'fantasy', 'anime'). Default: auto-match or 'cinematic character'"
+        help="Style description. Default: 'cinematic character'. Presets: see --photorealistic, --anime"
+    )
+    
+    parser.add_argument(
+        "--photorealistic", "--real",
+        dest="photorealistic",
+        action="store_true",
+        help="Preset: Generate photorealistic images (8k, raw photo, realistic texture)"
+    )
+    
+    parser.add_argument(
+        "--anime",
+        action="store_true",
+        help="Preset: Generate anime style images"
     )
     
     parser.add_argument(
@@ -331,6 +344,17 @@ def main():
 
     # 确定风格
     style = args.style
+    
+    # 优先处理 Preset 参数
+    if args.photorealistic:
+        preset = "Photorealistic, 8k, raw photo, realistic texture, hyperrealistic photography, highly detailed skin texture, cinematic lighting"
+        style = f"{preset}, {style}" if style else preset
+        print(f"[预设风格] Photorealistic ({style})")
+    elif args.anime:
+        preset = "Anime style, cell shaded, vibrant colors, 2D art style, studio ghibli style"
+        style = f"{preset}, {style}" if style else preset
+        print(f"[预设风格] Anime ({style})")
+    
     if not style:
         # 简单的关键词风格匹配
         desc_lower = description.lower()
