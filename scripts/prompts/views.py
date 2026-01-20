@@ -28,7 +28,7 @@ ALL_VIEWS: Dict[str, ViewConfig] = {
         name="front_right", 
         angle=45, 
         display_name="FRONT-RIGHT",
-        description="Platform at 45° - We see FRONT-RIGHT angle, right cheek visible, right shoulder prominent"
+        description="Platform at 45° - Front-3/4 view, facing LEFT, we see the right side of face and body"
     ),
     "right": ViewConfig(
         name="right", 
