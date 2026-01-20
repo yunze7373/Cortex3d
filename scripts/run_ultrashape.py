@@ -312,6 +312,7 @@ def refine_mesh(
         resolution=voxel_res,
         num_latents=num_latents
     )
+    voxel_cond = voxel_cond.to(device)
     logging.info(f"  ✓ 体素条件: {voxel_cond.shape}")
     
     # 加载图像
