@@ -254,6 +254,8 @@ Imagine the character standing on a rotating platform:
 {view_descriptions}
 
 ⚠️ IMPORTANT: Each panel shows a UNIQUE angle. No duplicates!
+⚠️ REFERENCE PHOTO OVERRIDE: The reference photo has a specific camera angle. You MUST IGNORE the reference camera angle and generate the specific angles requested above.
+⚠️ FORCE ROTATION: Do not just copy the reference photo. ROTATE the character to the requested angle.
 
 ### ANATOMICAL CORRECTNESS (CRITICAL!)
 - Arms MUST connect to shoulders only
