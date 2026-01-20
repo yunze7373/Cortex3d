@@ -160,12 +160,13 @@ services:
       - "7863:7860"
     environment:
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      - PYTHONPATH=/opt/ultrashape
     # 覆盖默认命令，启用局域网访问（无需重新 build）
     command: >
-      /entrypoint.sh python3 /opt/ultrashape/scripts/gradio_app.py
+      /entrypoint.sh sh -c "cd /opt/ultrashape && python3 scripts/gradio_app.py
       --ckpt /workspace/checkpoints/ultrashape_v1.pt
       --server_name 0.0.0.0
-      --server_port 7860
+      --server_port 7860"
     deploy:
       resources:
         reservations:
