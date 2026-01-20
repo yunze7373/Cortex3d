@@ -704,8 +704,8 @@ def main():
     # UltraShape refinement
     parser.add_argument("--refine", action="store_true",
                         help="Apply UltraShape geometric refinement after generation (high-fidelity geometry)")
-    parser.add_argument("--refine-preset", choices=["lowmem", "fast", "balanced", "high", "ultra"], default="lowmem",
-                        help="UltraShape quality preset (lowmem: 1min/6GB, fast: 30s/8GB, balanced: 2min/12GB)")
+    parser.add_argument("--refine-preset", choices=["lowmem", "fast", "balanced", "high", "ultra"], default="balanced",
+                        help="UltraShape quality preset (lowmem: 6GB峰值, fast: 8GB峰值, balanced: 14GB峰值适合16GB显卡)")
     parser.add_argument("--refine-low-vram", action="store_true",
                         help="Enable CPU offloading for UltraShape (reduces VRAM usage)")
     # Hunyuan3D-Omni control parameters

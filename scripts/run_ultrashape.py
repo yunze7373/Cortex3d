@@ -53,43 +53,49 @@ QUALITY_PRESETS = {
         "steps": 20,
         "num_latents": 4096,
         "octree_res": 384,
-        "chunk_size": 512,
-        "num_surface_points": 102400,  # 减少采样点
+        "chunk_size": 1024,
+        "num_surface_points": 102400,
         "description": "低内存模式（~1分钟，6GB VRAM）",
-        "low_vram": True
+        "low_vram": True,
+        "max_memory_gb": 6
     },
     "fast": {
         "steps": 12,
         "num_latents": 8192,
         "octree_res": 512,
-        "chunk_size": 1024,
+        "chunk_size": 2048,
         "num_surface_points": 204800,
-        "description": "快速预览（~30秒，8GB VRAM）"
+        "description": "快速预览（~30秒，8GB VRAM）",
+        "low_vram": True,
+        "max_memory_gb": 8
     },
     "balanced": {
-        "steps": 25,
-        "num_latents": 8192,
-        "octree_res": 512,
-        "chunk_size": 1024,
+        "steps": 30,
+        "num_latents": 12288,
+        "octree_res": 640,
+        "chunk_size": 2048,
         "num_surface_points": 204800,
-        "description": "标准质量（~2分钟，10GB VRAM）",
-        "low_vram": True  # 强制启用 CPU offload
+        "description": "标准质量（~2分钟，峰值14GB VRAM，适合16GB显卡）",
+        "low_vram": True,
+        "max_memory_gb": 14  # 严格峰值控制
     },
     "high": {
         "steps": 50,
-        "num_latents": 16384,
-        "octree_res": 768,
-        "chunk_size": 4000,
-        "num_surface_points": 409600,
-        "description": "高质量（~5分钟，20GB VRAM）"
-    },
-    "ultra": {
-        "steps": 100,
         "num_latents": 32768,
         "octree_res": 1024,
         "chunk_size": 8000,
         "num_surface_points": 409600,
-        "description": "超高质量（~10分钟，32GB VRAM）"
+        "description": "高质量（~5分钟，24GB VRAM）",
+        "max_memory_gb": 24
+    },
+    "ultra": {
+        "steps": 100,
+        "num_latents": 32768,
+        "octree_res": 2048,
+        "chunk_size": 10000,
+        "num_surface_points": 409600,
+        "description": "超高质量（~10分钟，32GB VRAM）",
+        "max_memory_gb": 32
     }
 }
 
@@ -399,6 +405,7 @@ def refine_mesh(
         octree_res = octree_res or preset_config["octree_res"]
         chunk_size = chunk_size or preset_config["chunk_size"]
         num_surface_points = preset_config.get("num_surface_points", 409600)
+        max_memory_gb = preset_config.get("max_memory_gb", None)
         
         # 如果预设启用低显存模式，强制开启
         if preset_config.get("low_vram", False):
@@ -411,10 +418,20 @@ def refine_mesh(
         octree_res = octree_res or 768
         chunk_size = chunk_size or 4000
         num_surface_points = 409600
+        max_memory_gb = None
     
     # 设备配置
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"🖥️  设备: {device}")
+    
+    # 设置严格的显存限制
+    if max_memory_gb and torch.cuda.is_available():
+        max_memory_bytes = int(max_memory_gb * 1024 * 1024 * 1024)
+        torch.cuda.set_per_process_memory_fraction(max_memory_gb / 16.0)  # 假设16GB显卡
+        logging.info(f"  🔒 严格限制显存: {max_memory_gb}GB (峰值保护)")
+        
+        # 设置 PyTorch 缓存分配器为保守模式
+        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
     
     # 确保路径存在
     mesh_path = Path(mesh_path)
@@ -503,27 +520,37 @@ def refine_mesh(
     logging.info("="*60 + "\n")
     
     try:
-        # 低显存模式：清理显存
+        # 低显存模式：激进的内存清理
         if low_vram:
             gc.collect()
             torch.cuda.empty_cache()
             logging.info("  🧹 清理显存完成")
             
-            # 设置 PyTorch 内存分配器为更保守的模式
-            torch.cuda.set_per_process_memory_fraction(0.95)
+            # 强制同步，确保清理完成
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
         
-        # 强制禁用 AMP，确保全程 float32
+        # 强制禁用 AMP 和梯度，确保全程 float32 + 无梯度
         with torch.cuda.amp.autocast(enabled=False), torch.no_grad():
             # 确保输入张量也是 float32
             if voxel_cond.dtype != torch.float32:
                 voxel_cond = voxel_cond.float()
             
-            # 低显存模式：现在才移到 GPU
+            # 低显存模式：分批移到 GPU
             if low_vram and voxel_cond.device.type != 'cuda':
+                logging.info("  📦 分批加载到 GPU...")
                 voxel_cond = voxel_cond.to(device)
-                # 立即清理
+                
+                # 立即清理并同步
                 gc.collect()
                 torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                
+                # 打印当前显存使用
+                if torch.cuda.is_available():
+                    allocated = torch.cuda.memory_allocated() / 1024**3
+                    reserved = torch.cuda.memory_reserved() / 1024**3
+                    logging.info(f"  💾 显存: {allocated:.2f}GB 已用, {reserved:.2f}GB 已保留")
             
             outputs = pipeline(
                 image=image,
@@ -603,8 +630,8 @@ def main():
     parser.add_argument(
         "--preset",
         choices=["lowmem", "fast", "balanced", "high", "ultra"],
-        default="lowmem",
-        help="质量预设 (lowmem: 6GB/1min, fast: 8GB/30s, balanced: 12GB/2min, high: 24GB/5min, ultra: 32GB/10min)"
+        default="balanced",
+        help="质量预设 (lowmem: 6GB峰值, fast: 8GB峰值, balanced: 14GB峰值, high: 20GB, ultra: 32GB)"
     )
     
     # 高级参数（覆盖预设）
