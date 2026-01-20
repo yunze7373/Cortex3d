@@ -456,14 +456,18 @@ def main():
         
         # 确定是否使用图片参考模式
         ref_image_path = args.from_image if args.from_image else None
-        use_ref_prompt = bool(args.from_image)  # 如果有参考图片，使用保留动作的提示词
-        use_strict = bool(args.strict and args.from_image)  # 严格模式需要配合 --from-image
         
         # 确定视角模式
         view_mode = f"{args.views}-view"  # "4" -> "4-view"
         custom_views = args.custom_views
         if custom_views:
             view_mode = "custom"
+            
+        # 只有在标准 4 视图且没有自定义视角时，才使用"图片参考专用提示词"
+        # 否则（如 8 视图或自定义），我们使用通用多视角模板来强制生成指定视角
+        use_ref_prompt = bool(args.from_image) and view_mode == "4-view" and not custom_views
+        
+        use_strict = bool(args.strict and args.from_image)  # 严格模式需要配合 --from-image
         
         if use_strict:
             print("[MODE] 严格复制模式 (100% 基于原图)")
