@@ -394,6 +394,9 @@ def run_hunyuan3d_21(image_path, output_dir, quality="balanced", no_texture=Fals
     }
     preset = quality_presets.get(quality, quality_presets["balanced"])
     
+    # Enable multi-view for ultra quality (Hunyuan3D 2.1 supports multi-view via 2mv model)
+    use_multiview = quality == "ultra"
+    
     if in_docker:
         # 容器内直接运行
         script_path = SCRIPT_DIR / "run_hunyuan3d.py"
@@ -410,6 +413,8 @@ def run_hunyuan3d_21(image_path, output_dir, quality="balanced", no_texture=Fals
             "--guidance", str(preset["guidance"]),
             "--steps", str(preset["steps"])
         ]
+        if use_multiview:
+            cmd.append("--multiview")
         if no_texture:
             cmd.append("--no-texture")
         if sharpen:
@@ -430,7 +435,9 @@ def run_hunyuan3d_21(image_path, output_dir, quality="balanced", no_texture=Fals
             "--model", model_type,
             "--octree", str(preset["octree"]),
             "--guidance", str(preset["guidance"]),
-            "--steps", str(preset["steps"])
+           use_multiview:
+            cmd.append("--multiview")
+        if  "--steps", str(preset["steps"])
         ]
         if no_texture:
             cmd.append("--no-texture")

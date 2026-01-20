@@ -237,22 +237,39 @@ def generate_3d(
     np.random.seed(seed)
     
     try:
-        # Generation parameters
-        gen_kwargs = {
-            'image': images,
-            'octree_resolution': octree_resolution,
-            'guidance_scale': guidance_scale,
-            'num_inference_steps': num_inference_steps
-        }
+        # Generation parameters - different for multi-view vs single-view
         print(f"[INFO] Generation params: octree={octree_resolution}, guidance={guidance_scale}, steps={num_inference_steps}")
         
         # Generate shape
         if multiview and isinstance(images, dict):
-            # Multi-view: pass dict of images with view tags
-            print(f"[INFO] Using {len(images)} views for generation: {list(images.keys())}")
+            # Multi-view: Hunyuan3D-2mv expects images as a list in specific order
+            # Required order: [front, right, back, left] or available views
+            view_order = ['front', 'right', 'back', 'left']
+            image_list = []
+            actual_views = []
+            for view in view_order:
+                if view in images:
+                    image_list.append(images[view])
+                    actual_views.append(view)
+            
+            print(f"[INFO] Using {len(image_list)} views for generation: {actual_views}")
+            
+            # Multi-view API expects list of images
+            gen_kwargs = {
+                'image': image_list,  # List of PIL images
+                'octree_resolution': octree_resolution,
+                'guidance_scale': guidance_scale,
+                'num_inference_steps': num_inference_steps
+            }
             mesh = shape_pipeline(**gen_kwargs)[0]
         else:
             # Single-view: pass single image
+            gen_kwargs = {
+                'image': images,  # Single PIL image
+                'octree_resolution': octree_resolution,
+                'guidance_scale': guidance_scale,
+                'num_inference_steps': num_inference_steps
+            }
             mesh = shape_pipeline(**gen_kwargs)[0]
         
         print(f"[INFO] Shape generated!")
