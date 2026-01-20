@@ -307,7 +307,7 @@ def refine_mesh(
     
     # 体素化条件
     logging.info(f"🧊 生成体素条件 (Token 数: {num_latents})...")
-    voxel_cond = voxelize_from_point(
+    voxel_cond, _ = voxelize_from_point(
         surface_pcd[:, :, :3],
         resolution=voxel_res,
         num_latents=num_latents
