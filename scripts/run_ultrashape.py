@@ -24,6 +24,9 @@ import logging
 from pathlib import Path
 import gc
 
+# ⚠️ 关键：必须在导入 torch 之前设置环境变量
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,max_split_size_mb:128'
+
 import torch
 import numpy as np
 from PIL import Image
@@ -434,12 +437,17 @@ def refine_mesh(
     
     # 设置严格的显存限制
     if max_memory_gb and torch.cuda.is_available():
-        max_memory_bytes = int(max_memory_gb * 1024 * 1024 * 1024)
-        torch.cuda.set_per_process_memory_fraction(max_memory_gb / 16.0)  # 假设16GB显卡
-        logging.info(f"  🔒 严格限制显存: {max_memory_gb}GB (峰值保护)")
+        # 获取实际显卡容量
+        total_memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        fraction = max_memory_gb / total_memory_gb
         
-        # 设置 PyTorch 缓存分配器：避免碎片化 + 保守模式
-        os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,max_split_size_mb:128'
+        # 限制不超过1.0
+        if fraction > 1.0:
+            logging.warning(f"  ⚠️  max_memory_gb ({max_memory_gb}GB) 超过显卡容量 ({total_memory_gb:.1f}GB)，已调整")
+            fraction = 0.95
+        
+        torch.cuda.set_per_process_memory_fraction(fraction, device=0)
+        logging.info(f"  🔒 严格限制显存: {max_memory_gb}GB / {total_memory_gb:.1f}GB = {fraction*100:.1f}%")
     
     # 确保路径存在
     mesh_path = Path(mesh_path)
