@@ -593,12 +593,18 @@ def main():
                 except Exception as e:
                     print(f"\n[ERROR] 3D 生成异常: {e}")
 
-        # 列出生成的文件
+        # 列出生成的文件 - 仅列出当前生成的 ID 相关文件
         if output_path.exists():
-            files = list(output_path.glob("*.png"))
+            # result 是 master 图片的绝对路径，我们只需要 ID (文件名 stem)
+            asset_id_prefix = master_path.stem
+            
+            # 使用 glob 匹配 ID 开头的所有文件
+            files = list(output_path.glob(f"{asset_id_prefix}*.*"))
+            
             if files:
                 print("\n生成的文件列表:")
-                for f in sorted(files)[-5:]:
+                # 按名称排序，确保列表整洁
+                for f in sorted(files):
                      print(f"  📷 {f.name}")
         
     else:

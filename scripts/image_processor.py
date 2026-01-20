@@ -1246,14 +1246,29 @@ def main():
         default=5,
         help="切割边界收缩像素 (默认: 5)"
     )
+    parser.add_argument(
+        "--views",
+        type=int,
+        default=4,
+        choices=[1, 4, 6, 8],
+        help="期望的视角数量 (默认: 4)"
+    )
     
     args = parser.parse_args()
+    
+    # 根据视角数量生成期望的视图列表
+    expected_views = None
+    if args.views == 6:
+        expected_views = ['front', 'front_right', 'right', 'back', 'left', 'front_left']
+    elif args.views == 8:
+        expected_views = ['front', 'front_right', 'right', 'back', 'left', 'front_left', 'top', 'bottom']
     
     process_quadrant_image(
         input_path=args.input,
         output_dir=args.output,
         remove_bg_flag=not args.no_rembg,
-        margin=args.margin
+        margin=args.margin,
+        expected_views=expected_views
     )
 
 
