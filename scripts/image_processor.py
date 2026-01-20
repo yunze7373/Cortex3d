@@ -1031,7 +1031,10 @@ def split_quadrant_image(image, margin: int = 5, expected_views: list = None) ->
     # 检测布局 (传入期望的列数作为提示)
     # 注意: detect_grid_layout 目前签名不支持 expected_cols，这里暂时只使用其返回值进行校验
     # 如果需要支持 expected_cols，需要修改 detect_grid_layout
-    layout_type, rows, cols, v_gaps, h_gaps = detect_grid_layout(image)
+    rows, cols, v_gaps, h_gaps = detect_grid_layout(image)
+    
+    # 简单的 layout_type 推断 (用于兼容旧逻辑如果需要，这里其实没用到)
+    layout_type = "grid" if rows > 1 else "linear"
     
     # 如果检测结果与期望严重不符，优先使用期望
     if expected_layout:
