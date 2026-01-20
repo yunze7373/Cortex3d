@@ -382,6 +382,52 @@ def detect_grid_layout(image) -> tuple:
         print(f"[主体检测] 估算主体数量: {count} (过滤后)")
         return count
 
+    def calculate_gap_score_at_position(pos, profile, edges_profile, window=20):
+        """计算指定位置的间隙得分"""
+        start = max(0, pos - window // 2)
+        end = min(len(profile), pos + window // 2)
+        
+        if end <= start:
+            return 0
+        
+        # 低标准差 + 低边缘密度 = 可能是间隙
+        local_std = np.std(profile[start:end])
+        local_edge = np.mean(edges_profile[start:end])
+        
+        # 间隙得分（越高越可能是间隙）
+        score = 1.0 / (1.0 + local_std / 50.0) * 1.0 / (1.0 + local_edge / 20.0)
+        return score
+    
+    def find_gaps_for_n_columns(n_cols, img_width, col_profile, col_edges):
+        """尝试将图像分成 n 列，返回间隙位置和总得分"""
+        if n_cols <= 1:
+            return [], 0
+        
+        cell_width = img_width / n_cols
+        gaps = []
+        total_score = 0
+        
+        for i in range(1, n_cols):
+            expected_pos = int(i * cell_width)
+            # 在预期位置附近搜索最佳间隙
+            search_range = int(cell_width * 0.2)  # ±20%
+            best_pos = expected_pos
+            best_score = 0
+            
+            for offset in range(-search_range, search_range + 1, 5):
+                test_pos = expected_pos + offset
+                if 0 < test_pos < img_width:
+                    score = calculate_gap_score_at_position(test_pos, col_profile, col_edges)
+                    if score > best_score:
+                        best_score = score
+                        best_pos = test_pos
+            
+            gaps.append(best_pos)
+            total_score += best_score
+        
+        avg_score = total_score / len(gaps) if gaps else 0
+        return gaps, avg_score
+
     # =========================================================
     # 根据宽高比估算列数
     # =========================================================
