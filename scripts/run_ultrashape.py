@@ -70,14 +70,14 @@ QUALITY_PRESETS = {
         "max_memory_gb": 8
     },
     "balanced": {
-        "steps": 25,
-        "num_latents": 10240,
-        "octree_res": 512,
-        "chunk_size": 1536,
-        "num_surface_points": 163840,
-        "description": "标准质量（~2分钟，峰值12GB VRAM，适合16GB显卡）",
+        "steps": 20,
+        "num_latents": 8192,
+        "octree_res": 448,
+        "chunk_size": 1280,
+        "num_surface_points": 131072,
+        "description": "标准质量（~2分钟，峰值10GB VRAM，适合16GB显卡）",
         "low_vram": True,
-        "max_memory_gb": 12
+        "max_memory_gb": 10
     },
     "high": {
         "steps": 50,
@@ -264,11 +264,6 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
     dit.load_state_dict(weights['dit'], strict=True)
     conditioner.load_state_dict(weights['conditioner'], strict=True)
     
-    # 移动到设备并强制 float32
-    vae.to(device).float()
-    dit.to(device).float()
-    conditioner.to(device).float()
-    
     # 递归强制所有子模块、参数和缓冲区都是 float32
     def force_float32(module):
         """递归强制模块所有组件转换为 float32"""
@@ -284,6 +279,19 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
     force_float32(vae)
     force_float32(dit)
     force_float32(conditioner)
+    
+    # 低显存模式：先保留在 CPU，稍后通过 enable_model_cpu_offload 按需加载
+    # 正常模式：立即移动到 GPU
+    if not low_vram:
+        vae.to(device)
+        dit.to(device)
+        conditioner.to(device)
+        logging.info(f"  ✓ 模型已加载到 {device}")
+    else:
+        # 只将轻量级组件移到 GPU，重量级 DiT 留在 CPU
+        vae.to(device)
+        conditioner.to(device)
+        logging.info("  ✓ 低显存模式：DiT 保留在 CPU，VAE/Conditioner 已加载到 GPU")
     
     # 设置为评估模式
     vae.eval()
