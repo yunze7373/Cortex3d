@@ -548,8 +548,9 @@ def split_universal_grid(image, rows: int, cols: int, v_gaps: list, h_gaps: list
     views = []
     view_idx = 0
     
-    # 扩展比例
-    overlap_ratio = 0.10
+    # 扩展比例 (从 0.10 增加到 0.22 以防止切断手臂)
+    # 我们依赖后续的 remove_small_fragments 来清理邻居视图的残留
+    overlap_ratio = 0.22
     
     for row in range(rows):
         for col in range(cols):
