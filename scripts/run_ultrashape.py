@@ -89,6 +89,94 @@ def check_dependencies():
         from ultrashape.utils.misc import instantiate_from_config
         from ultrashape.utils import voxelize_from_point
         logging.info("✓ UltraShape 依赖加载成功")
+        
+        # 应用 dtype 修复补丁
+        apply_dtype_fix()
+        
+        return True
+    except ImportError as e:
+        logging.error(f"✗ 缺少依赖: {e}")
+        logging.error("  请确保在正确的 Docker 容器中运行")
+        return False
+
+
+def apply_dtype_fix():
+    """
+    修复 UltraShape 注意力层的 dtype 混合精度问题
+    RuntimeError: Expected query, key, and value to have the same dtype
+    """
+    try:
+        import torch.nn.functional as F
+        from ultrashape.models.denoisers import dit_mask
+        
+        # 保存原始 forward 方法
+        original_forward = dit_mask.Attention.forward
+        
+        def patched_forward(self, x, rotary_cos=None, rotary_sin=None):
+            """确保所有张量都是 float32"""
+            B, L, C = x.shape
+            
+            # 强制 float32
+            x = x.float()
+            
+            # QKV 投影
+            qkv = self.qkv(x).reshape(B, L, 3, self.num_heads, self.head_dim)
+            q, k, v = qkv.unbind(2)
+            
+            # 强制转换为 float32
+            q = q.float()
+            k = k.float()
+            v = v.float()
+            
+            # 应用旋转位置编码
+            if rotary_cos is not None and rotary_sin is not None:
+                rotary_cos = rotary_cos.float()
+                rotary_sin = rotary_sin.float()
+                # 简化的旋转编码应用
+                q_r, q_i = q[..., ::2], q[..., 1::2]
+                k_r, k_i = k[..., ::2], k[..., 1::2]
+                q_out_r = q_r * rotary_cos - q_i * rotary_sin
+                q_out_i = q_r * rotary_sin + q_i * rotary_cos
+                k_out_r = k_r * rotary_cos - k_i * rotary_sin
+                k_out_i = k_r * rotary_sin + k_i * rotary_cos
+                q = torch.stack([q_out_r, q_out_i], dim=-1).flatten(-2)
+                k = torch.stack([k_out_r, k_out_i], dim=-1).flatten(-2)
+            
+            # Transpose for attention
+            q = q.transpose(1, 2)
+            k = k.transpose(1, 2)
+            v = v.transpose(1, 2)
+            
+            # Scaled dot-product attention (所有张量都是 float32)
+            x = F.scaled_dot_product_attention(q, k, v)
+            x = x.transpose(1, 2).reshape(B, L, C)
+            
+            # 输出投影
+            x = self.proj(x)
+            return x
+        
+        # 应用补丁
+        dit_mask.Attention.forward = patched_forward
+        logging.info("✓ UltraShape dtype 修复补丁已应用")
+        
+    except Exception as e:
+        logging.warning(f"⚠ dtype 补丁应用失败: {e}")
+        logging.warning("  将尝试继续运行，但可能会遇到 dtype 错误")
+
+
+def check_dependencies():
+    """检查必要依赖"""
+    try:
+        from omegaconf import OmegaConf
+        from ultrashape.pipelines import UltraShapePipeline
+        from ultrashape.surface_loaders import SharpEdgeSurfaceLoader
+        from ultrashape.utils.misc import instantiate_from_config
+        from ultrashape.utils import voxelize_from_point
+        logging.info("✓ UltraShape 依赖加载成功")
+        
+        # 应用 dtype 修复补丁
+        apply_dtype_fix()
+        
         return True
     except ImportError as e:
         logging.error(f"✗ 缺少依赖: {e}")
@@ -134,10 +222,18 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
     dit.load_state_dict(weights['dit'], strict=True)
     conditioner.load_state_dict(weights['conditioner'], strict=True)
     
-    # 移动到设备
+    # 移动到设备并强制 float32
     vae.eval().to(device).float()
     dit.eval().to(device).float()
     conditioner.eval().to(device).float()
+    
+    # 递归确保所有参数和缓冲区都是 float32
+    for model in [vae, dit, conditioner]:
+        for param in model.parameters():
+            param.data = param.data.float()
+        for buffer_name, buffer in model.named_buffers():
+            if buffer is not None:
+                model.register_buffer(buffer_name, buffer.float())
     
     # 启用 FlashVDM 加速（如果可用）
     if hasattr(vae, 'enable_flashvdm_decoder'):
@@ -337,6 +433,10 @@ def refine_mesh(
     try:
         # 强制禁用 AMP，确保全程 float32
         with torch.cuda.amp.autocast(enabled=False):
+            # 确保输入张量也是 float32
+            if voxel_cond.dtype != torch.float32:
+                voxel_cond = voxel_cond.float()
+            
             outputs = pipeline(
                 image=image,
                 voxel_cond=voxel_cond,
