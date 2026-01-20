@@ -267,6 +267,8 @@ def main():
     # Generate
     output_dir = Path(args.output)
     output_name = Path(args.image).stem
+    if output_name.endswith('_front'):
+        output_name = output_name[:-6]
     
     glb_path = generate_3d(
         pipeline, image, output_dir, output_name,
