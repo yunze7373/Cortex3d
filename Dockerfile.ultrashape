@@ -12,7 +12,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
     CUDA_HOME=/usr/local/cuda \
     PATH=/usr/local/cuda/bin:$PATH \
-    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH \
+    CPATH=/usr/local/cuda/include:$CPATH \
+    LIBRARY_PATH=/usr/local/cuda/lib64:$LIBRARY_PATH
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
