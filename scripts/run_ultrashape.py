@@ -264,7 +264,27 @@ def refine_mesh(
     
     # 加载配置路径
     config_path = ULTRASHAPE_ROOT / config_path
-    ckpt_path = ULTRASHAPE_ROOT / ckpt_path
+    ckpt_path = Path(ckpt_path)
+    if not ckpt_path.is_absolute():
+        # 尝试多个可能的路径
+        possible_paths = [
+            Path("/workspace/checkpoints") / ckpt_path.name,
+            Path("/workspace/models/ultrashape") / ckpt_path.name,
+            ULTRASHAPE_ROOT / ckpt_path,
+            Path("models/ultrashape") / ckpt_path.name  # 相对路径 fallback
+        ]
+        
+        found = False
+        for p in possible_paths:
+            if p.exists():
+                ckpt_path = p
+                found = True
+                logging.info(f"  ✓ 找到权重文件: {ckpt_path}")
+                break
+        
+        if not found:
+            # 默认回退到 ULTRASHAPE_ROOT，让后续报错
+            ckpt_path = ULTRASHAPE_ROOT / ckpt_path
     
     if not config_path.exists():
         logging.error(f"配置文件不存在: {config_path}")
