@@ -1,0 +1,16 @@
+name: zombie_santa
+version: "1.0"
+description: "末日僵尸圣诞老人"
+category: "horror/christmas"
+
+character_description: |
+  • Head-body ratio: 1:7.5 (Realistic human proportions)
+  • Expression: Weary, vigilant gaze with grim determination
+  • Face: Dirty white beard stained with blood and grime, weathered skin
+  • Body: Upright posture, right hand holding a fire axe at side
+  • Clothing: Tattered red Santa suit covered in blood and dirt
+  • Hat: Damaged Santa hat, worn and dirty
+  • Accessories: Old gift sack converted to survival bag on back
+  • Shoes: Worn black boots covered in mud
+
+style: "cinematic horror character, post-apocalyptic, gritty"

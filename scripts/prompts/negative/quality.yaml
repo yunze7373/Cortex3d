@@ -1,0 +1,23 @@
+name: quality_negative
+version: "1.0"
+description: "质量相关负面提示词"
+
+prompts:
+  - "low quality"
+  - "blurry"
+  - "pixelated"
+  - "jpeg artifacts"
+  - "watermark"
+  - "text"
+  - "logo"
+  - "signature"
+  - "cropped"
+  - "out of frame"
+  - "mutated"
+  - "disfigured"
+  - "bad proportions"
+  - "duplicate panels"
+  - "mirror flip"
+  - "low resolution"
+  - "noisy"
+  - "grainy"

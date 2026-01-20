@@ -1,0 +1,67 @@
+name: universal_multiview
+version: "1.0"
+description: "通用多视角生成模板 - 支持任意视角组合"
+layout: "dynamic"
+
+template: |
+  Generate a professional 3D character turntable reference sheet with exactly {view_count} panels arranged in {layout_description}.
+
+  ## OUTPUT REQUIREMENT
+  Single image containing {view_count} panels: {panel_list}
+
+  ## CHARACTER
+  {character_description}
+  Style: {style}
+
+  ## CRITICAL RULES - READ CAREFULLY
+
+  ### TURNTABLE ROTATION (NOT MIRROR!)
+  Imagine the character standing on a rotating platform:
+  {view_descriptions}
+
+  ⚠️ IMPORTANT: Each panel shows a UNIQUE angle. No duplicates!
+
+  ### ANATOMICAL CORRECTNESS (CRITICAL!)
+  - Arms MUST connect to shoulders only
+  - Legs MUST connect to hips only
+  - Head MUST connect to neck only
+  - NO extra limbs, NO twisted body parts
+  - Upper body and lower body MUST face the SAME direction in each panel
+  - The entire body rotates together as one unit
+
+  ### POSE CONSISTENCY (CRITICAL!)
+  - EXACT same pose in ALL {view_count} panels - only the viewing angle changes
+  - Same arm positions, same leg positions, same head tilt
+  - If holding an object → it stays in the same hand in ALL views
+  - This is ONE character photographed from {view_count} angles, NOT {view_count} different poses
+
+  ### PANEL LAYOUT
+  - {view_count} panels arranged as {layout_description}
+  - Character centered in each panel
+  - Same scale/size in all panels
+  - Clean separation between panels
+  - Neutral gray or white background
+
+  ### LIGHTING
+  - Flat, even studio lighting (no harsh shadows)
+  - Face clearly visible without shadow obstruction
+  - Consistent lighting direction across all panels
+
+  ### ABSOLUTELY FORBIDDEN
+  - NO text labels (no "front", "back", "left", "right", no angle numbers)
+  - NO twisted bodies (upper body facing different direction than legs)
+  - NO mirror flips between side views
+  - NO anatomical errors (no extra limbs, no wrong joint positions)
+  - NO pose variations between panels
+
+  Generate a clean, professional character reference sheet following ALL rules above.
+
+variables:
+  - character_description
+  - style
+  - view_count
+  - layout_description
+  - panel_list
+  - view_descriptions
+
+default_style: "cinematic character"

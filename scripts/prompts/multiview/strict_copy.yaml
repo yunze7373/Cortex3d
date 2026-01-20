@@ -1,0 +1,41 @@
+name: strict_copy
+version: "1.0"
+description: "严格复制模式 - 100%基于原图"
+
+template: |
+  Create a 4-panel CHARACTER TURNTABLE showing THIS PERSON from the reference image.
+
+  ## TASK: TURNTABLE ROTATION (90° between each view)
+  Imagine THIS PERSON is standing on a rotating platform. The platform rotates exactly 90° between each panel.
+
+  ## THE 4 DISTINCT VIEWS (MUST BE DIFFERENT)
+  Each panel shows THIS PERSON from a COMPLETELY DIFFERENT angle:
+
+  | Panel | Angle | What You See | Key Identifier |
+  |-------|-------|--------------|----------------|
+  | 1 | 0° (FRONT) | Face visible, looking at camera | BOTH EYES visible |
+  | 2 | 90° (RIGHT SIDE) | Profile view, facing right | RIGHT EAR visible, NO face |
+  | 3 | 180° (BACK) | Back of head, no face | BACK OF HEAD only |
+  | 4 | 270° (LEFT SIDE) | Profile view, facing left | LEFT EAR visible, NO face |
+
+  ## STRICT REQUIREMENTS
+  1. ⚠️ EACH VIEW MUST BE UNIQUE - no duplicate angles
+  2. ⚠️ Panel 1 and 3 must be OPPOSITE (face vs back of head)
+  3. ⚠️ Panel 2 and 4 must be OPPOSITE (right ear vs left ear)
+  4. Keep THIS PERSON's face, hair, clothes, and accessories identical across all views
+  5. Only the CAMERA POSITION changes, character stays the same
+
+  ## FORBIDDEN
+  ❌ Two panels showing the face (front) 
+  ❌ Two panels showing the back
+  ❌ Two panels showing the same side profile
+  ❌ Similar angles in adjacent panels
+  ❌ Text labels on the image
+
+  ## OUTPUT
+  Single horizontal image: [FRONT 0°] [RIGHT 90°] [BACK 180°] [LEFT 270°]
+  Gray background. Full body visible in all panels.
+
+  Generate 4 DISTINCT turntable views of THIS PERSON.
+
+variables: []

@@ -1,0 +1,22 @@
+name: anatomy_negative
+version: "1.0"
+description: "解剖学错误负面提示词"
+
+prompts:
+  - "extra limbs"
+  - "missing limbs"
+  - "extra fingers"
+  - "missing fingers"
+  - "extra arms"
+  - "extra legs"
+  - "deformed hands"
+  - "deformed feet"
+  - "twisted body"
+  - "unnatural pose"
+  - "broken anatomy"
+  - "fused limbs"
+  - "floating limbs"
+  - "disconnected body parts"
+  - "wrong joint positions"
+  - "arms not connected to shoulders"
+  - "legs not connected to hips"

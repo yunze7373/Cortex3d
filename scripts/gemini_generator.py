@@ -59,7 +59,8 @@ def generate_character_views(
     auto_cut: bool = True,
     style: str = "cinematic character",
     view_mode: str = "4-view",
-    custom_views: list = None
+    custom_views: list = None,
+    negative_prompt: str = None
 ) -> Optional[str]:
     """
     使用 Gemini API 生成多视图角色图像
@@ -73,6 +74,7 @@ def generate_character_views(
         style: 风格描述
         view_mode: 视角模式 (4-view, 6-view, 8-view, custom)
         custom_views: 自定义视角列表
+        negative_prompt: 负面提示词
     
     Returns:
         生成的图片路径
@@ -101,6 +103,11 @@ def generate_character_views(
         view_mode=view_mode,
         custom_views=custom_views
     )
+    
+    # 添加负面提示词
+    if negative_prompt:
+        full_prompt += f"\n\nNEGATIVE PROMPT (AVOID THESE):\n{negative_prompt}"
+        print(f"[负面提示词] {negative_prompt[:60]}...")
     
     print("[INFO] 正在生成图像... (可能需要 30-60 秒)")
     

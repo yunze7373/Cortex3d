@@ -1,0 +1,46 @@
+name: six_view_multiview
+version: "1.0"
+description: "6视角生成模板 - 包含45度斜角"
+layout: "2x3_grid"
+views:
+  - front
+  - front_right
+  - right
+  - back
+  - left
+  - front_left
+
+template: |
+  Generate a professional 3D character reference sheet with exactly 6 panels in a 2x3 grid layout.
+
+  ## OUTPUT REQUIREMENT
+  Single image containing 6 panels arranged as 2 rows x 3 columns:
+  Row 1: [FRONT 0°] [FRONT-RIGHT 45°] [RIGHT 90°]
+  Row 2: [BACK 180°] [LEFT 270°] [FRONT-LEFT 315°]
+
+  ## CHARACTER
+  {character_description}
+  Style: {style}
+
+  ## TURNTABLE ROTATION
+  Imagine the character standing on a rotating platform:
+  - Panel 1 (FRONT): Platform at 0° - Face visible, looking at camera
+  - Panel 2 (FRONT-RIGHT): Platform at 45° - Right cheek visible, 3/4 view from front-right
+  - Panel 3 (RIGHT): Platform at 90° - Right ear visible, full profile view
+  - Panel 4 (BACK): Platform at 180° - Back of head visible, NO face
+  - Panel 5 (LEFT): Platform at 270° - Left ear visible, full profile view
+  - Panel 6 (FRONT-LEFT): Platform at 315° - Left cheek visible, 3/4 view from front-left
+
+  ## CRITICAL RULES
+  - EXACT same pose in ALL 6 panels - only viewing angle changes
+  - NO text labels on the image
+  - NO anatomical errors (extra limbs, twisted body)
+  - Consistent lighting and character scale across all panels
+  - Arms MUST connect to shoulders, Legs MUST connect to hips
+  - Clean separation between panels with neutral background
+
+  Generate a professional 6-view character reference sheet.
+
+variables:
+  - character_description
+  - style

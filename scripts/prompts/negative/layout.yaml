@@ -1,0 +1,18 @@
+name: layout_negative
+version: "1.0"
+description: "布局错误负面提示词"
+
+prompts:
+  - "2x2 grid layout"
+  - "vertical layout"
+  - "stacked panels"
+  - "overlapping views"
+  - "unequal panel sizes"
+  - "diagonal arrangement"
+  - "circular layout"
+  - "text labels"
+  - "view labels"
+  - "front back left right text"
+  - "angle labels"
+  - "numbered panels"
+  - "labeled views"

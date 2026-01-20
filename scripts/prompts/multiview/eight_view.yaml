@@ -1,0 +1,49 @@
+name: eight_view_multiview
+version: "1.0"
+description: "8视角生成模板 - 包含顶部和底部视图"
+layout: "2x4_grid"
+views:
+  - front
+  - front_right
+  - right
+  - back
+  - left
+  - front_left
+  - top
+  - bottom
+
+template: |
+  Generate a professional 3D character reference sheet with exactly 8 panels in a 2x4 grid layout.
+
+  ## OUTPUT REQUIREMENT
+  Single image containing 8 panels arranged as 2 rows x 4 columns:
+  Row 1: [FRONT 0°] [FRONT-RIGHT 45°] [RIGHT 90°] [BACK 180°]
+  Row 2: [LEFT 270°] [FRONT-LEFT 315°] [TOP ↓] [BOTTOM ↑]
+
+  ## CHARACTER
+  {character_description}
+  Style: {style}
+
+  ## VIEW DESCRIPTIONS
+  - Panel 1 (FRONT): Platform at 0° - Face visible, looking at camera
+  - Panel 2 (FRONT-RIGHT): Platform at 45° - Right cheek visible, 3/4 view
+  - Panel 3 (RIGHT): Platform at 90° - Right ear visible, full profile view
+  - Panel 4 (BACK): Platform at 180° - Back of head visible, NO face
+  - Panel 5 (LEFT): Platform at 270° - Left ear visible, full profile view
+  - Panel 6 (FRONT-LEFT): Platform at 315° - Left cheek visible, 3/4 view
+  - Panel 7 (TOP): Bird's eye view - Looking straight down at top of head and shoulders
+  - Panel 8 (BOTTOM): Worm's eye view - Looking straight up at soles of feet
+
+  ## CRITICAL RULES
+  - EXACT same pose in all horizontal views (Panels 1-6)
+  - TOP and BOTTOM views show the character from directly above/below
+  - NO text labels on the image
+  - NO anatomical errors
+  - Consistent lighting and scale
+  - Clean panel separation with neutral background
+
+  Generate a professional 8-view character reference sheet including top and bottom perspectives.
+
+variables:
+  - character_description
+  - style

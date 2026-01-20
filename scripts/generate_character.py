@@ -498,6 +498,11 @@ def main():
         custom_views = args.custom_views
         if custom_views:
             view_mode = "custom"
+        
+        # 获取负面提示词
+        negative_prompt = None
+        if not args.no_negative:
+            negative_prompt = config.get_negative_prompt(args.negative_categories)
             
         result = generate_character_views(
             character_description=description,
@@ -507,7 +512,8 @@ def main():
             auto_cut=not args.no_cut,
             style=style,
             view_mode=view_mode,
-            custom_views=custom_views
+            custom_views=custom_views,
+            negative_prompt=negative_prompt
         )
     
     if result:
