@@ -1,4 +1,4 @@
-# TRELLIS.2 Docker Container
+# TRELLIS.2 Docker Container (for TRELLIS.2 Image-to-3D with O-Voxel)
 # Manually replicates official setup.sh without GPU check during build
 # Based on: https://github.com/microsoft/TRELLIS.2/blob/main/setup.sh
 
@@ -66,8 +66,8 @@ RUN pip install --no-cache-dir \
 # utils3d (exact commit from setup.sh)
 RUN pip install --no-cache-dir git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
 
-# Clone TRELLIS.2
-RUN git clone --recursive https://github.com/microsoft/TRELLIS.2.git /opt/trellis2
+# Clone TRELLIS.2 (official Microsoft TRELLIS.2 repository with O-Voxel)
+RUN git clone --recursive -b main https://github.com/microsoft/TRELLIS.2.git /opt/trellis2
 
 WORKDIR /opt/trellis2
 
@@ -75,32 +75,34 @@ WORKDIR /opt/trellis2
 RUN pip install --no-cache-dir flash-attn==2.7.3 --no-build-isolation || \
     echo "flash-attn failed, will use fallback"
 
-# nvdiffrast v0.4.0 (from setup.sh --nvdiffrast)
+# ========== TRELLIS.2 SPECIFIC EXTENSIONS ==========
+
+# nvdiffrast (required for rendering)
 RUN mkdir -p /tmp/extensions && \
     git clone -b v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/extensions/nvdiffrast && \
     pip install --no-cache-dir /tmp/extensions/nvdiffrast --no-build-isolation
 
-# nvdiffrec (from setup.sh --nvdiffrec)
+# nvdiffrec (required for PBR material rendering with split-sum renderer)
 RUN mkdir -p /tmp/extensions && \
     git clone -b renderutils https://github.com/JeffreyXiang/nvdiffrec.git /tmp/extensions/nvdiffrec && \
     pip install --no-cache-dir /tmp/extensions/nvdiffrec --no-build-isolation || \
     echo "nvdiffrec failed"
 
-# CuMesh (from setup.sh --cumesh)
+# CuMesh (CUDA-accelerated mesh utilities: remeshing, decimation, UV-unwrapping)
 RUN mkdir -p /tmp/extensions && \
     git clone https://github.com/JeffreyXiang/CuMesh.git /tmp/extensions/CuMesh --recursive && \
     pip install --no-cache-dir /tmp/extensions/CuMesh --no-build-isolation
 
-# FlexGEMM (from setup.sh --flexgemm)
+# FlexGEMM (efficient sparse convolution implementation based on Triton)
 RUN mkdir -p /tmp/extensions && \
     git clone https://github.com/JeffreyXiang/FlexGEMM.git /tmp/extensions/FlexGEMM --recursive && \
     pip install --no-cache-dir /tmp/extensions/FlexGEMM --no-build-isolation
 
-# o-voxel (from setup.sh --o-voxel, uses local copy)
+# O-Voxel (field-free sparse voxel structure - core of TRELLIS.2)
 RUN cp -r /opt/trellis2/o-voxel /tmp/extensions/o-voxel && \
     pip install --no-cache-dir /tmp/extensions/o-voxel --no-build-isolation
 
-# ========== END OFFICIAL setup.sh ==========
+# ========== END TRELLIS.2 SETUP ==========
 
 # Additional dependencies
 RUN pip install --no-cache-dir rembg accelerate safetensors huggingface_hub einops scipy

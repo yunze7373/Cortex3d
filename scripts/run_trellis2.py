@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
-Cortex3d TRELLIS.2 Runner
-Uses Microsoft TRELLIS.2 for high-quality image-to-3D generation with sharp edges.
+Cortex3d TRELLIS Runner
+Uses Microsoft TRELLIS for high-quality image-to-3D generation.
 
 Key Features:
-- O-Voxel representation preserves sharp edges
-- Up to 1536³ resolution
-- Full PBR material support
+- Structured Latent (SLatent) representation
+- Multi-format output (mesh, gaussian, radiance field)
+- High-quality geometry and texture
 
 Usage:
     python run_trellis2.py <input_image> [options]
     
 Example:
     python run_trellis2.py test_images/character_front.png --output outputs/trellis2
+
+Note: Despite the filename 'run_trellis2.py', this uses the official TRELLIS repository.
 """
 
 import os
@@ -28,11 +30,12 @@ import torch
 import numpy as np
 from PIL import Image
 
-# TRELLIS.2 imports
+# TRELLIS.2 imports (Microsoft's official TRELLIS.2 with O-Voxel)
 try:
     from trellis2.pipelines import Trellis2ImageTo3DPipeline
     from trellis2.utils import render_utils
     from trellis2.renderers import EnvMap
+    from trellis2.representations import MeshWithVoxel
     import o_voxel
     TRELLIS2_AVAILABLE = True
 except ImportError as e:
@@ -53,9 +56,9 @@ def setup_device():
 
 
 def load_pipeline(model_name: str = "microsoft/TRELLIS.2-4B"):
-    """Load TRELLIS.2 pipeline."""
+    """Load TRELLIS.2 pipeline (Image-to-3D with O-Voxel)."""
     print(f"[INFO] Loading TRELLIS.2 pipeline: {model_name}")
-    print("[INFO] This may take a while on first run (downloading ~15GB of weights)...")
+    print("[INFO] This may take a while on first run (downloading model weights)...")
     
     pipeline = Trellis2ImageTo3DPipeline.from_pretrained(model_name)
     pipeline.cuda()
@@ -68,11 +71,11 @@ def load_envmap(hdri_path: str = None):
     """Load environment map for PBR rendering."""
     import cv2
     
-    # Default HDRI paths to try
+    # Default HDRI paths to try (TRELLIS may not include HDRI assets)
     hdri_paths = [
         hdri_path,
         "/workspace/assets/hdri/forest.exr",
-        "/opt/trellis2/assets/hdri/forest.exr",
+        "/opt/trellis2/assets/example_image/T.png",  # Fallback to example
         "assets/hdri/forest.exr",
     ]
     
@@ -142,26 +145,27 @@ def generate_3d(
     torch.manual_seed(seed)
     np.random.seed(seed)
     
-    # Generate
+    # Generate (using TRELLIS.2 pipeline API)
     with torch.inference_mode():
-        meshes = pipeline.run(image)
-        mesh = meshes[0]
+        mesh = pipeline.run(
+            image,
+            seed=seed,
+            preprocess_image=False  # We already preprocessed
+        )[0]  # Returns list of MeshWithVoxel
     
-    print(f"[INFO] Raw mesh generated!")
-    
-    # Simplify mesh (nvdiffrast has a limit)
-    max_faces = 16777216
-    if hasattr(mesh, 'faces') and len(mesh.faces) > max_faces:
-        print(f"[INFO] Simplifying mesh from {len(mesh.faces)} to {max_faces} faces...")
-        mesh.simplify(max_faces)
+    print(f"[INFO] 3D model generated!")
     
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Export to GLB with PBR
+    # Export to GLB using TRELLIS.2 O-Voxel postprocessing
     glb_path = output_dir / f"{output_name}.glb"
     print(f"[INFO] Exporting GLB to {glb_path}...")
     
+    # Simplify mesh (nvdiffrast limit)
+    mesh.simplify(16777216)
+    
+    # Use TRELLIS.2's O-Voxel GLB export
     glb = o_voxel.postprocess.to_glb(
         vertices=mesh.vertices,
         faces=mesh.faces,
@@ -196,19 +200,24 @@ def generate_3d(
     except Exception as e:
         print(f"[WARNING] OBJ export failed: {e}")
     
-    # Render preview video if envmap available
-    if envmap is not None:
-        try:
-            import imageio
-            video_path = output_dir / f"{output_name}_preview.mp4"
-            print(f"[INFO] Rendering preview video...")
-            video = render_utils.make_pbr_vis_frames(
-                render_utils.render_video(mesh, envmap=envmap)
-            )
-            imageio.mimsave(str(video_path), video, fps=15)
-            print(f"[INFO] Preview video saved: {video_path}")
-        except Exception as e:
-            print(f"[WARNING] Video rendering failed: {e}")
+    # Render preview video with PBR materials
+    try:
+        import imageio
+        video_path = output_dir / f"{output_name}_preview.mp4"
+        print(f"[INFO] Rendering preview video with PBR materials...")
+        
+        # Render with environment map if available
+        if envmap is not None:
+            video_frames = render_utils.render_video(mesh, envmap=envmap)
+            video = render_utils.make_pbr_vis_frames(video_frames)
+        else:
+            video_frames = render_utils.render_video(mesh)
+            video = video_frames['color']
+        
+        imageio.mimsave(str(video_path), video, fps=15)
+        print(f"[INFO] Preview video saved: {video_path}")
+    except Exception as e:
+        print(f"[WARNING] Video rendering failed: {e}")
     
     # Print stats
     print(f"\n[INFO] Output Statistics:")
@@ -223,7 +232,7 @@ def main():
     parser.add_argument("--output", "-o", type=str, default="outputs/trellis2",
                         help="Output directory")
     parser.add_argument("--model", type=str, default="microsoft/TRELLIS.2-4B",
-                        help="Model name/path")
+                        help="Model name/path (e.g., microsoft/TRELLIS-image-large)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--decimation", type=int, default=500000,
                         help="Target face count for mesh simplification")
@@ -235,12 +244,12 @@ def main():
     args = parser.parse_args()
     
     if not TRELLIS2_AVAILABLE:
-        print("[ERROR] TRELLIS.2 is not installed. Please run in the trellis2 Docker container.")
+        print("[ERROR] TRELLIS is not installed. Please run in the trellis2 Docker container.")
         sys.exit(1)
     
     print("=" * 60)
-    print("Cortex3d TRELLIS.2 3D Generation")
-    print("Sharp Edges | High Resolution | PBR Materials")
+    print("Cortex3d TRELLIS 3D Generation")
+    print("High Quality | Structured Latents | Multi-Format Output")
     print("=" * 60)
     
     # Setup

@@ -110,6 +110,33 @@ stage4-trellis:
 		--voxel_size_mm 0.1 \
 		--skip_remesh
 
+# --- TRELLIS2 Targets (New Microsoft TRELLIS) ---
+
+# Build TRELLIS2 Docker image
+build-trellis2:
+	docker compose build trellis2
+
+# Start TRELLIS2 container
+up-trellis2:
+	docker compose up -d trellis2
+
+# TRELLIS2 reconstruction (using official Microsoft TRELLIS)
+reconstruct-trellis2:
+	docker compose exec trellis2 python3 /workspace/scripts/run_trellis2.py \
+		/workspace/test_images/character_20251226_013442_front.png \
+		--output /workspace/outputs/trellis2
+
+# TRELLIS2 + Blender pipeline
+pipeline-trellis2: reconstruct-trellis2 stage4-trellis2
+
+# Helper for TRELLIS2 post-processing
+stage4-trellis2:
+	docker compose exec $(SVC) python3 /workspace/scripts/blender_factory.py \
+		--mesh /workspace/outputs/trellis2/character_20251226_013442_front.glb \
+		--output /workspace/outputs/final_print_trellis2.stl \
+		--height_mm 100 \
+		--voxel_size_mm 0.1
+
 # 检查环境
 check:
 	docker compose exec $(SVC) python3 -c "import torch; import nvdiffrast.torch as dr; print('✅ OK:', torch.cuda.get_device_name(0))"
@@ -136,6 +163,79 @@ down:
 logs:
 	docker compose logs -f $(SVC)
 
+# --- Docker 清理命令 (释放WSL空间) ---
+
+# 清理所有停止的容器
+clean-containers:
+	@echo "🧹 清理停止的容器..."
+	docker container prune -f
+
+# 清理未使用的镜像
+clean-images:
+	@echo "🧹 清理未使用的镜像..."
+	docker image prune -a -f
+
+# 清理 Docker 构建缓存
+clean-build-cache:
+	@echo "🧹 清理 Docker 构建缓存..."
+	docker builder prune -a -f
+	@echo ""
+	@echo "Docker 清理 (释放空间):"
+	@echo "  make docker-space      - 查看 Docker 空间使用"
+	@echo "  make images-size       - 查看所有镜像大小"
+	@echo "  make clean-containers  - 清理停止的容器"
+	@echo "  make clean-images      - 清理未使用的镜像"
+	@echo "  make clean-build-cache - 清理构建缓存"
+	@echo "  make clean-all         - 完全清理 (保留 HF 缓存)"
+	@echo "  make wsl-compact       - 显示 WSL 磁盘压缩方法"
+
+# 清理未使用的卷
+clean-volumes:
+	@echo "🧹 清理未使用的卷..."
+	docker volume prune -f
+
+# 清理未使用的网络
+clean-networks:
+	@echo "🧹 清理未使用的网络..."
+	docker network prune -f
+
+# 完全清理 (保留 hf-cache 卷)
+clean-all:
+	@echo "⚠️  即将清理所有 Docker 资源 (保留 Hugging Face 缓存)..."
+	@echo "按 Ctrl+C 取消，或等待 5 秒继续..."
+	@sleep 5
+	docker container prune -f
+	docker image prune -a -f
+	docker builder prune -a -f
+	docker volume prune -f --filter "label!=com.docker.compose.volume=hf-cache"
+	docker network prune -f
+	@echo "✅ 清理完成！"
+
+# 显示 Docker 空间使用情况
+docker-space:
+	@echo "📊 Docker 空间使用情况:"
+	@echo ""
+	docker system df -v
+
+# 查看所有镜像大小
+images-size:
+	@echo "📦 镜像列表 (按大小排序):"
+	@docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" | sort -k3 -h
+
+# 删除旧的 TRELLIS 镜像 (如果重新构建失败)
+clean-trellis-old:
+	@echo "🧹 删除旧的 TRELLIS 相关镜像..."
+	docker rmi -f $$(docker images | grep "trellis" | awk '{print $$3}') 2>/dev/null || true
+
+# WSL 磁盘压缩 (需要在 PowerShell 中运行)
+wsl-compact:
+	@echo "ℹ️  WSL 磁盘压缩需要在 Windows PowerShell 中运行:"
+	@echo ""
+	@echo "  1. 关闭 WSL: wsl --shutdown"
+	@echo "  2. 压缩磁盘: Optimize-VHD -Path %%LOCALAPPDATA%%\\Docker\\wsl\\data\\ext4.vhdx -Mode Full"
+	@echo "  3. 重启 Docker Desktop"
+	@echo ""
+
 # 帮助
 help:
 	@echo "用法:"
@@ -146,3 +246,9 @@ help:
 	@echo "  make build   - 重新构建镜像"
 	@echo "  make up      - 启动容器"
 	@echo "  make down    - 停止容器"
+	@echo ""
+	@echo "TRELLIS (官方):"
+	@echo "  make build-trellis2    - 构建 TRELLIS 镜像"
+	@echo "  make up-trellis2       - 启动 TRELLIS 容器"
+	@echo "  make reconstruct-trellis2 - 运行 TRELLIS 生成"
+	@echo "  make pipeline-trellis2 - TRELLIS 完整流程"
