@@ -112,14 +112,10 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
     vae = instantiate_from_config(config.model.params.vae_config)
     
     logging.info("  - 加载 DiT...")
-    try:
-        dit = instantiate_from_config(config.model.params.dit_config)
-    except Exception as e:
-        logging.error("无法加载 DiT 配置。config.model.params 的 keys: %s", config.model.params.keys())
-        raise e
+    dit = instantiate_from_config(config.model.params.dit_cfg)
     
     logging.info("  - 加载调度器...")
-    scheduler = instantiate_from_config(config.model.params.scheduler_config)
+    scheduler = instantiate_from_config(config.model.params.scheduler_cfg)
     
     logging.info("  - 加载条件编码器...")
     conditioner = instantiate_from_config(config.model.params.conditioner_config)
