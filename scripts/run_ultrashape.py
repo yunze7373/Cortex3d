@@ -102,14 +102,15 @@ def check_dependencies():
 
 def apply_dtype_fix():
     """
-    修复 UltraShape 注意力层的 dtype 混合精度问题
-    RuntimeError: Expected query, key, and value to have the same dtype
+    修复 UltraShape 混合精度问题
+    RuntimeError: mat1 and mat2 must have the same dtype
     """
     try:
+        import torch.nn as nn
         import torch.nn.functional as F
         from ultrashape.models.denoisers import dit_mask
         
-        # 保存原始 scaled_dot_product_attention
+        # 1. 修复 scaled_dot_product_attention
         original_sdpa = F.scaled_dot_product_attention
         
         def patched_sdpa(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None):
@@ -127,10 +128,25 @@ def apply_dtype_fix():
                 scale=scale
             )
         
-        # 替换 F.scaled_dot_product_attention
         F.scaled_dot_product_attention = patched_sdpa
         
-        logging.info("✓ UltraShape dtype 修复补丁已应用")
+        # 2. 修复所有线性层，确保输入输出都是 float32
+        original_linear_forward = nn.Linear.forward
+        
+        def patched_linear_forward(self, input):
+            """强制线性层输入输出为 float32"""
+            # 确保权重和偏置是 float32
+            if self.weight.dtype != torch.float32:
+                self.weight.data = self.weight.data.float()
+            if self.bias is not None and self.bias.dtype != torch.float32:
+                self.bias.data = self.bias.data.float()
+            # 确保输入是 float32
+            input = input.float()
+            return original_linear_forward(self, input)
+        
+        nn.Linear.forward = patched_linear_forward
+        
+        logging.info("✓ UltraShape dtype 修复补丁已应用 (SDPA + Linear)")
         
     except Exception as e:
         logging.warning(f"⚠ dtype 补丁应用失败: {e}")
