@@ -109,54 +109,21 @@ def apply_dtype_fix():
         import torch.nn.functional as F
         from ultrashape.models.denoisers import dit_mask
         
-        # 保存原始 forward 方法
-        original_forward = dit_mask.Attention.forward
+        # 保存原始 scaled_dot_product_attention
+        original_sdpa = F.scaled_dot_product_attention
         
-        def patched_forward(self, x, rotary_cos=None, rotary_sin=None):
-            """确保所有张量都是 float32"""
-            B, L, C = x.shape
-            
-            # 强制 float32
-            x = x.float()
-            
-            # QKV 投影
-            qkv = self.qkv(x).reshape(B, L, 3, self.num_heads, self.head_dim)
-            q, k, v = qkv.unbind(2)
-            
-            # 强制转换为 float32
-            q = q.float()
-            k = k.float()
-            v = v.float()
-            
-            # 应用旋转位置编码
-            if rotary_cos is not None and rotary_sin is not None:
-                rotary_cos = rotary_cos.float()
-                rotary_sin = rotary_sin.float()
-                # 简化的旋转编码应用
-                q_r, q_i = q[..., ::2], q[..., 1::2]
-                k_r, k_i = k[..., ::2], k[..., 1::2]
-                q_out_r = q_r * rotary_cos - q_i * rotary_sin
-                q_out_i = q_r * rotary_sin + q_i * rotary_cos
-                k_out_r = k_r * rotary_cos - k_i * rotary_sin
-                k_out_i = k_r * rotary_sin + k_i * rotary_cos
-                q = torch.stack([q_out_r, q_out_i], dim=-1).flatten(-2)
-                k = torch.stack([k_out_r, k_out_i], dim=-1).flatten(-2)
-            
-            # Transpose for attention
-            q = q.transpose(1, 2)
-            k = k.transpose(1, 2)
-            v = v.transpose(1, 2)
-            
-            # Scaled dot-product attention (所有张量都是 float32)
-            x = F.scaled_dot_product_attention(q, k, v)
-            x = x.transpose(1, 2).reshape(B, L, C)
-            
-            # 输出投影
-            x = self.proj(x)
-            return x
+        def patched_sdpa(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None):
+            """确保 q, k, v 类型一致为 float32"""
+            query = query.float()
+            key = key.float()
+            value = value.float()
+            if attn_mask is not None:
+                attn_mask = attn_mask.float()
+            return original_sdpa(query, key, value, attn_mask, dropout_p, is_causal, scale)
         
-        # 应用补丁
-        dit_mask.Attention.forward = patched_forward
+        # 替换 F.scaled_dot_product_attention
+        F.scaled_dot_product_attention = patched_sdpa
+        
         logging.info("✓ UltraShape dtype 修复补丁已应用")
         
     except Exception as e:
