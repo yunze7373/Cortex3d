@@ -141,8 +141,8 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
     
     # 启用 FlashVDM 加速（如果可用）
     if hasattr(vae, 'enable_flashvdm_decoder'):
-        vae.enable_flashvdm_decoder()
-        logging.info("  ✓ FlashVDM 加速已启用")
+        # vae.enable_flashvdm_decoder()
+        logging.info("  ✓ FlashVDM 加速已跳过 (强制 Float32)")
     
     # 创建流水线
     logging.info("  - 创建推理流水线...")
