@@ -49,6 +49,14 @@ else:
 
 # 质量预设配置
 QUALITY_PRESETS = {
+    "lowmem": {
+        "steps": 20,
+        "num_latents": 4096,
+        "octree_res": 384,
+        "chunk_size": 1024,
+        "description": "低内存模式（~1分钟，6GB VRAM）",
+        "low_vram": True
+    },
     "fast": {
         "steps": 12,
         "num_latents": 8192,
@@ -58,10 +66,10 @@ QUALITY_PRESETS = {
     },
     "balanced": {
         "steps": 30,
-        "num_latents": 16384,
-        "octree_res": 768,
-        "chunk_size": 4000,
-        "description": "标准质量（~2分钟，16GB VRAM）"
+        "num_latents": 12288,
+        "octree_res": 640,
+        "chunk_size": 2048,
+        "description": "标准质量（~2分钟，12GB VRAM）"
     },
     "high": {
         "steps": 50,
@@ -358,6 +366,11 @@ def refine_mesh(
         num_latents = num_latents or preset_config["num_latents"]
         octree_res = octree_res or preset_config["octree_res"]
         chunk_size = chunk_size or preset_config["chunk_size"]
+        
+        # 如果预设启用低显存模式，强制开启
+        if preset_config.get("low_vram", False):
+            low_vram = True
+            logging.info("  ⚙️  自动启用 CPU offloading (低显存优化)")
     else:
         logging.warning(f"未知预设 '{preset}'，使用默认值")
         steps = steps or 30
@@ -430,7 +443,10 @@ def refine_mesh(
         resolution=voxel_res,
         num_latents=num_latents
     )
-    voxel_cond = voxel_cond.to(device)
+    
+    # 低显存模式：先不移到 GPU
+    if not low_vram:
+        voxel_cond = voxel_cond.to(device)
     logging.info(f"  ✓ 体素条件: {voxel_cond.shape}")
     
     # 加载图像
@@ -453,11 +469,21 @@ def refine_mesh(
     logging.info("="*60 + "\n")
     
     try:
+        # 低显存模式：清理显存
+        if low_vram:
+            gc.collect()
+            torch.cuda.empty_cache()
+            logging.info("  🧹 清理显存完成")
+        
         # 强制禁用 AMP，确保全程 float32
         with torch.cuda.amp.autocast(enabled=False):
             # 确保输入张量也是 float32
             if voxel_cond.dtype != torch.float32:
                 voxel_cond = voxel_cond.float()
+            
+            # 低显存模式：现在才移到 GPU
+            if low_vram and voxel_cond.device.type != 'cuda':
+                voxel_cond = voxel_cond.to(device)
             
             outputs = pipeline(
                 image=image,
@@ -536,9 +562,9 @@ def main():
     # 质量预设
     parser.add_argument(
         "--preset",
-        choices=["fast", "balanced", "high", "ultra"],
-        default="balanced",
-        help="质量预设 (fast: 8GB/30s, balanced: 16GB/2min, high: 24GB/5min, ultra: 32GB/10min)"
+        choices=["lowmem", "fast", "balanced", "high", "ultra"],
+        default="lowmem",
+        help="质量预设 (lowmem: 6GB/1min, fast: 8GB/30s, balanced: 12GB/2min, high: 24GB/5min, ultra: 32GB/10min)"
     )
     
     # 高级参数（覆盖预设）

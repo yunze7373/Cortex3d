@@ -614,10 +614,14 @@ def run_hunyuan3d_omni(image_path, output_dir, quality="balanced", control_type=
     return run_command(cmd, cwd=PROJECT_ROOT)
 
 
-def run_ultrashape(image_path, mesh_path, output_dir, preset="balanced"):
+def run_ultrashape(image_path, mesh_path, output_dir, preset="lowmem", low_vram=False):
     """
     Call UltraShape to refine the mesh.
     Automatically handles Docker execution.
+    
+    Args:
+        preset: Quality preset (lowmem/fast/balanced/high/ultra)
+        low_vram: Enable CPU offloading for lower VRAM usage
     """
     image_path = Path(image_path)
     mesh_path = Path(mesh_path)
@@ -646,6 +650,8 @@ def run_ultrashape(image_path, mesh_path, output_dir, preset="balanced"):
                 "--output", str(output_dir),
                 "--preset", preset
              ]
+             if low_vram:
+                 cmd.append("--low-vram")
              return run_command(cmd, cwd=PROJECT_ROOT)
         else:
              logging.error("Cannot run UltraShape: Not in ultrashape container and module not found.")
@@ -675,6 +681,8 @@ def run_ultrashape(image_path, mesh_path, output_dir, preset="balanced"):
             "--output", container_output,
             "--preset", preset
         ]
+        if low_vram:
+            cmd.append("--low-vram")
         
         return run_command(cmd, cwd=PROJECT_ROOT)
 
@@ -696,8 +704,10 @@ def main():
     # UltraShape refinement
     parser.add_argument("--refine", action="store_true",
                         help="Apply UltraShape geometric refinement after generation (high-fidelity geometry)")
-    parser.add_argument("--refine-preset", choices=["fast", "balanced", "high", "ultra"], default="balanced",
-                        help="UltraShape quality preset (fast: 30s/8GB, balanced: 2min/16GB, high: 5min/24GB)")
+    parser.add_argument("--refine-preset", choices=["lowmem", "fast", "balanced", "high", "ultra"], default="lowmem",
+                        help="UltraShape quality preset (lowmem: 1min/6GB, fast: 30s/8GB, balanced: 2min/12GB)")
+    parser.add_argument("--refine-low-vram", action="store_true",
+                        help="Enable CPU offloading for UltraShape (reduces VRAM usage)")
     # Hunyuan3D-Omni control parameters
     parser.add_argument("--control-type", choices=["pose", "point", "voxel", "bbox"],
                         help="Control type for Hunyuan3D-Omni (pose/point/voxel/bbox)")
@@ -842,12 +852,14 @@ def main():
             logging.info("\n" + "="*60)
             logging.info("🎨 Applying UltraShape geometric refinement...")
             logging.info(f"   Preset: {args.refine_preset}")
+            if args.refine_low_vram:
+                logging.info("   Low VRAM: Enabled (CPU offloading)")
             logging.info("="*60 + "\n")
             
             try:
                 # Call properly wrapped UltraShape runner
                 refine_output_dir = args.output_dir / "ultrashape"
-                if run_ultrashape(input_image, result_mesh, refine_output_dir, args.refine_preset):
+                if run_ultrashape(input_image, result_mesh, refine_output_dir, args.refine_preset, args.refine_low_vram):
                      refined_glb = refine_output_dir / f"{result_mesh.stem}_refined.glb"
                      if refined_glb.exists():
                         logging.info(f"✅ Refinement successful: {refined_glb}")
