@@ -191,6 +191,14 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
     
     weights = torch.load(ckpt_path, map_location='cpu')
     
+    # 强制转换权重为 float32（权重文件可能保存为 float16）
+    logging.info("  - 转换权重为 float32...")
+    for key in ['vae', 'dit', 'conditioner']:
+        if key in weights:
+            for param_key in weights[key]:
+                if torch.is_tensor(weights[key][param_key]):
+                    weights[key][param_key] = weights[key][param_key].float()
+    
     vae.load_state_dict(weights['vae'], strict=True)
     dit.load_state_dict(weights['dit'], strict=True)
     conditioner.load_state_dict(weights['conditioner'], strict=True)
