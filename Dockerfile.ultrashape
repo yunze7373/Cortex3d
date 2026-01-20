@@ -39,6 +39,9 @@ RUN pip3 install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 \
     --index-url https://download.pytorch.org/whl/cu121 && \
     echo "✓ PyTorch 2.5.1 安装完成"
 
+# 安装构建依赖 (FlashAttention 需要 psutil, ninja 等)
+RUN pip3 install psutil ninja packaging
+
 # 安装 UltraShape 依赖
 RUN pip3 install --no-build-isolation -r requirements.txt && \
     echo "✓ UltraShape 依赖安装完成"
