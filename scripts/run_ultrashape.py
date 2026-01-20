@@ -119,7 +119,13 @@ def apply_dtype_fix():
             value = value.float()
             if attn_mask is not None:
                 attn_mask = attn_mask.float()
-            return original_sdpa(query, key, value, attn_mask, dropout_p, is_causal, scale)
+            return original_sdpa(
+                query, key, value,
+                attn_mask=attn_mask,
+                dropout_p=dropout_p,
+                is_causal=is_causal,
+                scale=scale
+            )
         
         # 替换 F.scaled_dot_product_attention
         F.scaled_dot_product_attention = patched_sdpa
