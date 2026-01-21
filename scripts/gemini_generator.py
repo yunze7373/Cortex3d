@@ -856,6 +856,144 @@ def refine_character_details(
         return None
 
 
+# =============================================================================
+# P1 功能: 风格转换 (Style Transfer)
+# =============================================================================
+
+def style_transfer_character(
+    source_image_path: str,
+    style_preset: str,
+    character_description: str,
+    api_key: str,
+    model_name: str = DEFAULT_MODEL,
+    output_dir: str = "test_images",
+    custom_style: Optional[str] = None,
+    preserve_details: bool = True
+) -> Optional[str]:
+    """
+    应用风格转换到角色图像
+    
+    Args:
+        source_image_path: 源图像路径
+        style_preset: 风格预设 (anime/cinematic/oil-painting/watercolor/comic/3d)
+        character_description: 角色描述
+        api_key: Gemini API Key
+        model_name: 模型名称
+        output_dir: 输出目录
+        custom_style: 自定义风格描述 (覆盖预设)
+        preserve_details: 是否保留原始细节
+    
+    Returns:
+        风格转换后图像的路径
+    """
+    from pathlib import Path
+    from image_editor_utils import compose_style_transfer_prompt, load_image_as_base64
+    
+    _ensure_imports()
+    
+    # 风格预设映射
+    style_presets = {
+        "anime": "Japanese anime style with exaggerated features, bright colors, and expressive eyes",
+        "cinematic": "Cinematic photorealistic style with professional lighting and composition",
+        "oil-painting": "Classical oil painting style with visible brushstrokes and rich colors",
+        "watercolor": "Watercolor painting style with soft edges and flowing pigments",
+        "comic": "Comic book style with bold outlines and limited color palette",
+        "3d": "3D rendered/CGI style with modern digital aesthetics"
+    }
+    
+    # 确定风格描述
+    style_description = custom_style if custom_style else style_presets.get(style_preset, style_preset)
+    
+    print(f"\n[风格转换模式]")
+    print(f"  源图: {Path(source_image_path).name}")
+    print(f"  风格: {style_preset}" + (f" (自定义)" if custom_style else ""))
+    
+    # 构建提示词
+    prompt = compose_style_transfer_prompt(
+        target_style=style_description,
+        character_description=character_description
+    )
+    
+    # 保留细节的额外指令
+    if preserve_details:
+        prompt += "\n\nImportant: Preserve all anatomical details, proportions, and character identity while applying the style."
+    
+    # 加载源图像
+    image_b64 = load_image_as_base64(source_image_path)
+    if image_b64 is None:
+        print(f"[ERROR] 无法加载源图像: {source_image_path}")
+        return None
+    
+    mime_type = "image/png" if source_image_path.endswith('.png') else "image/jpeg"
+    
+    try:
+        # 调用 Gemini API
+        model = genai.GenerativeModel(model_name)
+        
+        contents = [
+            prompt,
+            {
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": image_b64
+                }
+            }
+        ]
+        
+        generation_config = genai.types.GenerationConfig(
+            max_output_tokens=4096,
+            temperature=0.7,
+        )
+        
+        print("\n[进度] 调用 Gemini API 进行风格转换...")
+        response = model.generate_content(
+            contents,
+            generation_config=generation_config,
+            safety_settings=[]
+        )
+        
+        if not response or not response.candidates:
+            print("[ERROR] 风格转换失败: 无返回内容")
+            return None
+        
+        # 提取生成的图像
+        image_data = None
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, 'inline_data') and part.inline_data:
+                if part.inline_data.mime_type.startswith('image/'):
+                    image_data = part.inline_data.data
+                    break
+        
+        if not image_data:
+            print("[ERROR] API 未返回图像数据")
+            return None
+        
+        # 保存风格转换后的图像
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = Path(output_dir) / f"styled_{style_preset}_{timestamp}.png"
+        
+        import struct
+        if isinstance(image_data, str):
+            import base64
+            image_bytes = base64.b64decode(image_data)
+        else:
+            image_bytes = image_data
+        
+        with open(output_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        print(f"✅ 风格转换完成: {output_path}")
+        return str(output_path)
+        
+    except Exception as e:
+        print(f"[ERROR] 风格转换失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 # 已移除 generate_with_imagen 和 generate_with_gemini_vision 函数
 # 直连模式应该和代理模式使用相同的逻辑，只是访问路径不同
 

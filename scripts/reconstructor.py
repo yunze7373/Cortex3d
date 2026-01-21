@@ -43,6 +43,64 @@ def run_command(cmd, cwd=None, env=None):
         logging.error(f"Command failed with exit code {e.returncode}")
         return False
 
+def ensure_container_running(service_name: str, cwd=None) -> bool:
+    """
+    检查 Docker 容器是否运行，如果没有则自动启动。
+    
+    Args:
+        service_name: Docker Compose 服务名称
+        cwd: 工作目录（包含 compose.yml）
+    
+    Returns:
+        bool: 容器是否成功运行
+    """
+    if cwd is None:
+        cwd = PROJECT_ROOT
+    
+    # 检查容器状态
+    try:
+        result = subprocess.run(
+            ["docker", "compose", "ps", "-q", service_name],
+            cwd=cwd,
+            capture_output=True,
+            text=True
+        )
+        container_id = result.stdout.strip()
+        
+        if container_id:
+            # 检查容器是否真正运行中
+            status_result = subprocess.run(
+                ["docker", "inspect", "-f", "{{.State.Running}}", container_id],
+                capture_output=True,
+                text=True
+            )
+            if status_result.stdout.strip() == "true":
+                logging.debug(f"Container '{service_name}' is already running.")
+                return True
+        
+        # 容器未运行，启动它
+        logging.info(f"Container '{service_name}' is not running. Starting...")
+        start_result = subprocess.run(
+            ["docker", "compose", "up", "-d", service_name],
+            cwd=cwd,
+            check=True,
+            text=True
+        )
+        logging.info(f"Container '{service_name}' started successfully.")
+        
+        # 等待容器就绪（给一点时间初始化）
+        import time
+        time.sleep(2)
+        
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to start container '{service_name}': {e}")
+        return False
+    except Exception as e:
+        logging.error(f"Error checking/starting container '{service_name}': {e}")
+        return False
+
 def run_instantmesh(image_path, output_dir, quality="balanced"):
     """
     调用 InstantMesh 生成
@@ -170,6 +228,11 @@ def run_multiview(image_prefix, output_dir, quality="balanced"):
         # 本地运行 -> 调用 Docker Compose
         logging.info("Running locally, dispatching to 'instantmesh' container...")
         
+        # 确保容器已启动
+        if not ensure_container_running("instantmesh"):
+            logging.error("Failed to start 'instantmesh' container")
+            return False
+        
         # 转换路径为容器内路径
         try:
             # image_prefix 可能是 "test_images/xxx" 或绝对路径
@@ -227,6 +290,11 @@ def run_trellis(image_path, output_dir, quality="balanced"):
     else:
         # 本地运行 -> 调用 Docker Compose
         logging.info("Running locally, dispatching to 'trellis' container...")
+        
+        # 确保容器已启动
+        if not ensure_container_running("trellis"):
+            logging.error("Failed to start 'trellis' container")
+            return False
         
         # 转换路径为容器内路径 (假设挂载了 . -> /workspace)
         # image_path 是绝对路径或相对路径。我们需要相对于 PROJECT_ROOT 的路径。
@@ -337,6 +405,11 @@ def run_hunyuan3d(image_path, output_dir, quality="balanced", no_texture=False, 
         # 本地运行 -> 调用 Docker Compose
         logging.info("Running locally, dispatching to 'hunyuan3d' container...")
         
+        # 确保容器已启动
+        if not ensure_container_running("hunyuan3d"):
+            logging.error("Failed to start 'hunyuan3d' container")
+            return False
+        
         # Enable multi-view for ultra quality
         use_multiview = quality == "ultra"
         
@@ -423,6 +496,11 @@ def run_hunyuan3d_21(image_path, output_dir, quality="balanced", no_texture=Fals
         # 本地运行，通过 Docker Compose 调用 hunyuan3d-2.1 容器
         logging.info("Running locally, dispatching to 'hunyuan3d-2.1' container...")
         
+        # 确保容器已启动
+        if not ensure_container_running("hunyuan3d-2.1"):
+            logging.error("Failed to start 'hunyuan3d-2.1' container")
+            return False
+        
         # 转换为容器内路径
         container_image_path = f"/workspace/{image_path}"
         container_output_dir = f"/workspace/{output_dir}"
@@ -500,6 +578,11 @@ def run_trellis2(image_path, output_dir, quality="balanced", no_texture=False):
     else:
         # Running locally -> use Docker Compose
         logging.info("Running locally, dispatching to 'trellis2' container...")
+        
+        # 确保容器已启动
+        if not ensure_container_running("trellis2"):
+            logging.error("Failed to start 'trellis2' container")
+            return False
         
         # Convert paths to container paths
         try:
@@ -580,6 +663,11 @@ def run_hunyuan3d_omni(image_path, output_dir, quality="balanced", control_type=
         # 本地运行，通过 Docker Compose 调用 hunyuan3d-omni 容器
         logging.info("Running locally, dispatching to 'hunyuan3d-omni' container...")
         
+        # 确保容器已启动
+        if not ensure_container_running("hunyuan3d-omni"):
+            logging.error("Failed to start 'hunyuan3d-omni' container")
+            return False
+        
         # 转换为容器内路径
         try:
             rel_image = image_path.absolute().relative_to(PROJECT_ROOT.absolute())
@@ -659,6 +747,11 @@ def run_ultrashape(image_path, mesh_path, output_dir, preset="lowmem", low_vram=
     else:
         # Running locally -> use Docker Compose to call ultrashape container
         logging.info("Running locally, dispatching to 'ultrashape' container...")
+        
+        # 确保容器已启动
+        if not ensure_container_running("ultrashape"):
+            logging.error("Failed to start 'ultrashape' container")
+            return False
         
         # Convert paths to container paths
         try:

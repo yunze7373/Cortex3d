@@ -470,6 +470,46 @@ def main():
         help="要优化的源图像路径"
     )
     
+    # ========================================
+    # P1: 风格转换模式参数
+    # ========================================
+    parser.add_argument(
+        "--mode-style",
+        action="store_true",
+        dest="mode_style",
+        help="激活风格转换模式: 改变角色整体美学风格。需要配合 --style-preset/--custom-style 和 --from-style"
+    )
+    
+    parser.add_argument(
+        "--style-preset",
+        type=str,
+        dest="style_preset",
+        choices=["anime", "cinematic", "oil-painting", "watercolor", "comic", "3d"],
+        help="风格预设: anime(日本动画) | cinematic(电影级) | oil-painting(油画) | watercolor(水彩) | comic(漫画) | 3d(3D渲染)"
+    )
+    
+    parser.add_argument(
+        "--custom-style",
+        type=str,
+        dest="custom_style",
+        help="自定义风格描述(覆盖 --style-preset)。例: 'impressionist Renaissance painting'"
+    )
+    
+    parser.add_argument(
+        "--from-style",
+        type=str,
+        dest="from_style",
+        help="要进行风格转换的源图像路径"
+    )
+    
+    parser.add_argument(
+        "--preserve-details",
+        action="store_true",
+        dest="preserve_details",
+        default=True,
+        help="风格转换时是否保留原始细节 (默认: 是)"
+    )
+    
     args = parser.parse_args()
     
     # 根据模式自动设置token(如果未提供)
@@ -600,6 +640,68 @@ def main():
             sys.exit(0)
         except Exception as e:
             print(f"[ERROR] 优化过程出错: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    
+    # =========================================================================
+    # P1 风格转换模式：对角色应用艺术风格转换
+    # =========================================================================
+    if args.mode_style:
+        print("[风格转换模式]")
+        
+        # 验证必需参数
+        if not args.from_style:
+            print("[ERROR] --mode-style 需要 --from-style 参数（源图像路径）")
+            sys.exit(1)
+        
+        if not args.style_preset and not args.custom_style:
+            print("[ERROR] --mode-style 需要 --style-preset 或 --custom-style 参数")
+            print("        预设选项: anime | cinematic | oil-painting | watercolor | comic | 3d")
+            sys.exit(1)
+        
+        # 检查源图像是否存在
+        source_path = Path(args.from_style)
+        if not source_path.exists():
+            print(f"[ERROR] 源图像不存在: {args.from_style}")
+            sys.exit(1)
+        
+        # 确定风格预设
+        style_preset = args.custom_style if args.custom_style else args.style_preset
+        
+        print(f"  └─ 源图像: {args.from_style}")
+        print(f"  └─ 风格: {style_preset}")
+        print(f"  └─ 保留细节: {'是' if args.preserve_details else '否'}")
+        print(f"  └─ 输出目录: {args.output}")
+        print("")
+        
+        # 导入风格转换函数
+        from gemini_generator import style_transfer_character
+        
+        # 执行风格转换
+        character_desc = args.character if args.character else "a character"
+        try:
+            output_path = style_transfer_character(
+                source_image_path=str(source_path),
+                style_preset=style_preset if not args.custom_style else "custom",
+                character_description=character_desc,
+                api_key=args.token,
+                model_name=args.model,
+                output_dir=args.output,
+                custom_style=args.custom_style if args.custom_style else None,
+                preserve_details=args.preserve_details
+            )
+            
+            if output_path:
+                print(f"\n✅ 风格转换完成！")
+                print(f"   输出: {output_path}")
+            else:
+                print(f"\n❌ 风格转换失败，请检查日志")
+                sys.exit(1)
+            
+            sys.exit(0)
+        except Exception as e:
+            print(f"[ERROR] 风格转换过程出错: {e}")
             import traceback
             traceback.print_exc()
             sys.exit(1)
