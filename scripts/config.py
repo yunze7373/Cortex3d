@@ -116,11 +116,28 @@ def build_image_reference_prompt(character_description: str) -> str:
     )
 
 
-def build_strict_copy_prompt() -> str:
+def build_strict_copy_prompt(custom_views: List[str] = None) -> str:
     """
     构建严格复制模式提示词（100%复制原图）
-    不需要额外描述，完全依赖参考图片
+    
+    Args:
+        custom_views: 自定义视角列表 (可选)
     """
+    if custom_views:
+        view_list_str = ", ".join(custom_views)
+        return f"""Create a character reference sheet showing THIS PERSON from the reference image.
+
+## VIEWS REQUIRED
+Generate ONLY these specific views: {view_list_str}
+
+## REQUIREMENTS
+- 100% Match the reference image character
+- Same pose, same clothes, same face
+- White background
+- No text or labels
+- Layout: Arrange views horizontally
+"""
+
     lib = _get_prompt_library()
     if lib:
         return lib.build_strict_copy_prompt()
