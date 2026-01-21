@@ -1,69 +1,69 @@
 name: universal_multiview
-version: "1.0"
-description: "通用多视角生成模板 - 支持任意视角组合"
+version: "1.2"
+description: "通用多视角生成模板 - 适用于任何对象类型"
 layout: "dynamic"
 
 template: |
-  Generate a professional 3D character turntable reference sheet with exactly {view_count} panels arranged in {layout_description}.
+  Generate a professional 3D reference sheet with exactly {view_count} panels arranged in {layout_description}.
 
   ## OUTPUT REQUIREMENT
   Single image containing {view_count} panels: {panel_list}
 
-  ## CHARACTER
+  ## OBJECT/CHARACTER
   {character_description}
   Style: {style}
 
-  ## CRITICAL RULES - READ CAREFULLY
-
-  ### TURNTABLE ROTATION (NOT MIRROR!)
-  Imagine the character standing on a rotating platform:
+  ## CAMERA POSITIONS (orbiting around the object)
+  
+  The object stays stationary in the center. The CAMERA orbits around it:
   {view_descriptions}
 
-  ⚠️ IMPORTANT: Each panel shows a UNIQUE angle. No duplicates!
-  ⚠️ REFERENCE PHOTO OVERRIDE: The reference photo has a specific camera angle. You MUST IGNORE the reference camera angle and generate the specific angles requested above.
-  ⚠️ If I ask for a LEFT view, show the LEFT side, even if the reference photo shows the right side.
-  ⚠️ FORCE ROTATION: Do not just copy the reference photo. ROTATE the character to the requested angle.
+  ⚠️ Each panel shows a UNIQUE camera angle. No duplicates!
+  ⚠️ REFERENCE OVERRIDE: If provided a reference image, ROTATE the object to show the requested angles, do not just copy the reference angle.
 
-  ### ANATOMICAL CORRECTNESS (CRITICAL!)
-  - Arms MUST connect to shoulders only
-  - Legs MUST connect to hips only
-  - Head MUST connect to neck only
-  - NO extra limbs, NO twisted body parts
-  - Upper body and lower body MUST face the SAME direction in each panel
-  - The entire body rotates together as one unit
+  ## ⚠️ CRITICAL: LEFT vs RIGHT DISTINCTION
+  
+  Think of the camera orbiting around the object:
+  
+  | View  | Camera Position | Object's Front Points To |
+  |-------|-----------------|-------------------------|
+  | RIGHT | Right of object | LEFT edge of image      |
+  | LEFT  | Left of object  | RIGHT edge of image     |
+  
+  ⚠️ These are views from OPPOSITE sides - NOT mirrors!
+  ⚠️ If RIGHT and LEFT panels look similar, you made an error!
 
-  ### POSE CONSISTENCY (CRITICAL!)
-  - EXACT same pose in ALL {view_count} panels - only the viewing angle changes
-  - Same arm positions, same leg positions, same head tilt
-  - If holding an object → it stays in the same hand in ALL views
-  - This is ONE character photographed from {view_count} angles, NOT {view_count} different poses
+  ## CONSISTENCY RULES
+  - SAME object in ALL {view_count} panels
+  - SAME pose/orientation/details in all panels
+  - Only the CAMERA ANGLE changes
 
-  ### PANEL LAYOUT
+  ## BACKGROUND
+  - Solid neutral gray or white background
+  - ❌ NO turntable, platform, or any surface under the object
+  - ✅ Object appears to float naturally
+
+  ## PANEL LAYOUT
   - {view_count} panels arranged as {layout_description}
-  - Character centered in each panel
-  - Same scale/size in all panels
+  - Object centered in each panel, same scale
   - Clean separation between panels
-  - Neutral gray or white background
 
-  ### LIGHTING
-  - Flat, even studio lighting (no harsh shadows)
-  - Face clearly visible without shadow obstruction
-  - Consistent lighting direction across all panels
+  ## ABSOLUTELY FORBIDDEN
+  - NO text labels
+  - NO mirror flips between opposite side views
+  - NO turntable, platform, or pedestal
 
-  ### ABSOLUTELY FORBIDDEN
-  - NO text labels (no "front", "back", "left", "right", no angle numbers)
-  - NO twisted bodies (upper body facing different direction than legs)
-  - NO mirror flips between side views
-  - NO anatomical errors (no extra limbs, no wrong joint positions)
-  - NO pose variations between panels
-
-  Generate a clean, professional character reference sheet following ALL rules above.
+  Generate a clean, professional reference sheet following ALL rules above.
 
 variables:
   - character_description
   - style
   - view_count
   - layout_description
+  - panel_list
+  - view_descriptions
+
+default_style: "cinematic character"
   - panel_list
   - view_descriptions
 

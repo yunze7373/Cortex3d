@@ -1,68 +1,69 @@
 name: standard_multiview
-version: "2.0"
-description: "标准4视角生成模板 - 1x4横排布局"
+version: "2.3"
+description: "标准4视角生成模板 - 通用方向描述，适用于任何对象"
 layout: "1x4_horizontal"
 
 template: |
-  Generate a professional 3D character turntable reference sheet with exactly 4 panels arranged horizontally.
+  Generate a professional 3D reference sheet with exactly 4 panels arranged horizontally.
 
   ## OUTPUT REQUIREMENT
   Single image containing 4 panels in a row: [FRONT] [RIGHT] [BACK] [LEFT]
 
-  ## CHARACTER
+  ## OBJECT/CHARACTER
   {character_description}
   Style: {style}
 
-  ## CRITICAL RULES - READ CAREFULLY
+  ## CAMERA POSITIONS (4 angles orbiting the object)
+  
+  Imagine the object in the center. The camera orbits around it clockwise:
+  
+  - Panel 1 (FRONT, 0°): Camera in front of the object
+    → We see the FRONT surface of the object
+    
+  - Panel 2 (RIGHT, 90°): Camera on the RIGHT side of the object
+    → We see the RIGHT surface of the object
+    → The object's FRONT points toward the LEFT edge of the image
+    
+  - Panel 3 (BACK, 180°): Camera behind the object
+    → We see the BACK surface of the object
+    
+  - Panel 4 (LEFT, 270°): Camera on the LEFT side of the object
+    → We see the LEFT surface of the object
+    → The object's FRONT points toward the RIGHT edge of the image
 
-  ### TURNTABLE ROTATION (NOT MIRROR!)
-  Imagine the character standing on a rotating platform:
-  - Panel 1 (FRONT): Platform at 0° - We see the FACE, chest, front of body
-  - Panel 2 (RIGHT SIDE): Platform rotated 90° clockwise - We see the RIGHT ear, RIGHT shoulder, RIGHT hip
-  - Panel 3 (BACK): Platform rotated 180° - We see back of HEAD, spine, buttocks
-  - Panel 4 (LEFT SIDE): Platform rotated 270° clockwise - We see the LEFT ear, LEFT shoulder, LEFT hip
+  ## ⚠️ CRITICAL: LEFT vs RIGHT - DO NOT CONFUSE!
+  
+  The key difference between Panel 2 (RIGHT) and Panel 4 (LEFT):
+  
+  | View  | Camera Position | Object's Front Points To |
+  |-------|-----------------|-------------------------|
+  | RIGHT | Right of object | LEFT edge of image      |
+  | LEFT  | Left of object  | RIGHT edge of image     |
+  
+  ⚠️ These are OPPOSITE views from opposite sides - NOT mirrors!
+  ⚠️ If panels 2 and 4 look similar, you made an error!
 
-  ⚠️ IMPORTANT: Panels 2 and 4 are NOT mirrors! They show OPPOSITE sides of the body!
-  - RIGHT SIDE shows: right ear, right arm, right leg
-  - LEFT SIDE shows: left ear, left arm, left leg
+  ## CONSISTENCY RULES
+  - SAME object in ALL 4 panels - only the camera angle changes
+  - SAME pose/orientation/details in all panels
+  - SAME scale and centering in all panels
 
-  ### ANATOMICAL CORRECTNESS (CRITICAL!)
-  - Arms MUST connect to shoulders only
-  - Legs MUST connect to hips only
-  - Head MUST connect to neck only
-  - NO extra limbs, NO twisted body parts
-  - Upper body and lower body MUST face the SAME direction in each panel
-  - The entire body rotates together as one unit
+  ## BACKGROUND
+  - Solid neutral gray or white background
+  - ❌ NO turntable, platform, or any surface under the object
+  - ✅ Object appears to float naturally
 
-  ### POSE CONSISTENCY (CRITICAL!)
-  - EXACT same pose in ALL 4 panels - only the viewing angle changes
-  - Same arm positions, same leg positions, same head tilt
-  - If holding an object in right hand → it stays in right hand in ALL views
-  - This is ONE character photographed from 4 angles, NOT 4 different poses
+  ## ABSOLUTELY FORBIDDEN
+  - NO text labels
+  - NO mirror flips (panels 2 and 4 must show DIFFERENT sides)
+  - NO turntable or platform
 
-  ### PANEL LAYOUT
-  - 4 equal-width panels arranged horizontally (side by side)
-  - Character centered in each panel
-  - Same scale/size in all panels
-  - Clean separation between panels
-  - Neutral gray or white background
-
-  ### LIGHTING
-  - Flat, even studio lighting (no harsh shadows)
-  - Face clearly visible without shadow obstruction
-  - Consistent lighting direction across all panels
-
-  ### ABSOLUTELY FORBIDDEN
-  - NO text labels (no "front", "back", "left", "right")
-  - NO twisted bodies (upper body facing different direction than legs)
-  - NO mirror flips (left and right views must show different sides)
-  - NO anatomical errors (no extra limbs, no wrong joint positions)
-  - NO pose variations between panels
-
-  Generate a clean, professional character reference sheet following ALL rules above.
+  Generate a clean, professional reference sheet following ALL rules above.
 
 variables:
   - character_description
   - style
+
+default_style: "cinematic character"
 
 default_style: "cinematic character"

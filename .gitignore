@@ -39,3 +39,5 @@ Thumbs.db
 .vscode/
 reference_images/
 test_images/
+log.log
+temp_output.txt

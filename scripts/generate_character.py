@@ -132,6 +132,12 @@ def main():
     )
     
     parser.add_argument(
+        "--export-prompt",
+        action="store_true",
+        help="Export prompt and parameters instead of calling API. Use this to manually copy to Gemini App when API quota is limited."
+    )
+    
+    parser.add_argument(
         "--style",
         default=None,
         help="Style description. Default: 'cinematic character'. Presets: see --photorealistic, --anime"
@@ -307,64 +313,78 @@ def main():
     # 正常模式：2D生成 + 可选3D
     # =========================================================================
     
-    # 检查认证
-    if args.mode == "proxy":
-        if not args.token:
-            print("\n⚠️  未设置 AiProxy 令牌\n")
-            
-            # 构建基于实际命令的建议
-            base_cmd_parts = ["python scripts\\generate_character.py"]
-            if args.from_image:
-                base_cmd_parts.append(f"--from-image {args.from_image}")
-            elif args.description:
-                base_cmd_parts.append(f'"{args.description}"')
-            if args.strict:
-                base_cmd_parts.append("--strict")
-            
-            proxy_cmd_with_token = " ".join(base_cmd_parts + ["--mode proxy --token 'your-aiproxy-token'"])
-            direct_cmd = " ".join(base_cmd_parts + ["--mode direct --token 'your-gemini-api-key'"])
-            
-            print("💡 解决方案:")
-            print(f"\n   选项 1: 直接传递 AiProxy Token (推荐)")
-            print(f"   {proxy_cmd_with_token}")
-            print(f"\n   选项 2: 使用直连模式")
-            print(f"   {direct_cmd}")
-            print(f"\n   选项 3: 设置环境变量")
-            print(f"   $env:AIPROXY_TOKEN='your-token'  # PowerShell")
-            print(f"   {' '.join(base_cmd_parts + ['--mode proxy'])}\n")
-            sys.exit(1)
-        model = args.model or "models/nano-banana-pro-preview"
-        print(f"[模式] AiProxy (bot.bigjj.click/aiproxy)")
-    else:
-        if not args.token:
-            print("\n⚠️  未设置 Gemini API Key\n")
-            
-            # 构建基于实际命令的建议
-            base_cmd_parts = ["python scripts\\generate_character.py"]
-            if args.from_image:
-                base_cmd_parts.append(f"--from-image {args.from_image}")
-            elif args.description:
-                base_cmd_parts.append(f'"{args.description}"')
-            if args.strict:
-                base_cmd_parts.append("--strict")
-            
-            direct_cmd_with_key = " ".join(base_cmd_parts + ["--mode direct --api-key 'your-gemini-api-key'"])
-            proxy_cmd = " ".join(base_cmd_parts + ["--mode proxy"])
-            
-            print("💡 解决方案:")
-            print(f"\n   选项 1: 直接传递 API Key (推荐)")
-            print(f"   {direct_cmd_with_key}")
-            print(f"\n   选项 2: 使用代理模式 (需要 AIPROXY_TOKEN)")
-            print(f"   {proxy_cmd}")
-            print(f"\n   选项 3: 设置环境变量")
-            print(f"   $env:GEMINI_API_KEY='your-api-key'  # PowerShell")
-            print(f"   {' '.join(base_cmd_parts + ['--mode direct'])}\n")
-            sys.exit(1)
-        # 直连模式使用和代理模式完全相同的模型
-        model = args.model or "models/nano-banana-pro-preview"
-        print(f"[模式] 直连 Gemini API")
+    # 导出模式不需要token验证（不会实际调用API）
+    if not args.export_prompt:
+        # 检查认证
+        if args.mode == "proxy":
+            if not args.token:
+                print("\n⚠️  未设置 AiProxy 令牌\n")
+                
+                # 构建基于实际命令的建议
+                base_cmd_parts = ["python scripts\\generate_character.py"]
+                if args.from_image:
+                    base_cmd_parts.append(f"--from-image {args.from_image}")
+                elif args.description:
+                    base_cmd_parts.append(f'"{args.description}"')
+                if args.strict:
+                    base_cmd_parts.append("--strict")
+                
+                proxy_cmd_with_token = " ".join(base_cmd_parts + ["--mode proxy --token 'your-aiproxy-token'"])
+                direct_cmd = " ".join(base_cmd_parts + ["--mode direct --token 'your-gemini-api-key'"])
+                export_cmd = " ".join(base_cmd_parts + ["--export-prompt"])
+                
+                print("💡 解决方案:")
+                print(f"\n   选项 1: 直接传递 AiProxy Token (推荐)")
+                print(f"   {proxy_cmd_with_token}")
+                print(f"\n   选项 2: 使用直连模式")
+                print(f"   {direct_cmd}")
+                print(f"\n   选项 3: 导出提示词 (不消耗API配额)")
+                print(f"   {export_cmd}")
+                print(f"\n   选项 4: 设置环境变量")
+                print(f"   $env:AIPROXY_TOKEN='your-token'  # PowerShell")
+                print(f"   {' '.join(base_cmd_parts + ['--mode proxy'])}\n")
+                sys.exit(1)
+        else:
+            if not args.token:
+                print("\n⚠️  未设置 Gemini API Key\n")
+                
+                # 构建基于实际命令的建议
+                base_cmd_parts = ["python scripts\\generate_character.py"]
+                if args.from_image:
+                    base_cmd_parts.append(f"--from-image {args.from_image}")
+                elif args.description:
+                    base_cmd_parts.append(f'"{args.description}"')
+                if args.strict:
+                    base_cmd_parts.append("--strict")
+                
+                direct_cmd_with_key = " ".join(base_cmd_parts + ["--mode direct --token 'your-gemini-api-key'"])
+                proxy_cmd = " ".join(base_cmd_parts + ["--mode proxy --token 'your-aiproxy-token'"])
+                export_cmd = " ".join(base_cmd_parts + ["--export-prompt"])
+                
+                print("💡 解决方案:")
+                print(f"\n   选项 1: 直接传递 Gemini API Key (推荐)")
+                print(f"   {direct_cmd_with_key}")
+                print(f"\n   选项 2: 使用代理模式")
+                print(f"   {proxy_cmd}")
+                print(f"\n   选项 3: 导出提示词 (不消耗API配额)")
+                print(f"   {export_cmd}")
+                print(f"\n   选项 4: 设置环境变量")
+                print(f"   $env:GEMINI_API_KEY='your-api-key'  # PowerShell")
+                print(f"   {' '.join(base_cmd_parts + ['--mode direct'])}\n")
+                sys.exit(1)
     
-    print(f"[模型] {model}")
+    # 设置模型
+    model = args.model or "models/nano-banana-pro-preview"
+    
+    # 显示模式信息（导出模式除外）
+    if not args.export_prompt:
+        if args.mode == "proxy":
+            print(f"[模式] AiProxy (bot.bigjj.click/aiproxy)")
+        else:
+            print(f"[模式] 直连 Gemini API")
+        print(f"[模型] {model}")
+    else:
+        print(f"[导出模式] 准备提示词参数...")
     
     # 获取角色描述
     if args.description:
@@ -563,8 +583,8 @@ def main():
         if args.from_image:
             ref_image_path = args.from_image
             
-            # 如果不是严格模式，先分析图像
-            if not args.strict:
+            # 如果不是严格模式，先分析图像（导出模式除外）
+            if not args.strict and not args.export_prompt:
                 print(f"\n[图片分析] 使用 Gemini 分析图像: {args.from_image}")
                 print("="*50)
                 
@@ -596,6 +616,16 @@ def main():
                     else:
                         print(f"[INFO] 将使用提供的描述继续: {args.description}")
                         description = args.description
+            elif args.export_prompt and not args.strict:
+                # 导出模式且非严格模式：跳过分析，使用默认或用户提供的描述
+                print(f"\n[导出模式] 跳过图片分析")
+                if args.description:
+                    description = args.description
+                    print(f"[描述] {args.description}")
+                else:
+                    description = "Character extracted from the reference image"
+                    print(f"[默认描述] {description}")
+                    print(f"[提示] 建议使用 --strict 模式或提供描述以获得更好效果")
             else:
                 # 严格模式：跳过分析
                 print(f"\n[严格复制模式] 跳过图片分析，100% 基于原图生成")
@@ -625,7 +655,8 @@ def main():
             reference_image_path=ref_image_path,
             use_strict_mode=args.strict,
             resolution=args.resolution,
-            original_args=args
+            original_args=args,
+            export_prompt=args.export_prompt
         )
     
     if result:

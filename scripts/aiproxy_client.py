@@ -451,7 +451,11 @@ def generate_character_multiview(
     # 优先级: 严格模式 > 自定义视角 > 图片参考 > 默认多视角
     if use_strict_mode:
         print("[MODE] 严格复制模式 (100%基于原图，不允许创意改动)")
-        prompt = build_strict_copy_prompt(custom_views=custom_views)
+        prompt = build_strict_copy_prompt(
+            view_mode=view_mode,
+            custom_views=custom_views,
+            style=style
+        )
     elif custom_views:
         # 自定义视角模式 - 即使有参考图也使用自定义视角
         print(f"[MODE] 自定义视角模式 ({len(custom_views)} 个视角: {custom_views})")
@@ -463,7 +467,10 @@ def generate_character_multiview(
         )
     elif use_image_reference_prompt:
         print("[MODE] 使用图片参考模式提示词 (保留原图动作)")
-        prompt = build_image_reference_prompt(character_description)
+        prompt = build_image_reference_prompt(
+            character_description, 
+            style=style
+        )
     else:
         prompt = build_multiview_prompt(
             character_description, 

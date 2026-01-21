@@ -1,6 +1,6 @@
 name: anatomy_negative
-version: "1.0"
-description: "解剖学错误负面提示词"
+version: "1.1"
+description: "解剖学错误和姿势一致性负面提示词"
 
 prompts:
   - "extra limbs"
@@ -20,3 +20,11 @@ prompts:
   - "wrong joint positions"
   - "arms not connected to shoulders"
   - "legs not connected to hips"
+  - "different poses between views"
+  - "pose changes between panels"
+  - "inconsistent body position"
+  - "subject bending for camera"
+  - "subject looking at camera in all views"
+  - "head turning to face camera"
+  - "arms moving between views"
+  - "legs in different positions"

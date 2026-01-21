@@ -155,30 +155,31 @@ Imagine the character standing on a rotating platform:
 Generate a clean, professional character reference sheet following ALL rules above."""
 
     def _get_image_ref_template(self) -> str:
-        """图片参考模式模板"""
-        return """Generate a 3D character turntable reference sheet with exactly 4 panels, showing the character described below from 4 angles.
+        """图片参考模式模板（支持任意视角数量）"""
+        return """Generate a 3D character reference sheet with exactly {view_count} panel(s), showing the character from the reference image.
 
-## OUTPUT
-Single image with 4 panels horizontally: [FRONT] [RIGHT] [BACK] [LEFT]
+## OUTPUT REQUIREMENT
+Single image with {view_count} panel(s): {panel_list}
 
 ## CHARACTER DESCRIPTION (from reference photo)
 {character_description}
 
+## CRITICAL: GENERATE EXACTLY THESE SPECIFIC VIEW(S)
+You MUST generate exactly the following view(s) of the character:
+{view_descriptions}
+
+⚠️ SINGLE VIEW MODE: If only 1 panel is requested, output ONLY that one specific angle. Do NOT create multiple panels.
+⚠️ REFERENCE PHOTO OVERRIDE: The reference photo may show the character from a different angle. You MUST IGNORE the camera angle in the reference photo and ROTATE the character to match the requested angle(s) above.
+⚠️ FORCE ROTATION: Extract the character's appearance from the reference, then ROTATE them to the exact specified angle(s).
+
 ## CRITICAL: PRESERVE THE ORIGINAL POSE
 ⚠️ The character has a SPECIFIC pose from the reference photo. You MUST preserve this pose:
-- If the character is WALKING → show walking pose from all 4 angles
-- If the character is SITTING → show sitting pose from all 4 angles  
-- If one leg is forward → keep that leg forward in all views
+- If the character is WALKING → show walking pose from the requested angle(s)
+- If the character is SITTING → show sitting pose from the requested angle(s)
+- If one leg is forward → keep that leg forward
 - If arms are in a specific position → maintain that position
 
 DO NOT change the pose to a generic standing pose!
-
-## TURNTABLE ROTATION
-The 4 panels show the SAME character in the SAME pose, just rotated:
-- Panel 1 (FRONT): 0° - facing camera
-- Panel 2 (RIGHT): 90° - right side visible
-- Panel 3 (BACK): 180° - back visible
-- Panel 4 (LEFT): 270° - left side visible
 
 ## ANATOMICAL RULES
 - Arms connect to shoulders only
@@ -187,7 +188,8 @@ The 4 panels show the SAME character in the SAME pose, just rotated:
 - NO twisted bodies, NO extra limbs
 
 ## PANEL LAYOUT
-- 4 equal panels side by side
+- {view_count} panel(s) arranged as {layout_description}
+- Character centered in each panel
 - Same scale in all panels
 - Neutral gray background
 - NO text labels
@@ -195,9 +197,15 @@ The 4 panels show the SAME character in the SAME pose, just rotated:
 ## LIGHTING
 - Flat, even studio lighting
 - No harsh shadows
-- Face clearly visible
+- Character clearly visible
 
-Generate the character maintaining the EXACT pose described, viewed from 4 angles."""
+## ABSOLUTELY FORBIDDEN
+- NO text labels on the image
+- NO additional views beyond what is specified above
+- Do NOT generate 4 views if only 1 or 2 are requested
+- NO pose changes from the reference (except for rotation)
+
+Generate ONLY the specified view(s) of the character, maintaining the EXACT pose from the reference."""
 
     def _get_strict_copy_template(self) -> str:
         """严格复制模式模板"""
@@ -237,27 +245,25 @@ Gray background. Full body visible in all panels.
 Generate 4 DISTINCT turntable views of THIS PERSON."""
 
     def _get_universal_template(self) -> str:
-        """通用多视角模板（支持任意视角数量）"""
-        return """Generate a professional 3D character turntable reference sheet with exactly {view_count} panels arranged in {layout_description}.
+        """通用多视角模板（支持任意视角数量，包括单视角）"""
+        return """Generate a professional 3D character reference sheet with exactly {view_count} panel(s) arranged as {layout_description}.
 
 ## OUTPUT REQUIREMENT
-Single image containing {view_count} panels: {panel_list}
+Single image containing {view_count} panel(s): {panel_list}
 
 ## CHARACTER
 {character_description}
 Style: {style}
 
-## CRITICAL RULES - READ CAREFULLY
-
-### TURNTABLE ROTATION (NOT MIRROR!)
-Imagine the character standing on a rotating platform:
+## CRITICAL: GENERATE EXACTLY THESE VIEWS
+You MUST generate exactly the following view(s), no more, no less:
 {view_descriptions}
 
-⚠️ IMPORTANT: Each panel shows a UNIQUE angle. No duplicates!
-⚠️ REFERENCE PHOTO OVERRIDE: The reference photo has a specific camera angle. You MUST IGNORE the reference camera angle and generate the specific angles requested above.
-⚠️ FORCE ROTATION: Do not just copy the reference photo. ROTATE the character to the requested angle.
+⚠️ IMPORTANT FOR SINGLE VIEW: If only 1 panel is requested, generate ONLY that one specific angle. Do NOT generate multiple views.
+⚠️ REFERENCE PHOTO OVERRIDE: If a reference photo is provided, you MUST IGNORE the camera angle in the reference photo. Instead, ROTATE the character to match the requested angle(s) above.
+⚠️ FORCE ROTATION: Do not just copy the reference photo's perspective. ROTATE the character to the exact angle(s) specified.
 
-### ANATOMICAL CORRECTNESS (CRITICAL!)
+## ANATOMICAL CORRECTNESS (CRITICAL!)
 - Arms MUST connect to shoulders only
 - Legs MUST connect to hips only
 - Head MUST connect to neck only
@@ -265,32 +271,31 @@ Imagine the character standing on a rotating platform:
 - Upper body and lower body MUST face the SAME direction in each panel
 - The entire body rotates together as one unit
 
-### POSE CONSISTENCY (CRITICAL!)
-- EXACT same pose in ALL {view_count} panels - only the viewing angle changes
+## POSE CONSISTENCY (if multiple panels)
+- EXACT same pose in ALL panels - only the viewing angle changes
 - Same arm positions, same leg positions, same head tilt
-- If holding an object → it stays in the same hand in ALL views
-- This is ONE character photographed from {view_count} angles, NOT {view_count} different poses
+- This is ONE character photographed from the specified angle(s)
 
-### PANEL LAYOUT
-- {view_count} panels arranged as {layout_description}
+## PANEL LAYOUT
+- {view_count} panel(s) arranged as {layout_description}
 - Character centered in each panel
 - Same scale/size in all panels
-- Clean separation between panels
+- Clean separation between panels (if multiple)
 - Neutral gray or white background
 
-### LIGHTING
+## LIGHTING
 - Flat, even studio lighting (no harsh shadows)
-- Face clearly visible without shadow obstruction
+- Face clearly visible without shadow obstruction (if visible from the angle)
 - Consistent lighting direction across all panels
 
-### ABSOLUTELY FORBIDDEN
+## ABSOLUTELY FORBIDDEN
 - NO text labels (no "front", "back", "left", "right", no angle numbers)
 - NO twisted bodies (upper body facing different direction than legs)
-- NO mirror flips between side views
 - NO anatomical errors (no extra limbs, no wrong joint positions)
-- NO pose variations between panels
+- NO additional views beyond what is requested
+- Do NOT generate 4 views if only 1 is requested
 
-Generate a clean, professional character reference sheet following ALL rules above."""
+Generate ONLY the specified view(s) following ALL rules above."""
 
     def _get_six_view_template(self) -> str:
         """6视角专用模板"""
@@ -459,8 +464,14 @@ Generate a professional 8-view character reference sheet including top and botto
         
         view_count = len(views)
         
-        # 选择模板
-        if view_mode == "4-view":
+        # 智能选择模板
+        # - 自定义视角或非标准数量 -> universal 模板
+        # - 4视角标准 -> standard 模板
+        # - 6视角标准 -> six_view 模板
+        # - 8视角标准 -> eight_view 模板
+        if view_mode == "custom" or view_count not in [4, 6, 8]:
+            template_name = "universal"
+        elif view_mode == "4-view":
             template_name = "standard"
         elif view_mode == "6-view":
             template_name = "six_view"
@@ -474,7 +485,9 @@ Generate a professional 8-view character reference sheet including top and botto
         
         # 构建布局描述
         rows, cols, aspect = get_layout_for_views(view_count)
-        if rows > 1:
+        if view_count == 1:
+            layout_desc = "a single panel"
+        elif rows > 1:
             layout_desc = f"{rows} rows x {cols} columns"
         else:
             layout_desc = f"{cols} panels in a horizontal row"
@@ -496,30 +509,159 @@ Generate a professional 8-view character reference sheet including top and botto
                 style=style
             )
 
-    def build_image_reference_prompt(self, character_description: str) -> str:
+    def build_image_reference_prompt(
+        self, 
+        character_description: str,
+        view_mode: str = "4-view",
+        custom_views: List[str] = None,
+        style: str = None
+    ) -> str:
         """
         构建图片参考模式提示词
         
         Args:
             character_description: 从参考图片提取的描述
+            view_mode: 视角模式 (4-view, 6-view, 8-view, custom)
+            custom_views: 自定义视角列表 (仅 custom 模式)
+            style: 风格描述 (photorealistic, anime, 或自定义)
         
         Returns:
             完整提示词
         """
+        from prompts.views import infer_reference_system, format_reference_system_context
+        
+        # 确定要生成的视角
+        if view_mode == "custom" and custom_views:
+            views = get_views_by_names(custom_views)
+            # 推断参考视角系统（为 AI 提供上下文）
+            ref_system_name, ref_system_views = infer_reference_system(custom_views)
+        else:
+            views = get_views_for_mode(view_mode)
+            ref_system_name = view_mode
+            ref_system_views = views
+        
+        view_count = len(views)
+        
+        # 构建布局描述
+        rows, cols, aspect = get_layout_for_views(view_count)
+        if view_count == 1:
+            layout_desc = "a single panel"
+        elif rows > 1:
+            layout_desc = f"{rows} rows x {cols} columns"
+        else:
+            layout_desc = f"{cols} panels in a horizontal row"
+        
+        # 构建参考系统上下文（帮助 AI 理解视角在整体系统中的位置）
+        reference_context = ""
+        if view_mode == "custom" and custom_views:
+            reference_context = format_reference_system_context(ref_system_name, ref_system_views, views)
+        
+        # 构建风格指令
+        style_instructions = self._get_style_instructions(style)
+        
         template = self.load_prompt("multiview", "image_ref")
         return template.get("template", "").format(
-            character_description=character_description
+            character_description=character_description,
+            view_count=view_count,
+            layout_description=layout_desc,
+            panel_list=format_panel_list(views),
+            view_descriptions=format_view_descriptions(views),
+            reference_context=reference_context,
+            style_instructions=style_instructions
         )
+    
+    def _get_style_instructions(self, style: str = None) -> str:
+        """
+        根据风格参数生成风格指令
+        
+        Args:
+            style: 风格字符串 (可能包含 photorealistic, anime 等关键词)
+        
+        Returns:
+            风格指令字符串
+        """
+        # 加载模板中的风格预设
+        template = self.load_prompt("multiview", "image_ref")
+        style_presets = template.get("style_presets", {})
+        
+        if not style:
+            return style_presets.get("default", "Match the reference image style.")
+        
+        style_lower = style.lower()
+        
+        # 检测是否为写实风格
+        photorealistic_keywords = ["photorealistic", "photo", "realistic", "raw", "real", "8k", "hyperrealistic"]
+        if any(kw in style_lower for kw in photorealistic_keywords):
+            return style_presets.get("photorealistic", f"Generate in photorealistic style: {style}")
+        
+        # 检测是否为动画风格
+        anime_keywords = ["anime", "manga", "cartoon", "2d", "cell shaded", "ghibli"]
+        if any(kw in style_lower for kw in anime_keywords):
+            return style_presets.get("anime", f"Generate in anime style: {style}")
+        
+        # 默认：使用用户指定的风格
+        return f"""**STYLE REQUIREMENT:**
+{style}
+- Maintain this exact style consistently across all panels
+- Match the visual characteristics of the reference image"""
 
-    def build_strict_copy_prompt(self) -> str:
+    def build_strict_copy_prompt(
+        self,
+        view_mode: str = "4-view",
+        custom_views: List[str] = None,
+        style: str = None
+    ) -> str:
         """
         构建严格复制模式提示词
         
+        Args:
+            view_mode: 视角模式 (4-view, 6-view, 8-view, custom)
+            custom_views: 自定义视角列表 (仅 custom 模式)
+            style: 风格描述 (photorealistic, anime, 或自定义)
+        
         Returns:
             完整提示词
         """
+        from prompts.views import infer_reference_system, format_reference_system_context
+        
+        # 确定要生成的视角
+        if view_mode == "custom" and custom_views:
+            views = get_views_by_names(custom_views)
+            # 推断参考视角系统（为 AI 提供上下文）
+            ref_system_name, ref_system_views = infer_reference_system(custom_views)
+        else:
+            views = get_views_for_mode(view_mode)
+            ref_system_name = view_mode
+            ref_system_views = views
+        
+        view_count = len(views)
+        
+        # 构建布局描述
+        rows, cols, aspect = get_layout_for_views(view_count)
+        if view_count == 1:
+            layout_desc = "a single panel"
+        elif rows > 1:
+            layout_desc = f"{rows} rows x {cols} columns"
+        else:
+            layout_desc = f"{cols} panels in a horizontal row"
+        
+        # 构建参考系统上下文（帮助 AI 理解视角在整体系统中的位置）
+        reference_context = ""
+        if view_mode == "custom" and custom_views:
+            reference_context = format_reference_system_context(ref_system_name, ref_system_views, views)
+        
+        # 构建风格指令
+        style_instructions = self._get_style_instructions(style)
+        
         template = self.load_prompt("multiview", "strict_copy")
-        return template.get("template", "")
+        return template.get("template", "").format(
+            view_count=view_count,
+            layout_description=layout_desc,
+            panel_list=format_panel_list(views),
+            view_descriptions=format_view_descriptions(views),
+            reference_context=reference_context,
+            style_instructions=style_instructions
+        )
 
 
 # 全局单例

@@ -96,19 +96,32 @@ def build_multiview_prompt(
     )
 
 
-def build_image_reference_prompt(character_description: str) -> str:
+def build_image_reference_prompt(
+    character_description: str,
+    view_mode: str = "4-view",
+    custom_views: List[str] = None,
+    style: str = None
+) -> str:
     """
     构建图片参考模式专用提示词（保留原图动作）
     
     Args:
         character_description: 从参考图片提取的角色描述
+        view_mode: 视角模式 (4-view, 6-view, 8-view, custom)
+        custom_views: 自定义视角列表 (仅 custom 模式)
+        style: 风格描述 (photorealistic, anime, 或自定义)
     
     Returns:
         完整的提示词字符串
     """
     lib = _get_prompt_library()
     if lib:
-        return lib.build_image_reference_prompt(character_description)
+        return lib.build_image_reference_prompt(
+            character_description=character_description,
+            view_mode=view_mode,
+            custom_views=custom_views,
+            style=style
+        )
     
     # 回退到硬编码模板
     return _LEGACY_IMAGE_REF_TEMPLATE.format(
@@ -116,31 +129,29 @@ def build_image_reference_prompt(character_description: str) -> str:
     )
 
 
-def build_strict_copy_prompt(custom_views: List[str] = None) -> str:
+def build_strict_copy_prompt(
+    view_mode: str = "4-view",
+    custom_views: List[str] = None,
+    style: str = None
+) -> str:
     """
     构建严格复制模式提示词（100%复制原图）
     
     Args:
-        custom_views: 自定义视角列表 (可选)
+        view_mode: 视角模式 (4-view, 6-view, 8-view, custom)
+        custom_views: 自定义视角列表 (仅 custom 模式)
+        style: 风格描述 (photorealistic, anime, 或自定义)
+    
+    Returns:
+        完整的提示词字符串
     """
-    if custom_views:
-        view_list_str = ", ".join(custom_views)
-        return f"""Create a character reference sheet showing THIS PERSON from the reference image.
-
-## VIEWS REQUIRED
-Generate ONLY these specific views: {view_list_str}
-
-## REQUIREMENTS
-- 100% Match the reference image character
-- Same pose, same clothes, same face
-- White background
-- No text or labels
-- Layout: Arrange views horizontally
-"""
-
     lib = _get_prompt_library()
     if lib:
-        return lib.build_strict_copy_prompt()
+        return lib.build_strict_copy_prompt(
+            view_mode=view_mode,
+            custom_views=custom_views,
+            style=style
+        )
     
     return _LEGACY_STRICT_COPY_TEMPLATE
 

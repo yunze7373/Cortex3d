@@ -77,7 +77,8 @@ def generate_character_views(
     reference_image_path: str = None,
     use_strict_mode: bool = False,
     resolution: str = "2K",
-    original_args = None
+    original_args = None,
+    export_prompt: bool = False
 ) -> Optional[str]:
     """
     使用 Gemini API 生成多视图角色图像
@@ -140,14 +141,21 @@ def generate_character_views(
     # 构建提示词（和代理模式完全一致）
     if use_strict_mode and reference_image_b64:
         from config import build_strict_copy_prompt
-        full_prompt = build_strict_copy_prompt(character_description or "the character in the image")
+        full_prompt = build_strict_copy_prompt(
+            view_mode=view_mode,
+            custom_views=custom_views,
+            style=style
+        )
         print("[模式] 严格复制 - 100% 基于参考图像")
     elif reference_image_b64:
         from config import build_image_reference_prompt
         full_prompt = build_image_reference_prompt(
-            character_description or "Extract character details and generate multi-view"
+            character_description or "Extract character details and generate multi-view",
+            view_mode=view_mode,
+            custom_views=custom_views,
+            style=style
         )
-        print("[模式] 图像参考 - 提取特征生成多视角")
+        print(f"[模式] 图像参考 - 提取特征生成 {view_mode if view_mode != 'custom' else str(custom_views)} 视角")
     else:
         full_prompt = build_multiview_prompt(
             character_description, 
@@ -232,6 +240,98 @@ def generate_character_views(
             # 添加负面提示词到 prompt（Gemini API 方式）
             if negative_prompt:
                 contents[0] += f"\n\nNEGATIVE PROMPT (avoid these): {negative_prompt}"
+            
+            # ===================================================================
+            # 导出提示词模式：输出参数而不调用 API
+            # ===================================================================
+            if export_prompt:
+                print("\n" + "="*70)
+                print("📋 导出提示词和参数 (复制到 Gemini App 使用)")
+                print("="*70)
+                
+                print(f"\n【推荐模型】")
+                print(f"   nano-banana-pro-preview (最佳图像生成模型)")
+                print(f"   备用: gemini-2.5-flash-image")
+                print(f"   提示: 在 AI Studio 或 API 中使用上述模型名称")
+                
+                print(f"\n【配置参数建议】")
+                print(f"   分辨率: {image_size}")
+                print(f"   宽高比: {aspect_ratio}")
+                print(f"   Temperature: {generation_config.get('temperature', 0.7)}")
+                print(f"   Top P: {generation_config.get('top_p', 0.95)}")
+                print(f"   Top K: {generation_config.get('top_k', 40)}")
+                
+                print(f"\n【完整提示词】")
+                print("-"*70)
+                print(contents[0])
+                print("-"*70)
+                
+                if reference_image_b64:
+                    print(f"\n【⚠️  参考图像 - 重要】")
+                    print(f"   文件路径: {reference_image_path}")
+                    print(f"   图像类型: {mime_type}")
+                    print(f"   ")
+                    print(f"   📎 操作步骤:")
+                    print(f"      1. 在 Gemini App 中点击 📎 (附件) 按钮")
+                    print(f"      2. 上传图像: {reference_image_path}")
+                    print(f"      3. 图像会显示在对话框中")
+                    print(f"      4. 然后粘贴上面的【完整提示词】")
+                    if use_strict_mode:
+                        print(f"   ")
+                        print(f"   🎯 严格模式: 生成的图像将 100% 基于上传的参考图")
+                
+                print(f"\n【安全设置】")
+                print(f"   骚扰: BLOCK_ONLY_HIGH")
+                print(f"   仇恨言论: BLOCK_ONLY_HIGH")
+                print(f"   性暗示: BLOCK_ONLY_HIGH")
+                print(f"   危险内容: BLOCK_ONLY_HIGH")
+                
+                print(f"\n{'='*70}")
+                print("💡 完整使用流程:")
+                print("="*70)
+                print("\n第一步: 打开 Gemini App")
+                print("   访问: https://gemini.google.com")
+                print("   或使用 Gemini 移动应用")
+                
+                print("\n第二步: 选择模型")
+                print("   在 AI Studio 中使用: nano-banana-pro-preview")
+                print("   或在代码中调用: models/nano-banana-pro-preview")
+                
+                if reference_image_b64:
+                    print("\n第三步: 上传参考图像 ⚠️ 先上传图像!")
+                    print(f"   1. 点击对话框左下角的 📎 (附件) 图标")
+                    print(f"   2. 选择图像文件: {reference_image_path}")
+                    print(f"   3. 等待图像上传并显示在对话框中")
+                    step_four = "第四步"
+                else:
+                    step_four = "第三步"
+                
+                print(f"\n{step_four}: 粘贴提示词")
+                print("   1. 复制上面【完整提示词】部分的全部内容")
+                print("   2. 粘贴到 Gemini 对话框中")
+                if reference_image_b64:
+                    print("   3. 确认图像和提示词都已在对话框中")
+                
+                print(f"\n第{'五' if reference_image_b64 else '四'}步: 发送并等待")
+                print("   1. 点击发送按钮")
+                print("   2. 等待 30-60 秒生成完成")
+                print("   3. 生成的图像会显示在回复中")
+                
+                print(f"\n第{'六' if reference_image_b64 else '五'}步: 保存图像")
+                print("   1. 右键点击生成的图像")
+                print("   2. 选择 '保存图片为...'")
+                print("   3. 保存到您的输出目录")
+                
+                print("\n" + "="*70)
+                print("✅ 提示: 如果生成失败,请检查:")
+                print("   - 是否选择了支持图像生成的模型")
+                if reference_image_b64:
+                    print("   - 参考图像是否已正确上传")
+                print("   - 提示词是否完整复制(不要遗漏任何部分)")
+                print("="*70 + "\n")
+                
+                # 导出模式下不实际调用 API，直接返回
+                return None
             
             print(f"[Gemini API] 调用参数: image_size={image_size}, aspect_ratio={aspect_ratio}")
             

@@ -1,41 +1,94 @@
 name: strict_copy
-version: "1.0"
-description: "严格复制模式 - 100%基于原图"
+version: "2.1"
+description: "严格复制模式 - 100%基于原图，支持动态视角，强调姿势一致性"
 
 template: |
-  Create a 4-panel CHARACTER TURNTABLE showing THIS PERSON from the reference image.
+  Create a {view_count}-panel CHARACTER REFERENCE SHEET showing THIS EXACT PERSON/OBJECT from the reference image.
 
-  ## TASK: TURNTABLE ROTATION (90° between each view)
-  Imagine THIS PERSON is standing on a rotating platform. The platform rotates exactly 90° between each panel.
+  ## OUTPUT LAYOUT
+  Single image with {layout_description}: {panel_list}
 
-  ## THE 4 DISTINCT VIEWS (MUST BE DIFFERENT)
-  Each panel shows THIS PERSON from a COMPLETELY DIFFERENT angle:
+  {reference_context}
 
-  | Panel | Angle | What You See | Key Identifier |
-  |-------|-------|--------------|----------------|
-  | 1 | 0° (FRONT) | Face visible, looking at camera | BOTH EYES visible |
-  | 2 | 90° (RIGHT SIDE) | Profile view, facing right | RIGHT EAR visible, NO face |
-  | 3 | 180° (BACK) | Back of head, no face | BACK OF HEAD only |
-  | 4 | 270° (LEFT SIDE) | Profile view, facing left | LEFT EAR visible, NO face |
+  ## THE {view_count} REQUIRED VIEWS
+  {view_descriptions}
 
-  ## STRICT REQUIREMENTS
-  1. ⚠️ EACH VIEW MUST BE UNIQUE - no duplicate angles
-  2. ⚠️ Panel 1 and 3 must be OPPOSITE (face vs back of head)
-  3. ⚠️ Panel 2 and 4 must be OPPOSITE (right ear vs left ear)
-  4. Keep THIS PERSON's face, hair, clothes, and accessories identical across all views
-  5. Only the CAMERA POSITION changes, character stays the same
+  ## ⚠️ CRITICAL: STYLE CONSISTENCY
+  {style_instructions}
+
+  ## ⚠️⚠️⚠️ MOST CRITICAL: POSE MUST BE 100% IDENTICAL IN ALL VIEWS ⚠️⚠️⚠️
+  
+  **THE SUBJECT IS FROZEN LIKE A STATUE. THE CAMERA MOVES, NOT THE SUBJECT.**
+  
+  Imagine the person/object is:
+  - Completely FROZEN in the EXACT pose from the reference image
+  - Like a statue or mannequin - absolutely no movement allowed
+  - The camera orbits around this frozen subject
+  
+  **EVERY SINGLE VIEW must show:**
+  - SAME arm positions (if arms are down, they stay down in ALL views)
+  - SAME leg positions (if standing straight, stay standing straight in ALL views)
+  - SAME head angle (if looking forward, head stays looking forward in ALL views)
+  - SAME body posture (if standing upright, stay upright even in TOP/BOTTOM views)
+  - SAME hand positions, finger positions, everything
+  
+  **FOR TOP VIEW (looking down from above):**
+  - Camera is above looking DOWN at the frozen subject
+  - Subject does NOT bend over or look down
+  - Subject maintains the SAME upright standing pose
+  - We see the top of the head, shoulders from above
+  
+  **FOR BOTTOM VIEW (looking up from below):**
+  - Camera is below looking UP at the frozen subject
+  - Subject does NOT lie down or change pose
+  - Subject maintains the SAME upright standing pose
+  - We see the underside of chin, feet from below
+
+  ## ⚠️ STRICT COPY REQUIREMENTS
+  1. **100% IDENTICAL** - Every detail must match the reference exactly
+  2. **NO CREATIVE CHANGES** - Do not add, remove, or modify ANY features
+  3. **EXACT APPEARANCE** - Same face, hair, clothes, accessories, proportions
+  4. **ONLY CAMERA MOVES** - The subject stays frozen, only viewpoint changes
+  5. **PRESERVE POSE** - Keep the exact same pose/stance in all views
+
+  ## ⚠️ LEFT vs RIGHT VIEW DISTINCTION
+  
+  Think of the camera orbiting around the frozen subject:
+  
+  | View  | Camera Position | Object's Front Points To |
+  |-------|-----------------|-------------------------|
+  | RIGHT | Right of object | LEFT edge of image      |
+  | LEFT  | Left of object  | RIGHT edge of image     |
+  
+  ⚠️ These are views from OPPOSITE sides - NOT mirrors!
 
   ## FORBIDDEN
-  ❌ Two panels showing the face (front) 
-  ❌ Two panels showing the back
-  ❌ Two panels showing the same side profile
-  ❌ Similar angles in adjacent panels
+  ❌ Any creative interpretation or style change
+  ❌ Adding or removing clothing/accessories
+  ❌ Changing facial features, hair, or body proportions
+  ❌ **Different poses between panels** - THIS IS THE MOST IMPORTANT RULE
+  ❌ Subject bending, crouching, or adjusting for camera angle
+  ❌ Subject looking toward camera in each view
   ❌ Text labels on the image
+  ❌ Turntable, platform, or any surface under the subject
+
+  ## BACKGROUND
+  - Solid neutral gray or white background
+  - ❌ NO turntable, platform, pedestal, or floor
+  - ✅ Subject appears to float naturally
 
   ## OUTPUT
-  Single horizontal image: [FRONT 0°] [RIGHT 90°] [BACK 180°] [LEFT 270°]
-  Gray background. Full body visible in all panels.
+  {layout_description} with {view_count} panels
+  Same scale in all panels. Full body visible.
 
-  Generate 4 DISTINCT turntable views of THIS PERSON.
+  ⚠️ IMPORTANT: Generate EXACTLY {view_count} view(s) as specified. No more, no less.
+  
+  Generate {view_count} DISTINCT views of THIS EXACT PERSON/OBJECT - 100% faithful to reference, FROZEN POSE.
 
-variables: []
+variables:
+  - view_count
+  - layout_description
+  - panel_list
+  - view_descriptions
+  - reference_context
+  - style_instructions
