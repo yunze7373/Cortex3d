@@ -517,10 +517,49 @@ def main():
             negative_categories=args.negative_categories
         )
     else:
-        # Gemini Generator也需要更新支持style，这里暂时只支持proxy模式的style传递
-        # 或稍微修改一下 gemini_generator 的调用假设它有 style (需要去检查 gemini_generator.py)
-        # 检查 gemini_generator.py 发现它可能需要单独更新，暂时只更新 proxy 路径因为它是默认推荐
-        from gemini_generator import generate_character_views
+        # Gemini 直连模式 - 完整支持所有参数
+        from gemini_generator import generate_character_views, analyze_image_for_character
+        
+        # 处理图像参考模式
+        ref_image_path = None
+        if args.from_image:
+            ref_image_path = args.from_image
+            
+            # 如果不是严格模式，先分析图像
+            if not args.strict:
+                print(f"\n[图片分析] 使用 Gemini 分析图像: {args.from_image}")
+                print("="*50)
+                
+                user_guidance = args.description if args.description else None
+                
+                extracted_description = analyze_image_for_character(
+                    image_path=args.from_image,
+                    api_key=args.api_key,
+                    user_guidance=user_guidance
+                )
+                
+                if extracted_description:
+                    print(f"\n[提取的描述]")
+                    print("-"*50)
+                    print(extracted_description[:500] + "..." if len(extracted_description) > 500 else extracted_description)
+                    print("-"*50)
+                    
+                    if args.description:
+                        modification_note = f"\n\n**USER MODIFICATION REQUEST**: {args.description}\nApply this modification to the character description above."
+                        description = extracted_description + modification_note
+                        print(f"\n[用户修改需求已融入] {args.description}")
+                    else:
+                        description = extracted_description
+                else:
+                    print("[WARNING] 图片分析失败，使用默认描述")
+                    if not args.description:
+                        print("[ERROR] 图片分析失败且未提供描述，无法继续")
+                        sys.exit(1)
+            else:
+                # 严格模式：跳过分析
+                print(f"\n[严格复制模式] 跳过图片分析，100% 基于原图生成")
+                description = "(strict mode - no description needed)"
+        
         # 确定视角模式
         view_mode = f"{args.views}-view"
         custom_views = args.custom_views
@@ -541,7 +580,10 @@ def main():
             style=style,
             view_mode=view_mode,
             custom_views=custom_views,
-            negative_prompt=negative_prompt
+            negative_prompt=negative_prompt,
+            reference_image_path=ref_image_path,
+            use_strict_mode=args.strict,
+            resolution=args.resolution
         )
     
     if result:

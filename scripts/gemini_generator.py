@@ -24,11 +24,13 @@ from config import IMAGE_MODEL, build_multiview_prompt
 # Lazy imports
 genai = None
 PIL_Image = None
+cv2 = None
+np = None
 
 
 def _ensure_imports():
     """延迟导入依赖库"""
-    global genai, PIL_Image
+    global genai, PIL_Image, cv2, np
     
     if genai is None:
         try:
@@ -42,6 +44,16 @@ def _ensure_imports():
                 f"缺少必要依赖: {e}\n"
                 "请运行: pip install google-generativeai pillow"
             )
+    
+    # 可选的 OpenCV 导入（用于图像处理）
+    if cv2 is None:
+        try:
+            import cv2 as _cv2
+            import numpy as _np
+            cv2 = _cv2
+            np = _np
+        except ImportError:
+            pass  # 如果没有 opencv，某些功能会被禁用
 
 
 # 使用共享配置中的默认模型
@@ -61,7 +73,10 @@ def generate_character_views(
     style: str = "cinematic character",
     view_mode: str = "4-view",
     custom_views: list = None,
-    negative_prompt: str = None
+    negative_prompt: str = None,
+    reference_image_path: str = None,
+    use_strict_mode: bool = False,
+    resolution: str = "2K"
 ) -> Optional[str]:
     """
     使用 Gemini API 生成多视图角色图像
@@ -76,6 +91,9 @@ def generate_character_views(
         view_mode: 视角模式 (4-view, 6-view, 8-view, custom)
         custom_views: 自定义视角列表
         negative_prompt: 负面提示词
+        reference_image_path: 参考图像路径（用于图生图）
+        use_strict_mode: 严格复制模式（基于参考图像）
+        resolution: 目标分辨率 (1K/2K/4K)，通过后处理实现
     
     Returns:
         生成的图片路径
@@ -92,18 +110,46 @@ def generate_character_views(
     print(f"[角色描述] {character_description[:100]}...")
     print(f"[风格] {style}")
     print(f"[视角模式] {view_mode}")
+    if reference_image_path:
+        mode_label = "严格复制" if use_strict_mode else "参考图像"
+        print(f"[{mode_label}] {reference_image_path}")
+    print(f"[目标分辨率] {resolution}")
     print("-"*60)
     
     # 创建模型
     model = genai.GenerativeModel(model_name)
     
+    # 处理参考图像
+    reference_image = None
+    if reference_image_path:
+        try:
+            reference_image = PIL_Image.open(reference_image_path)
+            print(f"[INFO] 参考图像已加载: {reference_image.size}")
+        except Exception as e:
+            print(f"[WARNING] 无法加载参考图像: {e}")
+            reference_image = None
+    
     # 构建提示词
-    full_prompt = build_multiview_prompt(
-        character_description, 
-        style=style,
-        view_mode=view_mode,
-        custom_views=custom_views
-    )
+    if use_strict_mode and reference_image:
+        # 严格复制模式：基于参考图像生成多视角
+        from config import build_strict_copy_prompt
+        full_prompt = build_strict_copy_prompt(character_description or "the character in the image")
+        print("[模式] 严格复制 - 100% 基于参考图像")
+    elif reference_image:
+        # 参考图像模式：提取特征并生成多视角
+        from config import build_image_reference_prompt
+        full_prompt = build_image_reference_prompt(
+            character_description or "Extract character details and generate multi-view"
+        )
+        print("[模式] 图像参考 - 提取特征生成多视角")
+    else:
+        # 普通文本生成模式
+        full_prompt = build_multiview_prompt(
+            character_description, 
+            style=style,
+            view_mode=view_mode,
+            custom_views=custom_views
+        )
     
     # 添加负面提示词
     if negative_prompt:
@@ -123,15 +169,27 @@ def generate_character_views(
         }
 
         # 生成内容 (启用图像生成)
-        response = model.generate_content(
-            full_prompt,
-            generation_config=genai.GenerationConfig(
-                temperature=0.7,
-                top_p=0.95,
-                top_k=40,
-            ),
-            safety_settings=safety_settings
-        )
+        # 如果有参考图像，将其包含在请求中
+        if reference_image:
+            response = model.generate_content(
+                [full_prompt, reference_image],
+                generation_config=genai.GenerationConfig(
+                    temperature=0.7,
+                    top_p=0.95,
+                    top_k=40,
+                ),
+                safety_settings=safety_settings
+            )
+        else:
+            response = model.generate_content(
+                full_prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.7,
+                    top_p=0.95,
+                    top_k=40,
+                ),
+                safety_settings=safety_settings
+            )
         
         # 检查响应
         if not response.candidates:
@@ -162,6 +220,10 @@ def generate_character_views(
         # 解码并保存
         image_bytes = base64.b64decode(image_data) if isinstance(image_data, str) else image_data
         image = PIL_Image.open(io.BytesIO(image_bytes))
+        
+        # 分辨率调整（如果需要）
+        image = _adjust_resolution(image, resolution)
+        
         image.save(str(filepath))
         
         print(f"[保存] {filepath}")
@@ -375,6 +437,99 @@ def cut_and_save(image_path: str, output_dir: str, expected_views: list = None):
         print("[TIP] 运行: python scripts/image_processor.py " + image_path)
     except Exception as e:
         print(f"[WARNING] 切割失败: {e}")
+
+
+def _adjust_resolution(image: "PIL_Image.Image", resolution: str) -> "PIL_Image.Image":
+    """
+    调整图像分辨率
+    
+    Args:
+        image: PIL 图像对象
+        resolution: 目标分辨率 (1K/2K/4K)
+    
+    Returns:
+        调整后的图像
+    """
+    resolution_map = {
+        "1K": 1024,
+        "2K": 2048,
+        "4K": 4096
+    }
+    
+    target_size = resolution_map.get(resolution, 2048)
+    
+    # 如果图像已经足够大，保持原样
+    if max(image.size) >= target_size:
+        print(f"[分辨率] {image.size[0]}x{image.size[1]} (无需调整)")
+        return image
+    
+    # 计算新尺寸（保持宽高比）
+    aspect_ratio = image.size[0] / image.size[1]
+    if image.size[0] > image.size[1]:
+        new_width = target_size
+        new_height = int(target_size / aspect_ratio)
+    else:
+        new_height = target_size
+        new_width = int(target_size * aspect_ratio)
+    
+    # 使用高质量重采样
+    resized = image.resize((new_width, new_height), PIL_Image.Resampling.LANCZOS)
+    print(f"[分辨率] {image.size[0]}x{image.size[1]} → {new_width}x{new_height} ({resolution})")
+    
+    return resized
+
+
+def analyze_image_for_character(image_path: str, api_key: str, user_guidance: str = None) -> Optional[str]:
+    """
+    使用 Gemini 分析图片，提取角色特征描述
+    
+    Args:
+        image_path: 图片路径
+        api_key: Gemini API Key
+        user_guidance: 用户指导（可选，指定分析哪个人物或关注什么细节）
+    
+    Returns:
+        角色描述文本
+    """
+    _ensure_imports()
+    
+    genai.configure(api_key=api_key)
+    
+    try:
+        # 加载图像
+        image = PIL_Image.open(image_path)
+        
+        # 创建视觉模型
+        model = genai.GenerativeModel("gemini-2.0-flash-exp")
+        
+        # 构建分析提示词
+        analysis_prompt = """Analyze this image and provide a detailed character description for 3D modeling reference.
+
+Focus on:
+- Physical appearance (face, hair, body type)
+- Clothing and accessories (materials, colors, details)
+- Notable features or distinctive elements
+- Overall style and aesthetic
+
+Provide a clear, structured description that can be used to generate multi-view character references."""
+        
+        if user_guidance:
+            analysis_prompt += f"\n\nUser guidance: {user_guidance}"
+        
+        # 发送请求
+        response = model.generate_content([analysis_prompt, image])
+        
+        if response.text:
+            return response.text.strip()
+        else:
+            print("[WARNING] 图像分析未返回文本")
+            return None
+            
+    except Exception as e:
+        print(f"[ERROR] 图像分析失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def main():
