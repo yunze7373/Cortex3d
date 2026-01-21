@@ -34,6 +34,7 @@ def _ensure_imports():
         try:
             import google.generativeai as _genai
             from PIL import Image as _Image
+            from google.generativeai.types import HarmCategory, HarmBlockThreshold
             genai = _genai
             PIL_Image = _Image
         except ImportError as e:
@@ -112,6 +113,15 @@ def generate_character_views(
     print("[INFO] 正在生成图像... (可能需要 30-60 秒)")
     
     try:
+        # 安全设置
+        from google.generativeai.types import HarmCategory, HarmBlockThreshold
+        safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        }
+
         # 生成内容 (启用图像生成)
         response = model.generate_content(
             full_prompt,
@@ -119,7 +129,8 @@ def generate_character_views(
                 temperature=0.7,
                 top_p=0.95,
                 top_k=40,
-            )
+            ),
+            safety_settings=safety_settings
         )
         
         # 检查响应

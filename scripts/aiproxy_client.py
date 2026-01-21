@@ -91,7 +91,13 @@ def generate_image_via_proxy(
         "prompt": prompt,
         "model": model,
         "image_size": resolution,
-        "aspect_ratio": aspect_ratio
+        "aspect_ratio": aspect_ratio,
+        "safetySettings": [
+            { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH" }
+        ]
     }
     
     # 添加负面提示词（如果提供）
@@ -315,7 +321,13 @@ materials, and spatial positions. This will be used to generate a 3D model."""
     payload = {
         "prompt": analysis_prompt,
         "model": "gemini-2.0-flash",  # 使用文本/视觉模型
-        "image": f"data:{mime_type};base64,{b64_image}"
+        "image": f"data:{mime_type};base64,{b64_image}",
+        "safetySettings": [
+            { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH" }
+        ]
     }
     
     try:
