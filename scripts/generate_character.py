@@ -183,6 +183,25 @@ def main():
     )
     
     # =========================================================================
+    # Subject isolation parameters (主体隔离参数)
+    # =========================================================================
+    parser.add_argument(
+        "--subject-only", "--isolate",
+        dest="subject_only",
+        action="store_true",
+        help="Only process the main subject (person/character), remove all background objects like cars, furniture, etc."
+    )
+    
+    parser.add_argument(
+        "--with-props",
+        dest="with_props",
+        nargs="+",
+        default=None,
+        metavar="PROP",
+        help="Include specific props/objects with the subject. Examples: --with-props bicycle basketball guitar"
+    )
+    
+    # =========================================================================
     # Negative prompt parameters
     # =========================================================================
     parser.add_argument(
@@ -572,7 +591,9 @@ def main():
             view_mode=view_mode,
             custom_views=custom_views,
             use_negative_prompt=not args.no_negative,
-            negative_categories=args.negative_categories
+            negative_categories=args.negative_categories,
+            subject_only=args.subject_only,
+            with_props=args.with_props
         )
     else:
         # Gemini 直连模式 - 完整支持所有参数
@@ -656,7 +677,9 @@ def main():
             use_strict_mode=args.strict,
             resolution=args.resolution,
             original_args=args,
-            export_prompt=args.export_prompt
+            export_prompt=args.export_prompt,
+            subject_only=args.subject_only,
+            with_props=args.with_props
         )
     
     if result:

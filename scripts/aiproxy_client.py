@@ -380,7 +380,9 @@ def generate_character_multiview(
     view_mode: str = "4-view",  # 视角模式: 4-view, 6-view, 8-view, custom
     custom_views: list = None,  # 自定义视角列表
     use_negative_prompt: bool = True,  # 是否使用负面提示词
-    negative_categories: list = None  # 负面提示词类别
+    negative_categories: list = None,  # 负面提示词类别
+    subject_only: bool = False,  # 只处理主体，移除背景物体
+    with_props: list = None  # 要包含的道具列表
 ) -> Optional[str]:
     """
     生成多视角角色图像并保存
@@ -401,6 +403,8 @@ def generate_character_multiview(
         custom_views: 自定义视角列表 (仅 custom 模式)
         use_negative_prompt: 是否使用负面提示词 (默认: True)
         negative_categories: 负面提示词类别 ["anatomy", "quality", "layout"]
+        subject_only: 只处理主体，移除背景物体
+        with_props: 要包含的道具列表
     
     Returns:
         保存的图像路径 或 None
@@ -454,7 +458,9 @@ def generate_character_multiview(
         prompt = build_strict_copy_prompt(
             view_mode=view_mode,
             custom_views=custom_views,
-            style=style
+            style=style,
+            subject_only=subject_only,
+            with_props=with_props
         )
     elif custom_views:
         # 自定义视角模式 - 即使有参考图也使用自定义视角
@@ -463,20 +469,26 @@ def generate_character_multiview(
             character_description, 
             style=style,
             view_mode=view_mode,
-            custom_views=custom_views
+            custom_views=custom_views,
+            subject_only=subject_only,
+            with_props=with_props
         )
     elif use_image_reference_prompt:
         print("[MODE] 使用图片参考模式提示词 (保留原图动作)")
         prompt = build_image_reference_prompt(
             character_description, 
-            style=style
+            style=style,
+            subject_only=subject_only,
+            with_props=with_props
         )
     else:
         prompt = build_multiview_prompt(
             character_description, 
             style=style,
             view_mode=view_mode,
-            custom_views=custom_views
+            custom_views=custom_views,
+            subject_only=subject_only,
+            with_props=with_props
         )
     
     # 准备参考图片 (如果提供)

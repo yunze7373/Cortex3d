@@ -62,11 +62,55 @@ def _get_prompt_library():
 # 向后兼容的 API - 保持原有函数签名
 # =============================================================================
 
+def _build_subject_instructions(subject_only: bool = False, with_props: List[str] = None) -> str:
+    """
+    构建主体隔离指令
+    
+    Args:
+        subject_only: 只处理主体，移除背景物体
+        with_props: 要包含的道具列表
+    
+    Returns:
+        主体隔离指令字符串
+    """
+    if subject_only:
+        return """
+## ⚠️ SUBJECT ISOLATION - REMOVE BACKGROUND OBJECTS
+**IMPORTANT: Extract ONLY the main person/character from the reference.**
+
+- ❌ REMOVE all background objects (cars, furniture, buildings, scenery)
+- ❌ REMOVE any objects the subject is leaning on, sitting in, or standing near
+- ✅ KEEP only the main person/character
+- ✅ Place the isolated subject on a clean neutral background
+- The subject should appear to be standing/floating alone
+
+Think of it as: Extract the person and place them in an empty photo studio.
+"""
+    elif with_props:
+        props_list = ", ".join(with_props)
+        return f"""
+## ⚠️ SUBJECT WITH PROPS - INCLUDE SPECIFIC OBJECTS
+**IMPORTANT: Process the main subject TOGETHER with these items: {props_list}**
+
+- ✅ KEEP the main person/character
+- ✅ KEEP these specific props/objects: {props_list}
+- ❌ REMOVE all other background objects not in the list above
+- The subject and their props should appear together on a clean neutral background
+
+These props are considered part of the subject and must appear in ALL views:
+{chr(10).join(f'  - {prop}' for prop in with_props)}
+"""
+    else:
+        return ""
+
+
 def build_multiview_prompt(
     character_description: str,
     style: str = "cinematic character",
     view_mode: str = "4-view",
-    custom_views: List[str] = None
+    custom_views: List[str] = None,
+    subject_only: bool = False,
+    with_props: List[str] = None
 ) -> str:
     """
     构建多视图角色生成提示词
@@ -76,18 +120,25 @@ def build_multiview_prompt(
         style: 整体风格描述
         view_mode: 视角模式 (4-view, 6-view, 8-view, custom)
         custom_views: 自定义视角列表 (仅 custom 模式)
+        subject_only: 只处理主体，移除背景物体
+        with_props: 要包含的道具列表
     
     Returns:
         完整的提示词字符串
     """
     lib = _get_prompt_library()
     if lib:
-        return lib.build_multiview_prompt(
+        base_prompt = lib.build_multiview_prompt(
             character_description=character_description,
             style=style,
             view_mode=view_mode,
             custom_views=custom_views
         )
+        # 添加主体隔离指令
+        subject_instructions = _build_subject_instructions(subject_only, with_props)
+        if subject_instructions:
+            return base_prompt + "\n" + subject_instructions
+        return base_prompt
     
     # 回退到硬编码模板（旧版兼容）
     return _LEGACY_MULTIVIEW_TEMPLATE.format(
@@ -100,7 +151,9 @@ def build_image_reference_prompt(
     character_description: str,
     view_mode: str = "4-view",
     custom_views: List[str] = None,
-    style: str = None
+    style: str = None,
+    subject_only: bool = False,
+    with_props: List[str] = None
 ) -> str:
     """
     构建图片参考模式专用提示词（保留原图动作）
@@ -110,18 +163,25 @@ def build_image_reference_prompt(
         view_mode: 视角模式 (4-view, 6-view, 8-view, custom)
         custom_views: 自定义视角列表 (仅 custom 模式)
         style: 风格描述 (photorealistic, anime, 或自定义)
+        subject_only: 只处理主体，移除背景物体
+        with_props: 要包含的道具列表
     
     Returns:
         完整的提示词字符串
     """
     lib = _get_prompt_library()
     if lib:
-        return lib.build_image_reference_prompt(
+        base_prompt = lib.build_image_reference_prompt(
             character_description=character_description,
             view_mode=view_mode,
             custom_views=custom_views,
             style=style
         )
+        # 添加主体隔离指令
+        subject_instructions = _build_subject_instructions(subject_only, with_props)
+        if subject_instructions:
+            return base_prompt + "\n" + subject_instructions
+        return base_prompt
     
     # 回退到硬编码模板
     return _LEGACY_IMAGE_REF_TEMPLATE.format(
@@ -132,7 +192,9 @@ def build_image_reference_prompt(
 def build_strict_copy_prompt(
     view_mode: str = "4-view",
     custom_views: List[str] = None,
-    style: str = None
+    style: str = None,
+    subject_only: bool = False,
+    with_props: List[str] = None
 ) -> str:
     """
     构建严格复制模式提示词（100%复制原图）
@@ -141,17 +203,24 @@ def build_strict_copy_prompt(
         view_mode: 视角模式 (4-view, 6-view, 8-view, custom)
         custom_views: 自定义视角列表 (仅 custom 模式)
         style: 风格描述 (photorealistic, anime, 或自定义)
+        subject_only: 只处理主体，移除背景物体
+        with_props: 要包含的道具列表
     
     Returns:
         完整的提示词字符串
     """
     lib = _get_prompt_library()
     if lib:
-        return lib.build_strict_copy_prompt(
+        base_prompt = lib.build_strict_copy_prompt(
             view_mode=view_mode,
             custom_views=custom_views,
             style=style
         )
+        # 添加主体隔离指令
+        subject_instructions = _build_subject_instructions(subject_only, with_props)
+        if subject_instructions:
+            return base_prompt + "\n" + subject_instructions
+        return base_prompt
     
     return _LEGACY_STRICT_COPY_TEMPLATE
 

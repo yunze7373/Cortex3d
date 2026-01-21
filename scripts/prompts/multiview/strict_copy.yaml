@@ -1,9 +1,9 @@
 name: strict_copy
-version: "2.1"
-description: "严格复制模式 - 100%基于原图，支持动态视角，强调姿势一致性"
+version: "3.2"
+description: "严格复制模式 - Gemini优化，无表格，纯自然语言"
 
 template: |
-  Create a {view_count}-panel CHARACTER REFERENCE SHEET showing THIS EXACT PERSON/OBJECT from the reference image.
+  {output_type_description}
 
   ## OUTPUT LAYOUT
   Single image with {layout_description}: {panel_list}
@@ -13,77 +13,50 @@ template: |
   ## THE {view_count} REQUIRED VIEWS
   {view_descriptions}
 
-  ## ⚠️ CRITICAL: STYLE CONSISTENCY
+  ## ⚠️ STYLE REQUIREMENTS
   {style_instructions}
 
-  ## ⚠️⚠️⚠️ MOST CRITICAL: POSE MUST BE 100% IDENTICAL IN ALL VIEWS ⚠️⚠️⚠️
+  ## 🚨 ABSOLUTE RULE: POSE/POSITION IS LOCKED - ZERO CHANGES ALLOWED 🚨
   
-  **THE SUBJECT IS FROZEN LIKE A STATUE. THE CAMERA MOVES, NOT THE SUBJECT.**
+  The subject is FROZEN. Only the camera moves around it.
   
-  Imagine the person/object is:
-  - Completely FROZEN in the EXACT pose from the reference image
-  - Like a statue or mannequin - absolutely no movement allowed
-  - The camera orbits around this frozen subject
+  ### 🔒 SPATIAL LOCK INSTRUCTIONS:
   
-  **EVERY SINGLE VIEW must show:**
-  - SAME arm positions (if arms are down, they stay down in ALL views)
-  - SAME leg positions (if standing straight, stay standing straight in ALL views)
-  - SAME head angle (if looking forward, head stays looking forward in ALL views)
-  - SAME body posture (if standing upright, stay upright even in TOP/BOTTOM views)
-  - SAME hand positions, finger positions, everything
-  
-  **FOR TOP VIEW (looking down from above):**
-  - Camera is above looking DOWN at the frozen subject
-  - Subject does NOT bend over or look down
-  - Subject maintains the SAME upright standing pose
-  - We see the top of the head, shoulders from above
-  
-  **FOR BOTTOM VIEW (looking up from below):**
-  - Camera is below looking UP at the frozen subject
-  - Subject does NOT lie down or change pose
-  - Subject maintains the SAME upright standing pose
-  - We see the underside of chin, feet from below
+  Every element must match the reference EXACTLY across all views:
+  - HEAD: Must remain LOCKED in the same tilt and rotation.
+  - GAZE: Must remain LOCKED relative to the body, never correcting toward camera.
+  - ARMS: Must remain LOCKED in the same position and bend angle.
+  - LEGS: Must remain LOCKED in the same stance and crossing order.
+  - TORSO: Must remain LOCKED in the same lean and twist.
+  - OBJECTS: Must remain LOCKED in the same position relative to subject.
 
+  ### 🎯 KEY CONCEPT: Positions are relative to BODY, not CAMERA
+  
+  When camera moves, the APPEARANCE changes but ACTUAL POSITIONS stay the same.
+  
+  ❌ WRONG: "Correcting" poses to look more standard in each view
+  ❌ WRONG: Swapping left/right positions based on camera angle
+  ❌ WRONG: Making subject face forward in every view
+  ✅ RIGHT: All spatial relationships from reference are preserved
+  {top_bottom_instructions}
   ## ⚠️ STRICT COPY REQUIREMENTS
   1. **100% IDENTICAL** - Every detail must match the reference exactly
   2. **NO CREATIVE CHANGES** - Do not add, remove, or modify ANY features
-  3. **EXACT APPEARANCE** - Same face, hair, clothes, accessories, proportions
-  4. **ONLY CAMERA MOVES** - The subject stays frozen, only viewpoint changes
-  5. **PRESERVE POSE** - Keep the exact same pose/stance in all views
+  3. **ONLY CAMERA MOVES** - The subject stays frozen, only viewpoint changes
 
   ## ⚠️ LEFT vs RIGHT VIEW DISTINCTION
   
-  Think of the camera orbiting around the frozen subject:
-  
-  | View  | Camera Position | Object's Front Points To |
-  |-------|-----------------|-------------------------|
-  | RIGHT | Right of object | LEFT edge of image      |
-  | LEFT  | Left of object  | RIGHT edge of image     |
-  
-  ⚠️ These are views from OPPOSITE sides - NOT mirrors!
+  For the RIGHT view, the camera is positioned to the right of the subject, so the subject's front points toward the LEFT edge of the image.
+  For the LEFT view, the camera is positioned to the left of the subject, so the subject's front points toward the RIGHT edge of the image.
 
-  ## FORBIDDEN
-  ❌ Any creative interpretation or style change
-  ❌ Adding or removing clothing/accessories
-  ❌ Changing facial features, hair, or body proportions
-  ❌ **Different poses between panels** - THIS IS THE MOST IMPORTANT RULE
-  ❌ Subject bending, crouching, or adjusting for camera angle
-  ❌ Subject looking toward camera in each view
-  ❌ Text labels on the image
-  ❌ Turntable, platform, or any surface under the subject
-
-  ## BACKGROUND
+  ## BACKGROUND & PHYSICS
   - Solid neutral gray or white background
-  - ❌ NO turntable, platform, pedestal, or floor
-  - ✅ Subject appears to float naturally
+  - No visible floor, horizon line, or surface texture
+  - Feet may lightly contact an implied surface (no visible geometry)
+  - ❌ NO turntable, platform, pedestal, or disc under feet
+  - ✅ Clean seamless background, natural grounded positioning
 
-  ## OUTPUT
-  {layout_description} with {view_count} panels
-  Same scale in all panels. Full body visible.
-
-  ⚠️ IMPORTANT: Generate EXACTLY {view_count} view(s) as specified. No more, no less.
-  
-  Generate {view_count} DISTINCT views of THIS EXACT PERSON/OBJECT - 100% faithful to reference, FROZEN POSE.
+  ⚠️ Generate EXACTLY {view_count} view(s) - 100% faithful to reference.
 
 variables:
   - view_count
@@ -92,3 +65,5 @@ variables:
   - view_descriptions
   - reference_context
   - style_instructions
+  - output_type_description
+  - top_bottom_instructions

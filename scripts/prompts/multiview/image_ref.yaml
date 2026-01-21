@@ -1,9 +1,9 @@
 name: image_reference
-version: "2.6"
-description: "图片参考模式模板 - 通用方向描述，支持风格控制，强调姿势一致性"
+version: "3.2"
+description: "图片参考模式模板 - Gemini优化，无表格，纯自然语言"
 
 template: |
-  Generate a 3D reference sheet with exactly {view_count} panel(s), based on the reference image.
+  {output_type_description}
 
   ## OUTPUT LAYOUT
   Single image with {layout_description}: {panel_list}
@@ -13,70 +13,53 @@ template: |
   ## REQUIRED VIEWS ({view_count} total)
   {view_descriptions}
 
-  ## OBJECT/CHARACTER DESCRIPTION (from reference)
+  ## SUBJECT DESCRIPTION (from reference)
   {character_description}
 
-  ## ⚠️ CRITICAL: STYLE CONSISTENCY
+  ## ⚠️ STYLE REQUIREMENTS
   {style_instructions}
 
-  ## ⚠️⚠️⚠️ MOST CRITICAL: POSE MUST BE 100% IDENTICAL IN ALL VIEWS ⚠️⚠️⚠️
+  ## 🚨 ABSOLUTE RULE: POSE/POSITION IS LOCKED - ZERO CHANGES ALLOWED 🚨
   
-  **THE SUBJECT IS FROZEN LIKE A STATUE. THE CAMERA MOVES, NOT THE SUBJECT.**
+  The subject is FROZEN. Only the camera moves around it.
   
-  Imagine the person/object is:
-  - Completely FROZEN in the EXACT pose from the reference image
-  - Like a statue or mannequin - absolutely no movement allowed
-  - The camera orbits around this frozen subject
+  ### 🔒 SPATIAL LOCK INSTRUCTIONS:
   
-  **EVERY SINGLE VIEW must show:**
-  - SAME arm positions (if arms are down, they stay down in ALL views)
-  - SAME leg positions (if standing straight, stay standing straight in ALL views)
-  - SAME head angle (if looking forward, head stays looking forward in ALL views)
-  - SAME body posture (if standing upright, stay upright even in TOP/BOTTOM views)
-  - SAME hand positions, finger positions, everything
-  
-  **FOR TOP VIEW (looking down from above):**
-  - Camera is above looking DOWN at the frozen subject
-  - Subject does NOT bend over or look down
-  - Subject maintains the SAME upright standing pose
-  - We see the top of the head, shoulders from above
-  
-  **FOR BOTTOM VIEW (looking up from below):**
-  - Camera is below looking UP at the frozen subject
-  - Subject does NOT lie down or change pose
-  - Subject maintains the SAME upright standing pose
-  - We see the underside of chin, feet from below
-  
-  ❌ FORBIDDEN - DO NOT:
-  - Change any body part position between views
-  - Make the subject bend, crouch, or adjust for camera angle
-  - Have the subject look toward the camera in each view
-  - Alter arm/leg positions to "fit" the view better
-  
-  ✅ CORRECT - The subject is a FROZEN STATUE, camera moves around it
+  Every element must match the reference EXACTLY across all views:
+  - HEAD: Must remain LOCKED in the same tilt and rotation.
+  - GAZE: Must remain LOCKED relative to the body, never correcting toward camera.
+  - ARMS: Must remain LOCKED in the same position and bend angle.
+  - LEGS: Must remain LOCKED in the same stance and crossing order.
+  - TORSO: Must remain LOCKED in the same lean and twist.
+  - OBJECTS: Must remain LOCKED in the same position relative to subject.
 
+  ### 🎯 KEY CONCEPT: Positions are relative to BODY, not CAMERA
+  
+  When camera moves, the APPEARANCE changes but ACTUAL POSITIONS stay the same.
+  
+  ❌ WRONG: "Correcting" poses to look more standard in each view
+  ❌ WRONG: Swapping left/right positions based on camera angle
+  ❌ WRONG: Making subject face forward in every view
+  ✅ RIGHT: All spatial relationships from reference are preserved
+  {top_bottom_instructions}
   ## ⚠️ LEFT vs RIGHT VIEW DISTINCTION
   
-  Think of the camera orbiting around the frozen subject:
-  
-  | View  | Camera Position | Object's Front Points To |
-  |-------|-----------------|-------------------------|
-  | RIGHT | Right of object | LEFT edge of image      |
-  | LEFT  | Left of object  | RIGHT edge of image     |
-  
-  ⚠️ These are views from OPPOSITE sides - NOT mirrors!
+  For the RIGHT view, the camera is positioned to the right of the subject, so the subject's front points toward the LEFT edge of the image.
+  For the LEFT view, the camera is positioned to the left of the subject, so the subject's front points toward the RIGHT edge of the image.
 
-  ## BACKGROUND
+  ## BACKGROUND & PHYSICS
   - Solid neutral gray or white background
-  - ❌ NO turntable, platform, or any surface
-  - ✅ Object appears to float naturally
+  - No visible floor, horizon line, or surface texture
+  - Feet may lightly contact an implied surface (no visible geometry)
+  - ❌ NO turntable, platform, pedestal, or disc under feet
+  - ✅ Clean seamless background, natural grounded positioning
 
   ## PANEL LAYOUT
   - {layout_description}
   - Same scale in all panels
   - NO text labels
 
-  ⚠️ IMPORTANT: Generate EXACTLY {view_count} view(s) as specified. No more, no less.
+  ⚠️ Generate EXACTLY {view_count} view(s) as specified.
 
 variables:
   - character_description
@@ -86,18 +69,31 @@ variables:
   - view_descriptions
   - reference_context
   - style_instructions
+  - output_type_description
+  - top_bottom_instructions
+
+# 动态内容预设
+dynamic_content:
+  # 根据风格类型生成不同的输出类型描述
+  output_type_photorealistic: |
+    Generate a multi-view photo composite with exactly {view_count} panel(s), showing the same person/subject from different camera angles.
+  
+  output_type_default: |
+    Generate a multi-view reference sheet with exactly {view_count} panel(s), based on the reference image.
+  
+  # TOP/BOTTOM 说明（仅当包含这些视角时添加）
+  top_bottom_hint: |
+    
+    **TOP/BOTTOM VIEWS**: Camera above/below looking at the subject. Pose stays EXACTLY the same - only camera angle changes.
 
 # 风格指令预设
 style_presets:
   photorealistic: |
-    **PHOTOREALISTIC STYLE REQUIRED:**
-    - Match the EXACT style of the reference image (real person photo)
-    - Generate as if photographed by a professional camera (8K, RAW photo quality)
-    - Realistic skin texture with pores, fine details, and natural imperfections
-    - Natural lighting and shadows as in real photography
-    - ❌ DO NOT generate as: anime, cartoon, 3D render, CGI, illustration, digital art
-    - ❌ DO NOT add: plastic/smooth skin, exaggerated features, stylized proportions
-    - ✅ MUST look like: actual photograph of a real person
+    **PHOTOREALISTIC STYLE - REAL PHOTO QUALITY:**
+    - Generate as if photographed by a professional camera
+    - Realistic skin texture, natural lighting, real photography look
+    - ❌ DO NOT generate as: cartoon, 3D render, CGI, illustration
+    - ✅ MUST look like: actual photographs of a real person/subject
   
   anime: |
     **ANIME/2D STYLE REQUIRED:**

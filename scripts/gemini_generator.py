@@ -78,7 +78,9 @@ def generate_character_views(
     use_strict_mode: bool = False,
     resolution: str = "2K",
     original_args = None,
-    export_prompt: bool = False
+    export_prompt: bool = False,
+    subject_only: bool = False,
+    with_props: list = None
 ) -> Optional[str]:
     """
     使用 Gemini API 生成多视图角色图像
@@ -96,6 +98,8 @@ def generate_character_views(
         reference_image_path: 参考图像路径（用于图生图）
         use_strict_mode: 严格复制模式（基于参考图像）
         resolution: 目标分辨率 (1K/2K/4K)，通过后处理实现
+        subject_only: 只处理主体，移除背景物体
+        with_props: 要包含的道具列表
     
     Returns:
         生成的图片路径
@@ -115,6 +119,10 @@ def generate_character_views(
     if reference_image_path:
         mode_label = "严格复制" if use_strict_mode else "参考图像"
         print(f"[{mode_label}] {reference_image_path}")
+    if subject_only:
+        print(f"[主体隔离] 只处理主体人物，移除背景物体")
+    if with_props:
+        print(f"[包含道具] {', '.join(with_props)}")
     print(f"[分辨率] {resolution}")
     print("-"*60)
     
@@ -144,7 +152,9 @@ def generate_character_views(
         full_prompt = build_strict_copy_prompt(
             view_mode=view_mode,
             custom_views=custom_views,
-            style=style
+            style=style,
+            subject_only=subject_only,
+            with_props=with_props
         )
         print("[模式] 严格复制 - 100% 基于参考图像")
     elif reference_image_b64:
@@ -153,7 +163,9 @@ def generate_character_views(
             character_description or "Extract character details and generate multi-view",
             view_mode=view_mode,
             custom_views=custom_views,
-            style=style
+            style=style,
+            subject_only=subject_only,
+            with_props=with_props
         )
         print(f"[模式] 图像参考 - 提取特征生成 {view_mode if view_mode != 'custom' else str(custom_views)} 视角")
     else:
@@ -161,7 +173,9 @@ def generate_character_views(
             character_description, 
             style=style,
             view_mode=view_mode,
-            custom_views=custom_views
+            custom_views=custom_views,
+            subject_only=subject_only,
+            with_props=with_props
         )
     
     # 添加负面提示词
@@ -237,9 +251,20 @@ def generate_character_views(
                     'data': b64_data
                 })
             
-            # 添加负面提示词到 prompt（Gemini API 方式）
+            # Gemini 优化：使用语义负面提示（正面描述所需场景）
+            # 根据 Gemini API 文档建议，避免直接列出禁止项，而是强调正面要求
             if negative_prompt:
-                contents[0] += f"\n\nNEGATIVE PROMPT (avoid these): {negative_prompt}"
+                # 将传统负面提示词转换为语义正面指令
+                semantic_avoidance = """
+## 🛡️ QUALITY REQUIREMENTS (what the image MUST have):
+- Clean, anatomically correct figure with proper limb count and proportions
+- Consistent pose maintained identically across all panels
+- Head, gaze, and body orientation frozen in the same position in every view
+- All limbs in exactly the same position and crossing order across views
+- High quality, sharp details, no artifacts or distortions
+- Clean panel layout with consistent sizing
+- No text, labels, or overlays on the image"""
+                contents[0] += semantic_avoidance
             
             # ===================================================================
             # 导出提示词模式：输出参数而不调用 API
@@ -265,6 +290,15 @@ def generate_character_views(
                 print("-"*70)
                 print(contents[0])
                 print("-"*70)
+                
+                # 显示负面提示词信息（原始版本，供参考）
+                if negative_prompt:
+                    print(f"\n【负面提示词信息】")
+                    print(f"   📋 原始负面提示词 (已转换为语义正面指令):")
+                    print(f"   {negative_prompt[:200]}{'...' if len(negative_prompt) > 200 else ''}")
+                    print(f"   ")
+                    print(f"   ✅ Gemini 优化: 已自动转换为 'QUALITY REQUIREMENTS' 正面描述")
+                    print(f"   💡 根据 Gemini API 文档建议，使用语义负面提示效果更好")
                 
                 if reference_image_b64:
                     print(f"\n【⚠️  参考图像 - 重要】")

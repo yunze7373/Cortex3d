@@ -1,30 +1,28 @@
 name: anatomy_negative
-version: "1.1"
-description: "解剖学错误和姿势一致性负面提示词"
+version: "1.5"
+description: "解剖学错误和姿势一致性负面提示词（精简高权重版）"
 
 prompts:
+  # ========== 解剖学错误（保留核心） ==========
   - "extra limbs"
   - "missing limbs"
-  - "extra fingers"
-  - "missing fingers"
-  - "extra arms"
-  - "extra legs"
   - "deformed hands"
   - "deformed feet"
-  - "twisted body"
-  - "unnatural pose"
   - "broken anatomy"
   - "fused limbs"
   - "floating limbs"
   - "disconnected body parts"
-  - "wrong joint positions"
-  - "arms not connected to shoulders"
-  - "legs not connected to hips"
-  - "different poses between views"
-  - "pose changes between panels"
-  - "inconsistent body position"
-  - "subject bending for camera"
-  - "subject looking at camera in all views"
-  - "head turning to face camera"
-  - "arms moving between views"
-  - "legs in different positions"
+  
+  # ========== 高权重禁止块（替代50+条重复概念） ==========
+  # 这一条覆盖所有姿势变化问题
+  - "any pose or body orientation change across panels"
+  # 这一条覆盖所有视线/头部变化问题
+  - "any head angle or gaze direction change between views"
+  # 这一条覆盖所有肢体位置变化问题
+  - "any limb position or crossing order change across views"
+  
+  # ========== 关键具体禁止（防止常见错误） ==========
+  - "head facing forward in all views"
+  - "eyes following camera"
+  - "feet swapping front and back"
+  - "subject posing for each angle"

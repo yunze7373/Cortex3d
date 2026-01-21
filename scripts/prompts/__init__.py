@@ -541,6 +541,7 @@ Generate a professional 8-view character reference sheet including top and botto
             ref_system_views = views
         
         view_count = len(views)
+        view_names = [v.name for v in views]
         
         # 构建布局描述
         rows, cols, aspect = get_layout_for_views(view_count)
@@ -556,8 +557,12 @@ Generate a professional 8-view character reference sheet including top and botto
         if view_mode == "custom" and custom_views:
             reference_context = format_reference_system_context(ref_system_name, ref_system_views, views)
         
-        # 构建风格指令
+        # 构建风格指令和输出类型描述
         style_instructions = self._get_style_instructions(style)
+        output_type_description = self._get_output_type_description(style, view_count)
+        
+        # 构建 TOP/BOTTOM 说明（仅当包含这些视角时）
+        top_bottom_instructions = self._get_top_bottom_instructions(view_names)
         
         template = self.load_prompt("multiview", "image_ref")
         return template.get("template", "").format(
@@ -567,8 +572,43 @@ Generate a professional 8-view character reference sheet including top and botto
             panel_list=format_panel_list(views),
             view_descriptions=format_view_descriptions(views),
             reference_context=reference_context,
-            style_instructions=style_instructions
+            style_instructions=style_instructions,
+            output_type_description=output_type_description,
+            top_bottom_instructions=top_bottom_instructions
         )
+    
+    def _get_output_type_description(self, style: str = None, view_count: int = 4) -> str:
+        """
+        根据风格生成输出类型描述，避免"3D reference sheet + photorealistic"冲突
+        """
+        template = self.load_prompt("multiview", "image_ref")
+        dynamic_content = template.get("dynamic_content", {})
+        
+        if style:
+            style_lower = style.lower()
+            photorealistic_keywords = ["photorealistic", "photo", "realistic", "raw", "real", "8k"]
+            if any(kw in style_lower for kw in photorealistic_keywords):
+                return dynamic_content.get(
+                    "output_type_photorealistic", 
+                    f"Generate a multi-view photo composite with exactly {view_count} panel(s)."
+                ).format(view_count=view_count)
+        
+        return dynamic_content.get(
+            "output_type_default",
+            f"Generate a multi-view reference sheet with exactly {view_count} panel(s)."
+        ).format(view_count=view_count)
+    
+    def _get_top_bottom_instructions(self, view_names: List[str]) -> str:
+        """
+        仅当视角包含 top 或 bottom 时返回说明
+        """
+        has_top_bottom = any(v in ["top", "bottom"] for v in view_names)
+        if not has_top_bottom:
+            return ""  # 4-view 等不含 top/bottom 时不添加
+        
+        template = self.load_prompt("multiview", "image_ref")
+        dynamic_content = template.get("dynamic_content", {})
+        return dynamic_content.get("top_bottom_hint", "")
     
     def _get_style_instructions(self, style: str = None) -> str:
         """
@@ -635,6 +675,7 @@ Generate a professional 8-view character reference sheet including top and botto
             ref_system_views = views
         
         view_count = len(views)
+        view_names = [v.name for v in views]
         
         # 构建布局描述
         rows, cols, aspect = get_layout_for_views(view_count)
@@ -650,8 +691,12 @@ Generate a professional 8-view character reference sheet including top and botto
         if view_mode == "custom" and custom_views:
             reference_context = format_reference_system_context(ref_system_name, ref_system_views, views)
         
-        # 构建风格指令
+        # 构建风格指令和输出类型描述
         style_instructions = self._get_style_instructions(style)
+        output_type_description = self._get_output_type_description(style, view_count)
+        
+        # 构建 TOP/BOTTOM 说明（仅当包含这些视角时）
+        top_bottom_instructions = self._get_top_bottom_instructions(view_names)
         
         template = self.load_prompt("multiview", "strict_copy")
         return template.get("template", "").format(
@@ -660,7 +705,9 @@ Generate a professional 8-view character reference sheet including top and botto
             panel_list=format_panel_list(views),
             view_descriptions=format_view_descriptions(views),
             reference_context=reference_context,
-            style_instructions=style_instructions
+            style_instructions=style_instructions,
+            output_type_description=output_type_description,
+            top_bottom_instructions=top_bottom_instructions
         )
 
 
