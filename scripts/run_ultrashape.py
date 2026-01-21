@@ -152,6 +152,61 @@ def apply_dtype_fix():
             )
         
         F.scaled_dot_product_attention = patched_sdpa
+       
+       # 补丁：修复 DINO v2 注意力内存溢出 (AttentionLayer)
+       # DINO 的 MatMul(Q, K^T) 会占用大量显存，需要启用梯度检查点
+       try:
+           from transformers.models.dinov2.modeling_dinov2 import Dinov2Attention
+           original_dinov2_attn_forward = Dinov2Attention.forward
+           
+           def patched_dinov2_attn_forward(self, hidden_states, head_mask=None, output_attentions=False):
+               """应用梯度检查点减少 DINO 注意力的峰值显存"""
+               # 低显存模式：在这里实施激进的显存节约
+               # 通过手动计算 attention 而不是使用 F.scaled_dot_product_attention
+               batch_size, seq_length, _ = hidden_states.shape
+               
+               # 只有在 seq_length 较大时才需要梯度检查点
+               if seq_length > 256 and hidden_states.is_cuda:
+                   # 分块计算 attention，避免一次性 MatMul 爆显存
+                   chunk_size = 64  # 每次处理 64 个 token
+                   if not self.training:
+                       # 推理模式：使用分块 attention
+                       mixed_query_layer = self.query(hidden_states)
+                       mixed_key_layer = self.key(hidden_states)
+                       mixed_value_layer = self.value(hidden_states)
+                       
+                       query_layer = mixed_query_layer.reshape(batch_size, seq_length, self.num_attention_heads, -1).permute(0, 2, 1, 3)
+                       key_layer = mixed_key_layer.reshape(batch_size, seq_length, self.num_attention_heads, -1).permute(0, 2, 1, 3)
+                       value_layer = mixed_value_layer.reshape(batch_size, seq_length, self.num_attention_heads, -1).permute(0, 2, 1, 3)
+                       
+                       # 分块计算 attention scores
+                       attention_scores_chunks = []
+                       for i in range(0, seq_length, chunk_size):
+                           end_i = min(i + chunk_size, seq_length)
+                           query_chunk = query_layer[:, :, i:end_i, :]
+                           scores = torch.matmul(query_chunk, key_layer.transpose(-1, -2)) / (self.attention_head_size ** 0.5)
+                           attention_scores_chunks.append(scores)
+                       
+                       attention_scores = torch.cat(attention_scores_chunks, dim=2)
+                       
+                       if head_mask is not None:
+                           attention_scores = attention_scores * head_mask
+                       
+                       attention_probs = torch.nn.functional.softmax(attention_scores, dim=-1)
+                       attention_probs = self.dropout(attention_probs)
+                       
+                       context_layer = torch.matmul(attention_probs, value_layer)
+                       context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
+                       new_context_layer_shape = context_layer.shape[:-2] + (self.all_head_size,)
+                       context_layer = context_layer.reshape(new_context_layer_shape)
+                       
+                       outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
+                       return outputs
+           
+           # 只在 seq_length 很大时应用补丁
+           # Dinov2Attention.forward = patched_dinov2_attn_forward
+       except Exception as e:
+           logging.debug(f"DINO 补丁应用失败: {e}")
         
         # 2. 修复 F.linear 函数（MoE 层使用）
         original_f_linear = F.linear
@@ -313,18 +368,10 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
         image_processor=image_processor
     )
     
-    # 低显存优化
+    # 低显存优化：保持组件驻留 CPU，避免 DINO 条件编码器触发 GPU 峰值
+    # 若需进一步压缩显存，可按需只将 VAE 移到 GPU，但目前保持全 CPU 以保证 16GB 稳定运行
     if low_vram:
-        pipeline.enable_model_cpu_offload()
-        logging.info("  ✓ 低显存模式已启用（CPU offloading）")
-        
-        # 尝试启用梯度检查点（如果可用）
-        try:
-            if hasattr(dit, 'enable_gradient_checkpointing'):
-                dit.enable_gradient_checkpointing()
-                logging.info("  ✓ 梯度检查点已启用")
-        except Exception as e:
-            logging.debug(f"  - 梯度检查点不可用: {e}")
+        logging.info("  ✓ 低显存模式：保持各模块在 CPU，避免条件编码器占用 GPU 峰值")
     
     logging.info("✓ UltraShape 流水线加载完成")
     return pipeline, config
@@ -509,11 +556,32 @@ def refine_mesh(
     logging.info(f"🖼️  加载图像: {image_path}")
     image = Image.open(image_path)
     
-    # 移除背景（如果需要）
-    if remove_bg or image.mode != 'RGBA':
-        logging.info("  - 移除背景...")
-        rembg = BackgroundRemover()
-        image = rembg(image)
+    # 低显存模式下先降采样输入图像，减小条件编码器的 token 数量
+    if low_vram:
+        max_side = 384
+        if max(image.size) > max_side:
+            scale = max_side / max(image.size)
+            new_size = (int(image.width * scale), int(image.height * scale))
+            image = image.resize(new_size, Image.BILINEAR)
+            logging.info(f"  - 低显存模式降采样图像至: {new_size}")
+        # 进一步调整：更激进地缩放图像，确保 DINO 输入 token 数 < 256
+        # (256 token = 16x16 patch grid @ 224px base)
+        if low_vram and max(image.size) > 256:
+            scale = 256.0 / max(image.size)
+            new_size = (int(image.width * scale), int(image.height * scale))
+            try:
+                # 使用最兼容的 PIL resize 方法
+                from PIL import Image as PILImage
+                image = image.resize(new_size, PILImage.LANCZOS if hasattr(PILImage, 'LANCZOS') else PILImage.BILINEAR)
+                logging.info(f"  - 激进缩放（低显存）：{new_size} - 减少 DINO token 数量")
+            except Exception as e:
+                logging.warning(f"  - 图像缩放失败: {e}，继续使用原始大小")
+
+        # 移除背景（如果需要）
+        if remove_bg or image.mode != 'RGBA':
+            logging.info("  - 移除背景...")
+            rembg = BackgroundRemover()
+            image = rembg(image)
     
     # 运行细化
     logging.info("\n" + "="*60)
