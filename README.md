@@ -327,6 +327,9 @@ make wsl-compact
 
 ### 🚀 快速开始
 - **迭代 360° 生成指南**: [docs/ITERATIVE_360_GUIDE_V2.md](docs/ITERATIVE_360_GUIDE_V2.md) ⭐ *Gemini 官方最佳实践*
+- **图像编辑快速开始**: [docs/IMAGE_EDITING_QUICKSTART.md](docs/IMAGE_EDITING_QUICKSTART.md) 🎨 *使用 Gemini 编辑/修复角色图像*
+- **Gemini 图像编辑集成**: [docs/GEMINI_IMAGE_EDITING_INTEGRATION.md](docs/GEMINI_IMAGE_EDITING_INTEGRATION.md) 📖 *完整设计文档*
+- **图像编辑速查表**: [docs/GEMINI_IMAGE_EDITING_CHEATSHEET.md](docs/GEMINI_IMAGE_EDITING_CHEATSHEET.md) 📋 *快速参考*
 - **快速参考**: [docs/QUICKREF.md](docs/QUICKREF.md)
 
 ### 🔧 模型配置

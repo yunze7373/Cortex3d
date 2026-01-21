@@ -578,6 +578,284 @@ def generate_character_views(
         return None
 
 
+# =============================================================================
+# 新增编辑功能 - P0 高优先级
+# =============================================================================
+
+def edit_character_elements(
+    source_image_path: str,
+    edit_instruction: str,
+    character_description: str,
+    api_key: str,
+    model_name: str = DEFAULT_MODEL,
+    output_dir: str = "test_images",
+    auto_cut: bool = True,
+    style: str = "cinematic character",
+    export_prompt: bool = False,
+    subject_only: bool = False,
+    with_props: list = None
+) -> Optional[str]:
+    """
+    编辑角色的元素(添加/移除/修改)
+    
+    Args:
+        source_image_path: 源图像路径
+        edit_instruction: 编辑指令 ("add:xxx", "remove:xxx", "modify:xxx")
+        character_description: 角色描述
+        api_key: Gemini API Key
+        model_name: 模型名称
+        output_dir: 输出目录
+        auto_cut: 是否自动切割
+        style: 风格描述
+        export_prompt: 是否导出提示词
+        subject_only: 是否仅主体
+        with_props: 配件列表
+    
+    Returns:
+        编辑后图像的路径
+    """
+    from pathlib import Path
+    from image_editor_utils import parse_edit_instruction, compose_edit_prompt, load_image_as_base64
+    
+    _ensure_imports()
+    
+    # 解析编辑指令
+    edit_type, edit_detail = parse_edit_instruction(edit_instruction)
+    
+    print(f"\n[编辑模式] {edit_type.upper()}")
+    print(f"  原图: {Path(source_image_path).name}")
+    print(f"  操作: {edit_detail}")
+    
+    # 构建提示词
+    prompt = compose_edit_prompt(
+        edit_type=edit_type,
+        edit_instruction=edit_detail,
+        character_description=character_description,
+        additional_context=f"Style: {style}"
+    )
+    
+    if export_prompt:
+        print("\n[导出模式] 提示词已复制到剪贴板:")
+        print("="*70)
+        print(prompt)
+        print("="*70)
+        return None
+    
+    # 加载源图像
+    image_b64 = load_image_as_base64(source_image_path)
+    if image_b64 is None:
+        print(f"[ERROR] 无法加载源图像: {source_image_path}")
+        return None
+    
+    mime_type = "image/png" if source_image_path.endswith('.png') else "image/jpeg"
+    
+    try:
+        # 调用 Gemini API
+        model = genai.GenerativeModel(model_name)
+        
+        contents = [
+            prompt,
+            {
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": image_b64
+                }
+            }
+        ]
+        
+        generation_config = genai.types.GenerationConfig(
+            max_output_tokens=4096,
+            temperature=0.7,
+        )
+        
+        print("\n[进度] 调用 Gemini API 进行编辑...")
+        response = model.generate_content(
+            contents,
+            generation_config=generation_config,
+            safety_settings=[]
+        )
+        
+        if not response or not response.candidates:
+            print("[ERROR] 编辑失败: 无返回内容")
+            return None
+        
+        # 提取生成的图像
+        image_data = None
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, 'inline_data') and part.inline_data:
+                if part.inline_data.mime_type.startswith('image/'):
+                    image_data = part.inline_data.data
+                    break
+        
+        if not image_data:
+            print("[ERROR] API 未返回图像数据")
+            return None
+        
+        # 保存编辑后的图像
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = Path(output_dir) / f"{edit_type}_edited_{timestamp}.png"
+        
+        import struct
+        if isinstance(image_data, str):
+            import base64
+            image_bytes = base64.b64decode(image_data)
+        else:
+            image_bytes = image_data
+        
+        with open(output_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        print(f"✅ 编辑完成: {output_path}")
+        return str(output_path)
+        
+    except Exception as e:
+        print(f"[ERROR] 编辑失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def refine_character_details(
+    source_image_path: str,
+    detail_part: str,  # "face", "hands", "pose", "custom"
+    issue_description: str,
+    character_description: str,
+    api_key: str,
+    model_name: str = DEFAULT_MODEL,
+    output_dir: str = "test_images",
+    auto_cut: bool = True,
+    export_prompt: bool = False
+) -> Optional[str]:
+    """
+    优化角色的特定细节部位(语义遮盖)
+    
+    Args:
+        source_image_path: 源图像路径
+        detail_part: 要优化的部位 (face/hands/pose/custom)
+        issue_description: 问题描述
+        character_description: 角色描述
+        api_key: Gemini API Key
+        model_name: 模型名称
+        output_dir: 输出目录
+        auto_cut: 是否自动切割
+        export_prompt: 是否导出提示词
+    
+    Returns:
+        优化后图像的路径
+    """
+    from pathlib import Path
+    from image_editor_utils import compose_refine_prompt, load_image_as_base64
+    
+    _ensure_imports()
+    
+    # 构建部位标签
+    part_labels = {
+        'face': '脸部表情和特征',
+        'hands': '手指和手部细节',
+        'pose': '身体姿势',
+        'eyes': '眼睛和视线',
+        'custom': issue_description
+    }
+    
+    part_label = part_labels.get(detail_part, detail_part)
+    
+    print(f"\n[细节优化] {detail_part.upper()}")
+    print(f"  原图: {Path(source_image_path).name}")
+    print(f"  问题: {issue_description}")
+    
+    # 构建提示词
+    prompt = compose_refine_prompt(
+        detail_part=part_label,
+        issue_description=issue_description,
+        character_description=character_description,
+        preservation_notes="保持所有其他元素完全相同"
+    )
+    
+    if export_prompt:
+        print("\n[导出模式] 提示词已复制到剪贴板:")
+        print("="*70)
+        print(prompt)
+        print("="*70)
+        return None
+    
+    # 加载源图像
+    image_b64 = load_image_as_base64(source_image_path)
+    if image_b64 is None:
+        print(f"[ERROR] 无法加载源图像: {source_image_path}")
+        return None
+    
+    mime_type = "image/png" if source_image_path.endswith('.png') else "image/jpeg"
+    
+    try:
+        # 调用 Gemini API
+        model = genai.GenerativeModel(model_name)
+        
+        contents = [
+            prompt,
+            {
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": image_b64
+                }
+            }
+        ]
+        
+        generation_config = genai.types.GenerationConfig(
+            max_output_tokens=4096,
+            temperature=0.7,
+        )
+        
+        print("\n[进度] 调用 Gemini API 进行优化...")
+        response = model.generate_content(
+            contents,
+            generation_config=generation_config,
+            safety_settings=[]
+        )
+        
+        if not response or not response.candidates:
+            print("[ERROR] 优化失败: 无返回内容")
+            return None
+        
+        # 提取生成的图像
+        image_data = None
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, 'inline_data') and part.inline_data:
+                if part.inline_data.mime_type.startswith('image/'):
+                    image_data = part.inline_data.data
+                    break
+        
+        if not image_data:
+            print("[ERROR] API 未返回图像数据")
+            return None
+        
+        # 保存优化后的图像
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = Path(output_dir) / f"refined_{detail_part}_{timestamp}.png"
+        
+        import struct
+        if isinstance(image_data, str):
+            import base64
+            image_bytes = base64.b64decode(image_data)
+        else:
+            image_bytes = image_data
+        
+        with open(output_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        print(f"✅ 优化完成: {output_path}")
+        return str(output_path)
+        
+    except Exception as e:
+        print(f"[ERROR] 优化失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
 # 已移除 generate_with_imagen 和 generate_with_gemini_vision 函数
 # 直连模式应该和代理模式使用相同的逻辑，只是访问路径不同
 

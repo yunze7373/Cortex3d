@@ -415,6 +415,61 @@ def main():
         help="Iterative 360-degree mode with specified view count (4/6/8). Generate views sequentially, using each output as reference for the next. Requires --from-image."
     )
     
+    # =========================================================================
+    # P0 高优先级编辑功能 - 添加/移除元素
+    # =========================================================================
+    parser.add_argument(
+        "--mode-edit",
+        action="store_true",
+        dest="mode_edit",
+        help="激活编辑模式: 添加/移除/修改角色元素。需要配合 --edit-elements 和 --from-edited"
+    )
+    
+    parser.add_argument(
+        "--edit-elements",
+        type=str,
+        dest="edit_elements",
+        help="编辑指令。格式: 'add:xxx' 或 'remove:xxx' 或 'modify:xxx'。例: 'add:肩部火焰翅膀'"
+    )
+    
+    parser.add_argument(
+        "--from-edited",
+        type=str,
+        dest="from_edited",
+        help="要编辑的源图像路径"
+    )
+    
+    # =========================================================================
+    # P0 高优先级编辑功能 - 语义遮盖/细节修复
+    # =========================================================================
+    parser.add_argument(
+        "--mode-refine",
+        action="store_true",
+        dest="mode_refine",
+        help="激活优化模式: 修复特定细节(脸部/手指/姿势等)。需要配合 --refine-details 和 --from-refine"
+    )
+    
+    parser.add_argument(
+        "--refine-details",
+        choices=["face", "hands", "pose", "eyes", "custom"],
+        dest="refine_details",
+        help="要优化的细节部位"
+    )
+    
+    parser.add_argument(
+        "--detail-issue",
+        type=str,
+        dest="detail_issue",
+        help="具体问题描述。例: '左手有6根手指，需要改为5根'"
+    )
+    
+    parser.add_argument(
+        "--from-refine",
+        type=str,
+        dest="from_refine",
+        help="要优化的源图像路径"
+    )
+    
     args = parser.parse_args()
     
     # 根据模式自动设置token(如果未提供)
@@ -431,6 +486,123 @@ def main():
 ║         AI 多视角图像生成 → 切割 → 去背景 → 3D建模             ║
 ╚═══════════════════════════════════════════════════════════════╝
     """)
+    
+    # =========================================================================
+    # 图像编辑模式：使用 Gemini 对角色图像进行编辑
+    # =========================================================================
+    if args.mode_edit:
+        print("[图像编辑模式]")
+        
+        # 验证必需参数
+        if not args.from_edited:
+            print("[ERROR] --mode-edit 需要 --from-edited 参数（源图像路径）")
+            sys.exit(1)
+        
+        if not args.edit_elements:
+            print("[ERROR] --mode-edit 需要 --edit-elements 参数（操作指令）")
+            print("        格式示例: 'add:肩部炮台' 或 'remove:头顶绶带' 或 'modify:左手')\"")
+            sys.exit(1)
+        
+        # 验证源图像存在
+        source_path = Path(args.from_edited)
+        if not source_path.exists():
+            print(f"[ERROR] 源图像不存在: {args.from_edited}")
+            sys.exit(1)
+        
+        print(f"  └─ 源图像: {args.from_edited}")
+        print(f"  └─ 编辑操作: {args.edit_elements}")
+        print(f"  └─ 输出目录: {args.output}")
+        print("")
+        
+        # 导入编辑函数
+        from gemini_generator import edit_character_elements
+        
+        # 执行编辑
+        character_desc = args.character if args.character else "a character"
+        try:
+            output_path = edit_character_elements(
+                source_image_path=str(source_path),
+                edit_instruction=args.edit_elements,
+                character_description=character_desc,
+                api_key=args.token,
+                model_name=args.model,
+                output_dir=args.output
+            )
+            
+            if output_path:
+                print(f"\n✅ 编辑完成！")
+                print(f"   输出: {output_path}")
+            else:
+                print(f"\n❌ 编辑失败，请检查日志")
+                sys.exit(1)
+            
+            sys.exit(0)
+        except Exception as e:
+            print(f"[ERROR] 编辑过程出错: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    
+    # =========================================================================
+    # 图像细节优化模式：使用 Gemini 对特定部分进行细节修复
+    # =========================================================================
+    if args.mode_refine:
+        print("[图像细节优化模式]")
+        
+        # 验证必需参数
+        if not args.from_refine:
+            print("[ERROR] --mode-refine 需要 --from-refine 参数（源图像路径）")
+            sys.exit(1)
+        
+        if not args.refine_details:
+            print("[ERROR] --mode-refine 需要 --refine-details 参数")
+            print("        选项: face | hands | pose | eyes | custom")
+            sys.exit(1)
+        
+        # 验证源图像存在
+        source_path = Path(args.from_refine)
+        if not source_path.exists():
+            print(f"[ERROR] 源图像不存在: {args.from_refine}")
+            sys.exit(1)
+        
+        print(f"  └─ 源图像: {args.from_refine}")
+        print(f"  └─ 优化部分: {args.refine_details}")
+        if args.detail_issue:
+            print(f"  └─ 问题描述: {args.detail_issue}")
+        print(f"  └─ 输出目录: {args.output}")
+        print("")
+        
+        # 导入细节修复函数
+        from gemini_generator import refine_character_details
+        
+        # 执行细节修复
+        character_desc = args.character if args.character else "a character"
+        detail_issue = args.detail_issue if args.detail_issue else "please improve the quality"
+        
+        try:
+            output_path = refine_character_details(
+                source_image_path=str(source_path),
+                detail_part=args.refine_details,
+                issue_description=detail_issue,
+                character_description=character_desc,
+                api_key=args.token,
+                model_name=args.model,
+                output_dir=args.output
+            )
+            
+            if output_path:
+                print(f"\n✅ 细节优化完成！")
+                print(f"   输出: {output_path}")
+            else:
+                print(f"\n❌ 优化失败，请检查日志")
+                sys.exit(1)
+            
+            sys.exit(0)
+        except Exception as e:
+            print(f"[ERROR] 优化过程出错: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
     
     # =========================================================================
     # 迭代 360 度模式检查
