@@ -242,21 +242,21 @@ def generate_3d(
         
         # Generate shape
         if multiview and isinstance(images, dict):
-            # Multi-view: Hunyuan3D-2mv expects images as a list in specific order
-            # Required order: [front, right, back, left] or available views
+            # Multi-view: Hunyuan3D-2mv expects images as a dict with view tags as keys
+            # The pipeline's prepare_image() calls image_dict.items() so we need a dict
             view_order = ['front', 'right', 'back', 'left']
-            image_list = []
+            image_dict = {}
             actual_views = []
             for view in view_order:
                 if view in images:
-                    image_list.append(images[view])
+                    image_dict[view] = images[view]
                     actual_views.append(view)
             
-            print(f"[INFO] Using {len(image_list)} views for generation: {actual_views}")
+            print(f"[INFO] Using {len(image_dict)} views for generation: {actual_views}")
             
-            # Multi-view API expects list of images
+            # Multi-view API expects dict of {view_tag: PIL.Image}
             gen_kwargs = {
-                'image': image_list,  # List of PIL images
+                'image': image_dict,  # Dict of view_tag -> PIL.Image
                 'octree_resolution': octree_resolution,
                 'guidance_scale': guidance_scale,
                 'num_inference_steps': num_inference_steps
