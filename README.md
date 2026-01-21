@@ -325,11 +325,24 @@ make wsl-compact
 
 ## 📚 文档索引
 
+### 🚀 快速开始
+- **迭代 360° 生成指南**: [docs/ITERATIVE_360_GUIDE_V2.md](docs/ITERATIVE_360_GUIDE_V2.md) ⭐ *Gemini 官方最佳实践*
+- **快速参考**: [docs/QUICKREF.md](docs/QUICKREF.md)
+
+### 🔧 模型配置
 - **UltraShape 使用指南**: [docs/ULTRASHAPE_USAGE.md](docs/ULTRASHAPE_USAGE.md)
 - **UltraShape 技术研究**: [docs/ULTRASHAPE_RESEARCH.md](docs/ULTRASHAPE_RESEARCH.md)
 - **TRELLIS.2 配置**: [docs/TRELLIS2_SETUP.md](docs/TRELLIS2_SETUP.md)
+- **TRELLIS.2 安装**: [docs/TRELLIS_SETUP.md](docs/TRELLIS_SETUP.md)
 - **WSL 空间管理**: [docs/WSL_SPACE_MANAGEMENT.md](docs/WSL_SPACE_MANAGEMENT.md)
-- **快速清理参考**: [docs/CLEANUP_QUICK_REFERENCE.md](docs/CLEANUP_QUICK_REFERENCE.md)
+- **清理参考**: [docs/CLEANUP_QUICK_REFERENCE.md](docs/CLEANUP_QUICK_REFERENCE.md)
+
+### 📋 项目规划
+- **项目规范**: [docs/开发平台介绍.md](docs/开发平台介绍.md)
+- **需求文档**: [docs/需求.md](docs/需求.md)
+- **v2.0 方案**: [docs/AI%203D%20打印手办自动化流水线%20v2.0%20(工业级增强版).md](docs/AI%203D%20打印手办自动化流水线%20v2.0%20(工业级增强版).md)
+- **v2.0 增强**: [docs/AI%203D%20打印手办自动化流水线%20v2.0：工业级增强方案.md](docs/AI%203D%20打印手办自动化流水线%20v2.0：工业级增强方案.md)
+- **v2.1 功能**: [docs/AI%203D%20打印手办自动化流水线%20v2.1.md](docs/AI%203D%20打印手办自动化流水线%20v2.1.md)
 
 ---
 

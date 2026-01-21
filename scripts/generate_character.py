@@ -32,6 +32,190 @@ except ImportError:
     pass # 如果找不到 config 也没关系，可能用户手动 export 了
 
 
+def _iterative_360_generation(
+    initial_reference_image: str,
+    character_description: str,
+    api_key: str,
+    model_name: str,
+    output_dir: str,
+    auto_cut: bool,
+    style: str,
+    negative_prompt: str,
+    use_strict_mode: bool,
+    resolution: str,
+    original_args,
+    export_prompt: bool,
+    subject_only: bool,
+    with_props: list,
+) -> str:
+    """
+    迭代 360 度生成模式：按顺序生成多个视图
+    每个视图使用前一个生成的图像作为参考，以最大化 Gemini API 的一致性
+    
+    支持视角数量: 4 (FRONT/RIGHT/BACK/LEFT)
+                  6 (FRONT/FRONT_RIGHT/RIGHT/BACK/BACK_LEFT/LEFT)
+                  8 (6 views + TOP/BOTTOM)
+    
+    参考: Gemini API 文档 "Character Consistency: 360 view"
+    https://ai.google.dev/gemini-api/docs/image-generation
+    """
+    from gemini_generator import generate_character_views
+    import shutil
+    
+    output_path = Path(output_dir)
+    
+    # 根据 original_args.iterative_360 确定视角数量和序列
+    view_count = int(original_args.iterative_360)
+    
+    if view_count == 4:
+        angle_sequence = [
+            {"angle": 0,   "name": "FRONT",      "description": "camera looking directly at the subject's front"},
+            {"angle": 90,  "name": "RIGHT",      "description": "camera positioned to the RIGHT side of the subject"},
+            {"angle": 180, "name": "BACK",       "description": "camera looking at the subject's back"},
+            {"angle": 270, "name": "LEFT",       "description": "camera positioned to the LEFT side of the subject"},
+        ]
+    elif view_count == 6:
+        angle_sequence = [
+            {"angle": 0,   "name": "FRONT",      "description": "camera looking directly at the subject's front"},
+            {"angle": 45,  "name": "FRONT_RIGHT","description": "camera at 45-degree angle between front and right side"},
+            {"angle": 90,  "name": "RIGHT",      "description": "camera positioned to the RIGHT side of the subject"},
+            {"angle": 180, "name": "BACK",       "description": "camera looking at the subject's back"},
+            {"angle": 225, "name": "BACK_LEFT",  "description": "camera at 45-degree angle between back and left side"},
+            {"angle": 270, "name": "LEFT",       "description": "camera positioned to the LEFT side of the subject"},
+        ]
+    elif view_count == 8:
+        angle_sequence = [
+            {"angle": 0,   "name": "FRONT",      "description": "camera looking directly at the subject's front"},
+            {"angle": 45,  "name": "FRONT_RIGHT","description": "camera at 45-degree angle between front and right side"},
+            {"angle": 90,  "name": "RIGHT",      "description": "camera positioned to the RIGHT side of the subject"},
+            {"angle": 180, "name": "BACK",       "description": "camera looking at the subject's back"},
+            {"angle": 225, "name": "BACK_LEFT",  "description": "camera at 45-degree angle between back and left side"},
+            {"angle": 270, "name": "LEFT",       "description": "camera positioned to the LEFT side of the subject"},
+            {"angle": 90,  "name": "TOP",        "description": "camera positioned ABOVE the subject, looking down"},
+            {"angle": 270, "name": "BOTTOM",     "description": "camera positioned BELOW the subject, looking up"},
+        ]
+    else:
+        raise ValueError(f"Unsupported view count: {view_count}")
+    
+    current_reference = initial_reference_image
+    generated_images = []
+    
+    print("\n" + "="*70)
+    print(f"🔄 迭代 360 度生成启动 ({view_count}-view Gemini Character Consistency Mode)")
+    print("="*70)
+    
+    for idx, view_config in enumerate(angle_sequence, 1):
+        angle = view_config["angle"]
+        view_name = view_config["name"]
+        view_description = view_config["description"]
+        total_steps = len(angle_sequence)
+        
+        print(f"\n【第 {idx}/{total_steps} 步】 生成 {view_name} 视图 ({angle}°)")
+        print("-" * 70)
+        
+        # 修改提示词以强调保持姿势一致性，仅改变相机角度
+        if idx == 1:
+            # 第一步：初始生成
+            modified_description = character_description
+            reference_context = ""
+        else:
+            # 后续步骤：强调一致性
+            modified_description = character_description
+            reference_context = f"\n\n⚠️ **CRITICAL for Consistency**: Keep the subject's pose, expression, and positioning IDENTICAL to the previous view. Only the camera angle changes to {angle}°."
+        
+        # 调用单视角生成
+        result = generate_character_views(
+            character_description=modified_description + reference_context,
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir,
+            auto_cut=auto_cut,
+            style=style,
+            view_mode="1-view",  # 单视角
+            custom_views=[view_name.lower()],  # 指定单个视角
+            negative_prompt=negative_prompt,
+            reference_image_path=current_reference,
+            use_strict_mode=use_strict_mode,
+            resolution=resolution,
+            original_args=original_args,
+            export_prompt=export_prompt,
+            subject_only=subject_only,
+            with_props=with_props
+        )
+        
+        if result:
+            generated_images.append((view_name, result))
+            print(f"✅ {view_name} 视图生成成功: {result}")
+            
+            # 为下一轮做准备：使用当前生成的图像作为参考
+            if idx < len(angle_sequence):
+                current_reference = result
+                print(f"   └─ 下一步将使用此图像作为参考")
+        else:
+            print(f"❌ {view_name} 视图生成失败")
+            return None
+    
+    # 合成多视角到一张图
+    print("\n" + "="*70)
+    print(f"📦 合成最终 {view_count} 视角图像")
+    print("="*70)
+    
+    try:
+        from PIL import Image
+        
+        images = []
+        for view_name, img_path in generated_images:
+            img = Image.open(img_path)
+            images.append(img)
+        
+        # 根据视角数量确定布局
+        img_width, img_height = images[0].size
+        
+        if view_count == 4:
+            # 4 视角：1 行 4 列
+            combined = Image.new('RGB', (img_width * 4, img_height))
+            for idx, img in enumerate(images):
+                combined.paste(img, (idx * img_width, 0))
+            composite_name = "iterative_360_composite_4view.png"
+        elif view_count == 6:
+            # 6 视角：2 行 3 列
+            combined = Image.new('RGB', (img_width * 3, img_height * 2))
+            for idx, img in enumerate(images):
+                row = idx // 3
+                col = idx % 3
+                combined.paste(img, (col * img_width, row * img_height))
+            composite_name = "iterative_360_composite_6view.png"
+        elif view_count == 8:
+            # 8 视角：2 行 4 列（6个水平视图 + TOP + BOTTOM）
+            combined = Image.new('RGB', (img_width * 4, img_height * 2))
+            
+            # 前 6 个水平视图放在第一行和第二行
+            # TOP 和 BOTTOM 放在右下角
+            for idx in range(6):
+                row = idx // 3
+                col = idx % 3
+                combined.paste(images[idx], (col * img_width, row * img_height))
+            
+            # TOP 在右上角
+            combined.paste(images[6], (3 * img_width, 0))
+            # BOTTOM 在右下角
+            combined.paste(images[7], (3 * img_width, img_height))
+            composite_name = "iterative_360_composite_8view.png"
+        else:
+            raise ValueError(f"Unsupported view count: {view_count}")
+        
+        # 保存合成图
+        composite_path = output_path / composite_name
+        combined.save(str(composite_path))
+        print(f"✅ 合成图已保存: {composite_path}")
+        
+        return str(composite_path)
+    except Exception as e:
+        print(f"⚠️  合成失败: {e}，但单个视图已生成")
+        # 返回最后一张生成的图像
+        return generated_images[-1][1]
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Cortex3d - Generate multi-view character images from description"
@@ -220,6 +404,17 @@ def main():
         help="Negative prompt categories (default: anatomy quality layout)"
     )
     
+    # =========================================================================
+    # 360-degree iterative mode (Gemini API best practice)
+    # =========================================================================
+    parser.add_argument(
+        "--iterative-360",
+        choices=["4", "6", "8"],
+        dest="iterative_360",
+        default=None,
+        help="Iterative 360-degree mode with specified view count (4/6/8). Generate views sequentially, using each output as reference for the next. Requires --from-image."
+    )
+    
     args = parser.parse_args()
     
     # 根据模式自动设置token(如果未提供)
@@ -236,6 +431,23 @@ def main():
 ║         AI 多视角图像生成 → 切割 → 去背景 → 3D建模             ║
 ╚═══════════════════════════════════════════════════════════════╝
     """)
+    
+    # =========================================================================
+    # 迭代 360 度模式检查
+    # =========================================================================
+    if args.iterative_360:
+        if not args.from_image:
+            print("[ERROR] --iterative-360 requires --from-image parameter")
+            sys.exit(1)
+        
+        # 强制单视图模式用于迭代
+        args.views = "1"
+        view_count = int(args.iterative_360)
+        print("\n[迭代 360 度模式]")
+        print(f"  └─ 将按顺序生成: {view_count} 个视图")
+        print(f"  └─ 每个视图使用前一个生成的图像作为参考")
+        print(f"  └─ 目的: 最大化 Gemini API 生成的角色一致性")
+        print("")
     
     # =========================================================================
     # 快速模式：从已有ID直接生成3D
@@ -662,25 +874,47 @@ def main():
         negative_prompt = None
         if not args.no_negative:
             negative_prompt = config.get_negative_prompt(args.negative_categories)
-            
-        result = generate_character_views(
-            character_description=description,
-            api_key=args.token,
-            model_name=model,
-            output_dir=args.output,
-            auto_cut=not args.no_cut,
-            style=style,
-            view_mode=view_mode,
-            custom_views=custom_views,
-            negative_prompt=negative_prompt,
-            reference_image_path=ref_image_path,
-            use_strict_mode=args.strict,
-            resolution=args.resolution,
-            original_args=args,
-            export_prompt=args.export_prompt,
-            subject_only=args.subject_only,
-            with_props=args.with_props
-        )
+        
+        # ===================================================================
+        # 迭代 360 度模式
+        # ===================================================================
+        if args.iterative_360:
+            result = _iterative_360_generation(
+                initial_reference_image=ref_image_path,
+                character_description=description,
+                api_key=args.token,
+                model_name=model,
+                output_dir=args.output,
+                auto_cut=not args.no_cut,
+                style=style,
+                negative_prompt=negative_prompt,
+                use_strict_mode=args.strict,
+                resolution=args.resolution,
+                original_args=args,
+                export_prompt=args.export_prompt,
+                subject_only=args.subject_only,
+                with_props=args.with_props
+            )
+        else:
+            # 标准多视角模式
+            result = generate_character_views(
+                character_description=description,
+                api_key=args.token,
+                model_name=model,
+                output_dir=args.output,
+                auto_cut=not args.no_cut,
+                style=style,
+                view_mode=f"{args.views}-view",
+                custom_views=args.custom_views,
+                negative_prompt=negative_prompt,
+                reference_image_path=ref_image_path,
+                use_strict_mode=args.strict,
+                resolution=args.resolution,
+                original_args=args,
+                export_prompt=args.export_prompt,
+                subject_only=args.subject_only,
+                with_props=args.with_props
+            )
     
     if result:
         print("\n" + "═" * 50)

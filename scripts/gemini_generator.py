@@ -295,7 +295,7 @@ def generate_character_views(
                 if negative_prompt:
                     print(f"\n【负面提示词信息】")
                     print(f"   📋 原始负面提示词 (已转换为语义正面指令):")
-                    print(f"   {negative_prompt[:200]}{'...' if len(negative_prompt) > 200 else ''}")
+                    print(f"   {negative_prompt}")
                     print(f"   ")
                     print(f"   ✅ Gemini 优化: 已自动转换为 'QUALITY REQUIREMENTS' 正面描述")
                     print(f"   💡 根据 Gemini API 文档建议，使用语义负面提示效果更好")
