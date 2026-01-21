@@ -435,19 +435,11 @@ def refine_mesh(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"🖥️  设备: {device}")
     
-    # 设置严格的显存限制
+    # 取消进程级显存硬限制，避免人工 8GB 上限导致 OOM
+    # 保留分配器防碎片设置（已在 import torch 前设置 PYTORCH_CUDA_ALLOC_CONF）
     if max_memory_gb and torch.cuda.is_available():
-        # 获取实际显卡容量
         total_memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-        fraction = max_memory_gb / total_memory_gb
-        
-        # 限制不超过1.0
-        if fraction > 1.0:
-            logging.warning(f"  ⚠️  max_memory_gb ({max_memory_gb}GB) 超过显卡容量 ({total_memory_gb:.1f}GB)，已调整")
-            fraction = 0.95
-        
-        torch.cuda.set_per_process_memory_fraction(fraction, device=0)
-        logging.info(f"  🔒 严格限制显存: {max_memory_gb}GB / {total_memory_gb:.1f}GB = {fraction*100:.1f}%")
+        logging.info(f"  ℹ️ 不再施加 per-process 显存上限，当前显卡容量: {total_memory_gb:.1f}GB")
     
     # 确保路径存在
     mesh_path = Path(mesh_path)
