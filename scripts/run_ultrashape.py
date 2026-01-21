@@ -283,7 +283,7 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
     force_float32(dit)
     force_float32(conditioner)
     
-    # 低显存模式：先保留在 CPU，稍后通过 enable_model_cpu_offload 按需加载
+    # 低显存模式：全部先停留在 CPU，交由 accelerate 的 offload 按需迁移
     # 正常模式：立即移动到 GPU
     if not low_vram:
         vae.to(device)
@@ -291,10 +291,7 @@ def load_ultrashape_pipeline(config_path, ckpt_path, device='cuda', low_vram=Fal
         conditioner.to(device)
         logging.info(f"  ✓ 模型已加载到 {device}")
     else:
-        # 只将轻量级组件移到 GPU，重量级 DiT 留在 CPU
-        vae.to(device)
-        conditioner.to(device)
-        logging.info("  ✓ 低显存模式：DiT 保留在 CPU，VAE/Conditioner 已加载到 GPU")
+        logging.info("  ✓ 低显存模式：所有模块先驻留 CPU，按需迁移以降低显存峰值")
     
     # 设置为评估模式
     vae.eval()
