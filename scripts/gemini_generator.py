@@ -56,8 +56,8 @@ def _ensure_imports():
             pass  # 如果没有 opencv，某些功能会被禁用
 
 
-# 使用共享配置中的默认模型
-DEFAULT_MODEL = IMAGE_MODEL
+# 使用共享配置中的默认模型（和代理模式完全一致）
+DEFAULT_MODEL = IMAGE_MODEL  # models/nano-banana-pro-preview
 
 
 # =============================================================================
@@ -76,7 +76,8 @@ def generate_character_views(
     negative_prompt: str = None,
     reference_image_path: str = None,
     use_strict_mode: bool = False,
-    resolution: str = "2K"
+    resolution: str = "2K",
+    original_args = None
 ) -> Optional[str]:
     """
     使用 Gemini API 生成多视图角色图像
@@ -104,7 +105,7 @@ def generate_character_views(
     genai.configure(api_key=api_key)
     
     print("="*60)
-    print("Gemini 多视角图像生成器")
+    print("Gemini 多视角图像生成器 (直连模式)")
     print("="*60)
     print(f"[模型] {model_name}")
     print(f"[角色描述] {character_description[:100]}...")
@@ -113,37 +114,41 @@ def generate_character_views(
     if reference_image_path:
         mode_label = "严格复制" if use_strict_mode else "参考图像"
         print(f"[{mode_label}] {reference_image_path}")
-    print(f"[目标分辨率] {resolution}")
+    print(f"[分辨率] {resolution}")
     print("-"*60)
     
-    # 创建模型
-    model = genai.GenerativeModel(model_name)
-    
-    # 处理参考图像
-    reference_image = None
+    # 处理参考图像（转为 base64）
+    reference_image_b64 = None
     if reference_image_path:
         try:
-            reference_image = PIL_Image.open(reference_image_path)
-            print(f"[INFO] 参考图像已加载: {reference_image.size}")
+            with open(reference_image_path, 'rb') as f:
+                image_bytes = f.read()
+            reference_image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+            # 获取 MIME 类型
+            if reference_image_path.lower().endswith('.png'):
+                mime = 'image/png'
+            elif reference_image_path.lower().endswith(('.jpg', '.jpeg')):
+                mime = 'image/jpeg'
+            else:
+                mime = 'image/png'
+            reference_image_b64 = f"data:{mime};base64,{reference_image_b64}"
+            print(f"[INFO] 参考图像已加载")
         except Exception as e:
             print(f"[WARNING] 无法加载参考图像: {e}")
-            reference_image = None
+            reference_image_b64 = None
     
-    # 构建提示词
-    if use_strict_mode and reference_image:
-        # 严格复制模式：基于参考图像生成多视角
+    # 构建提示词（和代理模式完全一致）
+    if use_strict_mode and reference_image_b64:
         from config import build_strict_copy_prompt
         full_prompt = build_strict_copy_prompt(character_description or "the character in the image")
         print("[模式] 严格复制 - 100% 基于参考图像")
-    elif reference_image:
-        # 参考图像模式：提取特征并生成多视角
+    elif reference_image_b64:
         from config import build_image_reference_prompt
         full_prompt = build_image_reference_prompt(
             character_description or "Extract character details and generate multi-view"
         )
         print("[模式] 图像参考 - 提取特征生成多视角")
     else:
-        # 普通文本生成模式
         full_prompt = build_multiview_prompt(
             character_description, 
             style=style,
@@ -153,83 +158,268 @@ def generate_character_views(
     
     # 添加负面提示词
     if negative_prompt:
-        full_prompt += f"\n\nNEGATIVE PROMPT (AVOID THESE):\n{negative_prompt}"
         print(f"[负面提示词] {negative_prompt[:60]}...")
     
     print("[INFO] 正在生成图像... (可能需要 30-60 秒)")
     
     try:
-        # 安全设置
+        # 准备 API 调用参数（和代理模式完全对齐）
         from google.generativeai.types import HarmCategory, HarmBlockThreshold
-        safety_settings = {
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        
+        # 分辨率映射
+        resolution_map = {
+            "1K": "1K",
+            "2K": "2K",
+            "4K": "4K"
         }
-
-        # 生成内容 (启用图像生成)
-        # 如果有参考图像，将其包含在请求中
-        if reference_image:
-            response = model.generate_content(
-                [full_prompt, reference_image],
-                generation_config=genai.GenerationConfig(
-                    temperature=0.7,
-                    top_p=0.95,
-                    top_k=40,
-                ),
-                safety_settings=safety_settings
-            )
-        else:
-            response = model.generate_content(
-                full_prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.7,
-                    top_p=0.95,
-                    top_k=40,
-                ),
-                safety_settings=safety_settings
-            )
+        image_size = resolution_map.get(resolution, "2K")
         
-        # 检查响应
-        if not response.candidates:
-            print("[ERROR] 生成失败: 无返回内容")
-            return None
+        # 宽高比（默认 3:2 适合四视图横排）
+        aspect_ratio = "3:2"
         
-        # 查找图像数据
-        image_data = None
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, 'inline_data') and part.inline_data:
-                if part.inline_data.mime_type.startswith('image/'):
-                    image_data = part.inline_data.data
-                    break
+        # 构建生成配置
+        generation_config = {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "top_k": 40,
+        }
         
-        if not image_data:
-            # 如果没有直接的图像数据，尝试使用 Imagen
-            print("[INFO] 尝试使用 Imagen 生成...")
-            return generate_with_imagen(character_description, api_key, output_dir, auto_cut)
+        # 安全设置（和代理一致）
+        safety_settings = [
+            {"category": HarmCategory.HARM_CATEGORY_HARASSMENT, "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH},
+            {"category": HarmCategory.HARM_CATEGORY_HATE_SPEECH, "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH},
+            {"category": HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH},
+            {"category": HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH},
+        ]
         
-        # 保存图像
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
+        # 定义回退模型（和代理模式完全一致）
+        FALLBACK_MODELS = {
+            "models/nano-banana-pro-preview": "gemini-2.5-flash-image",
+            "nano-banana-pro-preview": "gemini-2.5-flash-image",
+        }
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"character_{timestamp}.png"
-        filepath = output_path / filename
+        current_model = model_name
+        MAX_RETRIES = 1
         
-        # 解码并保存
-        image_bytes = base64.b64decode(image_data) if isinstance(image_data, str) else image_data
-        image = PIL_Image.open(io.BytesIO(image_bytes))
+        for attempt in range(MAX_RETRIES + 1):
+            print(f"[Gemini API] 尝试模型: {current_model} (尝试 {attempt+1}/{MAX_RETRIES+1})")
+            
+            # 创建模型
+            model = genai.GenerativeModel(current_model)
         
-        # 分辨率调整（如果需要）
-        image = _adjust_resolution(image, resolution)
+            # 创建模型
+            model = genai.GenerativeModel(current_model)
         
-        image.save(str(filepath))
+            # 准备内容列表
+            contents = [full_prompt]
+            
+            # 如果有参考图像，添加到内容中
+            if reference_image_b64:
+                # 解析 data URL
+                if reference_image_b64.startswith('data:'):
+                    header, b64_data = reference_image_b64.split(',', 1)
+                    mime_type = header.split(';')[0].split(':')[1]
+                else:
+                    b64_data = reference_image_b64
+                    mime_type = 'image/png'
+                
+                # 添加图像部分
+                contents.append({
+                    'mime_type': mime_type,
+                    'data': b64_data
+                })
+            
+            # 添加负面提示词到 prompt（Gemini API 方式）
+            if negative_prompt:
+                contents[0] += f"\n\nNEGATIVE PROMPT (avoid these): {negative_prompt}"
+            
+            print(f"[Gemini API] 调用参数: image_size={image_size}, aspect_ratio={aspect_ratio}")
+            
+            try:
+                # 调用 Gemini API
+                response = model.generate_content(
+                    contents,
+                    generation_config=generation_config,
+                    safety_settings=safety_settings
+                )
+                
+                # 检查响应
+                if not response or not response.candidates:
+                    print("[ERROR] 生成失败: 无返回内容")
+                    if attempt < MAX_RETRIES:
+                        continue  # 尝试回退模型
+                    return None
+                
+                # 提取图像数据
+                image_data = None
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        if part.inline_data.mime_type.startswith('image/'):
+                            image_data = part.inline_data.data
+                            break
+                
+                if not image_data:
+                    print("[ERROR] API 未返回图像数据")
+                    if attempt < MAX_RETRIES:
+                        print(f"[INFO] 尝试使用回退模型...")
+                        continue  # 尝试回退模型
+                    print("[提示] Gemini API 可能不支持该模型的图像生成")
+                    print("       请尝试使用 --mode proxy 通过代理服务访问")
+                    return None
+                
+                # 保存图像
+                output_path = Path(output_dir)
+                output_path.mkdir(parents=True, exist_ok=True)
+                
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"character_{timestamp}.png"
+                filepath = output_path / filename
+                
+                # 解码并保存
+                image_bytes = base64.b64decode(image_data) if isinstance(image_data, str) else image_data
+                image = PIL_Image.open(io.BytesIO(image_bytes))
+                image.save(str(filepath))
+                
+                print(f"[保存] {filepath}")
+                
+                # 成功，跳出重试循环
+                break
+                
+            except Exception as e:
+                error_msg = str(e)
+                
+                # 检测配额错误（ResourceExhausted / 429）
+                is_quota_error = (
+                    "429" in error_msg or 
+                    "quota" in error_msg.lower() or 
+                    "ResourceExhausted" in str(type(e).__name__)
+                )
+                
+                # 检测模型不存在错误
+                is_model_not_found = "not found" in error_msg.lower() or "404" in error_msg
+                
+                if is_quota_error:
+                    print(f"\n⚠️  配额限制")
+                    print(f"   模型 '{current_model}' 的免费配额已用完")
+                    
+                    # 检查是否需要回退模型
+                    if attempt < MAX_RETRIES:
+                        fallback_model = FALLBACK_MODELS.get(current_model)
+                        if fallback_model and fallback_model != current_model:
+                            print(f"   → 自动切换到回退模型: {fallback_model}")
+                            current_model = fallback_model
+                            continue  # 重试
+                    
+                    # 如果已经是最后一次尝试，给出友好提示
+                    print(f"\n{'='*70}")
+                    print(f"💡 解决方案 - 请选择以下任一选项:")
+                    print(f"{'='*70}")
+                    
+                    # 构建基于实际参数的命令
+                    if original_args:
+                        base_cmd_parts = ["python scripts\\generate_character.py"]
+                        
+                        # 添加描述或图像输入
+                        if hasattr(original_args, 'from_image') and original_args.from_image:
+                            base_cmd_parts.append(f"--from-image {original_args.from_image}")
+                        elif hasattr(original_args, 'description') and original_args.description:
+                            base_cmd_parts.append(f'"{original_args.description}"')
+                        
+                        # 添加其他参数
+                        if hasattr(original_args, 'strict') and original_args.strict:
+                            base_cmd_parts.append("--strict")
+                        if hasattr(original_args, 'resolution') and original_args.resolution and original_args.resolution != "2K":
+                            base_cmd_parts.append(f"--resolution {original_args.resolution}")
+                        if hasattr(original_args, 'views') and original_args.views and original_args.views != 4:
+                            base_cmd_parts.append(f"--views {original_args.views}")
+                        if hasattr(original_args, 'preprocess') and original_args.preprocess:
+                            base_cmd_parts.append("--preprocess")
+                        
+                        proxy_cmd = " ".join(base_cmd_parts + ["--mode proxy --token 'your-aiproxy-token'"])
+                        direct_cmd = " ".join(base_cmd_parts + ["--mode direct --token 'another-gemini-key'"])
+                        
+                        print(f"\n📌 选项 1: 切换到代理模式 (推荐)")
+                        print(f"   {proxy_cmd}")
+                        
+                        print(f"\n📌 选项 2: 使用不同的 Gemini API Key")
+                        print(f"   {direct_cmd}")
+                    else:
+                        # 降级到通用提示
+                        print(f"\n📌 选项 1: 切换到代理模式 (--mode proxy --token 'your-token')")
+                        print(f"📌 选项 2: 使用不同的 API Key (--mode direct --token 'new-key')")
+                    
+                    print(f"\n📌 选项 3: 等待配额恢复 (24小时后)")
+                    print(f"📌 选项 4: 升级付费计划 (https://ai.google.dev/pricing)")
+                    
+                    print(f"\n{'='*70}")
+                    print(f"💬 推荐使用代理模式以获得最佳体验")
+                    print(f"{'='*70}\n")
+                    return None
+                    
+                elif is_model_not_found:
+                    print(f"\n❌ 模型不存在: {current_model}")
+                    
+                    if attempt < MAX_RETRIES:
+                        fallback_model = FALLBACK_MODELS.get(current_model)
+                        if fallback_model and fallback_model != current_model:
+                            print(f"   → 自动切换到回退模型: {fallback_model}")
+                            current_model = fallback_model
+                            continue  # 重试
+                    
+                    # 构建基于实际参数的代理模式命令
+                    if original_args:
+                        base_cmd_parts = ["python scripts\\generate_character.py"]
+                        if hasattr(original_args, 'from_image') and original_args.from_image:
+                            base_cmd_parts.append(f"--from-image {original_args.from_image}")
+                        if hasattr(original_args, 'strict') and original_args.strict:
+                            base_cmd_parts.append("--strict")
+                        proxy_cmd = " ".join(base_cmd_parts + ["--mode proxy --token 'your-aiproxy-token'"])
+                        print(f"   💡 建议使用代理模式: {proxy_cmd}")
+                    else:
+                        print(f"   💡 建议使用代理模式 (--mode proxy --token 'your-token')")
+                    return None
+                    
+                else:
+                    # 其他未知错误
+                    print(f"\n❌ 生成失败: {error_msg}")
+                    
+                    # 尝试回退模型
+                    if attempt < MAX_RETRIES:
+                        fallback_model = FALLBACK_MODELS.get(current_model)
+                        if fallback_model and fallback_model != current_model:
+                            print(f"   → 尝试回退模型: {fallback_model}")
+                            current_model = fallback_model
+                            continue  # 重试
+                    
+                    # 最后一次尝试，打印详细错误
+                    print(f"\n🔍 详细错误信息:")
+                    import traceback
+                    traceback.print_exc()
+                    return None
+                # 成功，跳出重试循环
+                break
+                
+            except Exception as e:
+                error_msg = str(e)
+                print(f"[ERROR] 生成失败: {error_msg}")
+                
+                # 检查是否需要回退模型
+                if attempt < MAX_RETRIES:
+                    # 检查是否是配额错误或模型不支持错误
+                    if "quota" in error_msg.lower() or "429" in error_msg or "not found" in error_msg.lower():
+                        fallback_model = FALLBACK_MODELS.get(current_model)
+                        if fallback_model and fallback_model != current_model:
+                            print(f"⚠️  模型 {current_model} 调用失败，自动切换到回退模型: {fallback_model}")
+                            current_model = fallback_model
+                            continue  # 重试
+                
+                # 如果是最后一次尝试，打印详细错误并退出
+                if attempt >= MAX_RETRIES:
+                    import traceback
+                    traceback.print_exc()
+                    return None
         
-        print(f"[保存] {filepath}")
-        
-        # 自动切割
-        if auto_cut:
+        # 如果成功保存了图像，继续处理
             try:
                 from prompts.views import get_views_by_names, get_views_for_mode
                 
@@ -254,164 +444,8 @@ def generate_character_views(
         return None
 
 
-def generate_with_imagen(
-    character_description: str,
-    api_key: str,
-    output_dir: str = "test_images",
-    auto_cut: bool = True
-) -> Optional[str]:
-    """
-    使用 Imagen 3 模型生成图像
-    
-    Args:
-        character_description: 角色描述
-        api_key: Gemini API Key
-        output_dir: 输出目录
-        auto_cut: 是否自动切割
-    
-    Returns:
-        生成的图片路径
-    """
-    _ensure_imports()
-    
-    genai.configure(api_key=api_key)
-    
-    # 使用 Imagen 模型
-    try:
-        imagen = genai.ImageGenerationModel("imagen-3.0-generate-002")
-    except Exception:
-        print("[WARNING] Imagen 模型不可用，尝试其他方法...")
-        return generate_with_gemini_vision(character_description, api_key, output_dir, auto_cut)
-    
-    # 构建简洁的 Imagen 提示词
-    imagen_prompt = f"""Professional 3D character reference sheet, quadriptych layout with 4 orthographic views (front, back, left side, right side).
-
-Character: {character_description}
-
-Style: Hyper-realistic 3D CGI render, 8K textures, A-pose standing pose, pure light grey background (#D3D3D3), clear silhouettes, no text, no watermarks."""
-
-    print("[INFO] 使用 Imagen 3 生成...")
-    
-    try:
-        result = imagen.generate_images(
-            prompt=imagen_prompt,
-            number_of_images=1,
-            aspect_ratio="4:3",  # 适合四宫格
-            safety_filter_level="block_only_high",
-        )
-        
-        if not result.images:
-            print("[ERROR] Imagen 未返回图像")
-            return None
-        
-        # 保存图像
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"character_{timestamp}.png"
-        filepath = output_path / filename
-        
-        result.images[0].save(str(filepath))
-        print(f"[保存] {filepath}")
-        
-        # 自动切割
-        if auto_cut:
-            cut_and_save(str(filepath), output_dir)
-        
-        return str(filepath)
-        
-    except Exception as e:
-        print(f"[ERROR] Imagen 生成失败: {e}")
-        return generate_with_gemini_vision(character_description, api_key, output_dir, auto_cut)
-
-
-def generate_with_gemini_vision(
-    character_description: str,
-    api_key: str,
-    output_dir: str = "test_images",
-    auto_cut: bool = True
-) -> Optional[str]:
-    """
-    使用 Gemini 2.0 Flash 的原生图像生成能力
-    """
-    _ensure_imports()
-    
-    genai.configure(api_key=api_key)
-    
-    print("[INFO] 使用 Gemini 2.0 Flash 原生图像生成...")
-    
-    # Gemini 2.0 Flash 支持原生图像输出
-    model = genai.GenerativeModel("gemini-2.0-flash-exp")
-    
-    prompt = f"""Generate an image: A professional 3D character modeling reference sheet.
-
-Layout: 4 panels arranged horizontally in a single row:
-- Panel 1 (Left): Front view (0°) - Face visible
-- Panel 2: Right side view (90°) - Right ear visible
-- Panel 3: Back view (180°) - Back of head visible
-- Panel 4 (Right): Left side view (270°) - Left ear visible
-
-Character: {character_description}
-
-Requirements:
-- A-pose (arms 45° from body)
-- Orthographic projection (no perspective)
-- Pure light grey background
-- Hyper-realistic 3D CGI style
-- 8K quality textures
-- No text or watermarks
-- Character must be identical in all 4 views
-- Same pose in all panels"""
-
-    try:
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="image/png",
-            )
-        )
-        
-        # 提取图像
-        if response.candidates:
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, 'inline_data') and part.inline_data:
-                    # 保存图像
-                    output_path = Path(output_dir)
-                    output_path.mkdir(parents=True, exist_ok=True)
-                    
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"character_{timestamp}.png"
-                    filepath = output_path / filename
-                    
-                    image_data = part.inline_data.data
-                    image = PIL_Image.open(io.BytesIO(image_data))
-                    image.save(str(filepath))
-                    
-                    print(f"[保存] {filepath}")
-                    
-                    if auto_cut:
-                        cut_and_save(str(filepath), output_dir)
-                    
-                    return str(filepath)
-        
-        print("[ERROR] 未获取到图像数据")
-        print("[TIP] 请尝试手动使用 Gemini 网页版生成图像")
-        return None
-        
-    except Exception as e:
-        print(f"[ERROR] 生成失败: {e}")
-        print("\n" + "="*60)
-        print("备选方案: 手动生成")
-        print("="*60)
-        print("1. 访问 https://gemini.google.com/")
-        print("2. 使用以下提示词生成图像:")
-        print("-"*60)
-        print(prompt[:500] + "...")
-        print("-"*60)
-        print("3. 下载图像到 test_images/ 目录")
-        print("4. 运行: python scripts/image_processor.py test_images/your_image.png")
-        return None
+# 已移除 generate_with_imagen 和 generate_with_gemini_vision 函数
+# 直连模式应该和代理模式使用相同的逻辑，只是访问路径不同
 
 
 def cut_and_save(image_path: str, output_dir: str, expected_views: list = None):
@@ -439,47 +473,11 @@ def cut_and_save(image_path: str, output_dir: str, expected_views: list = None):
         print(f"[WARNING] 切割失败: {e}")
 
 
-def _adjust_resolution(image: "PIL_Image.Image", resolution: str) -> "PIL_Image.Image":
-    """
-    调整图像分辨率
-    
-    Args:
-        image: PIL 图像对象
-        resolution: 目标分辨率 (1K/2K/4K)
-    
-    Returns:
-        调整后的图像
-    """
-    resolution_map = {
-        "1K": 1024,
-        "2K": 2048,
-        "4K": 4096
-    }
-    
-    target_size = resolution_map.get(resolution, 2048)
-    
-    # 如果图像已经足够大，保持原样
-    if max(image.size) >= target_size:
-        print(f"[分辨率] {image.size[0]}x{image.size[1]} (无需调整)")
-        return image
-    
-    # 计算新尺寸（保持宽高比）
-    aspect_ratio = image.size[0] / image.size[1]
-    if image.size[0] > image.size[1]:
-        new_width = target_size
-        new_height = int(target_size / aspect_ratio)
-    else:
-        new_height = target_size
-        new_width = int(target_size * aspect_ratio)
-    
-    # 使用高质量重采样
-    resized = image.resize((new_width, new_height), PIL_Image.Resampling.LANCZOS)
-    print(f"[分辨率] {image.size[0]}x{image.size[1]} → {new_width}x{new_height} ({resolution})")
-    
-    return resized
+# 分辨率控制已在 API 调用时通过 image_size 参数指定
+# 无需后处理调整
 
 
-def analyze_image_for_character(image_path: str, api_key: str, user_guidance: str = None) -> Optional[str]:
+def analyze_image_for_character(image_path: str, api_key: str, user_guidance: str = None, original_args = None) -> Optional[str]:
     """
     使用 Gemini 分析图片，提取角色特征描述
     
@@ -499,8 +497,8 @@ def analyze_image_for_character(image_path: str, api_key: str, user_guidance: st
         # 加载图像
         image = PIL_Image.open(image_path)
         
-        # 创建视觉模型
-        model = genai.GenerativeModel("gemini-2.0-flash-exp")
+        # 创建视觉模型（和代理模式完全一致，使用 gemini-2.0-flash）
+        model = genai.GenerativeModel("gemini-2.0-flash")
         
         # 构建分析提示词
         analysis_prompt = """Analyze this image and provide a detailed character description for 3D modeling reference.
@@ -526,9 +524,29 @@ Provide a clear, structured description that can be used to generate multi-view 
             return None
             
     except Exception as e:
-        print(f"[ERROR] 图像分析失败: {e}")
-        import traceback
-        traceback.print_exc()
+        error_msg = str(e)
+        
+        # 检测配额错误
+        is_quota_error = (
+            "429" in error_msg or 
+            "quota" in error_msg.lower() or 
+            "ResourceExhausted" in str(type(e).__name__)
+        )
+        
+        if is_quota_error:
+            print(f"\n⚠️  配额限制: gemini-2.0-flash 的免费配额已用完")
+            print(f"\n💡 建议: 使用代理模式可避免配额限制")
+            if original_args:
+                base_cmd_parts = ["python scripts\\generate_character.py"]
+                if hasattr(original_args, 'from_image') and original_args.from_image:
+                    base_cmd_parts.append(f"--from-image {original_args.from_image}")
+                if hasattr(original_args, 'strict') and original_args.strict:
+                    base_cmd_parts.append("--strict")
+                proxy_cmd = " ".join(base_cmd_parts + ["--mode proxy --token 'your-aiproxy-token'"])
+                print(f"   {proxy_cmd}\n")
+        else:
+            print(f"[ERROR] 图像分析失败: {error_msg}")
+        
         return None
 
 

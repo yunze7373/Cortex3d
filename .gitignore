@@ -37,3 +37,5 @@ Thumbs.db
 
 # VS Code
 .vscode/
+reference_images/
+test_images/

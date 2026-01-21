@@ -55,18 +55,13 @@ def main():
     )
     parser.add_argument(
         "--token",
-        default=os.environ.get("AIPROXY_TOKEN"),
-        help="AiProxy token (for proxy mode)"
-    )
-    parser.add_argument(
-        "--api-key",
-        default=os.environ.get("GEMINI_API_KEY"),
-        help="Gemini API Key (for direct mode)"
+        default=None,  # 将根据 mode 自动选择环境变量
+        help="认证 Token: proxy模式使用 AIPROXY_TOKEN, direct模式使用 GEMINI_API_KEY"
     )
     parser.add_argument(
         "--model",
         default=None,
-        help="Model name. Default: nano-banana-pro for proxy, gemini-2.0-flash-exp for direct"
+        help="Model name. Default: models/nano-banana-pro-preview (same for both proxy and direct mode)"
     )
     parser.add_argument(
         "--output", "-o",
@@ -202,6 +197,13 @@ def main():
     
     args = parser.parse_args()
     
+    # 根据模式自动设置token(如果未提供)
+    if args.token is None:
+        if args.mode == "proxy":
+            args.token = os.environ.get("AIPROXY_TOKEN")
+        else:  # direct mode
+            args.token = os.environ.get("GEMINI_API_KEY")
+    
     # Banner
     print("""
 ╔═══════════════════════════════════════════════════════════════╗
@@ -308,18 +310,58 @@ def main():
     # 检查认证
     if args.mode == "proxy":
         if not args.token:
-            print("[!] 未设置 AiProxy 令牌")
-            print("    请运行: export AIPROXY_TOKEN='your-token'")
-            print("    或使用: --mode direct 直连 Gemini API")
+            print("\n⚠️  未设置 AiProxy 令牌\n")
+            
+            # 构建基于实际命令的建议
+            base_cmd_parts = ["python scripts\\generate_character.py"]
+            if args.from_image:
+                base_cmd_parts.append(f"--from-image {args.from_image}")
+            elif args.description:
+                base_cmd_parts.append(f'"{args.description}"')
+            if args.strict:
+                base_cmd_parts.append("--strict")
+            
+            proxy_cmd_with_token = " ".join(base_cmd_parts + ["--mode proxy --token 'your-aiproxy-token'"])
+            direct_cmd = " ".join(base_cmd_parts + ["--mode direct --token 'your-gemini-api-key'"])
+            
+            print("💡 解决方案:")
+            print(f"\n   选项 1: 直接传递 AiProxy Token (推荐)")
+            print(f"   {proxy_cmd_with_token}")
+            print(f"\n   选项 2: 使用直连模式")
+            print(f"   {direct_cmd}")
+            print(f"\n   选项 3: 设置环境变量")
+            print(f"   $env:AIPROXY_TOKEN='your-token'  # PowerShell")
+            print(f"   {' '.join(base_cmd_parts + ['--mode proxy'])}\n")
             sys.exit(1)
         model = args.model or "models/nano-banana-pro-preview"
         print(f"[模式] AiProxy (bot.bigjj.click/aiproxy)")
     else:
-        if not args.api_key:
-            print("[!] 未设置 Gemini API Key")
-            print("    请运行: export GEMINI_API_KEY='your-key'")
+        if not args.token:
+            print("\n⚠️  未设置 Gemini API Key\n")
+            
+            # 构建基于实际命令的建议
+            base_cmd_parts = ["python scripts\\generate_character.py"]
+            if args.from_image:
+                base_cmd_parts.append(f"--from-image {args.from_image}")
+            elif args.description:
+                base_cmd_parts.append(f'"{args.description}"')
+            if args.strict:
+                base_cmd_parts.append("--strict")
+            
+            direct_cmd_with_key = " ".join(base_cmd_parts + ["--mode direct --api-key 'your-gemini-api-key'"])
+            proxy_cmd = " ".join(base_cmd_parts + ["--mode proxy"])
+            
+            print("💡 解决方案:")
+            print(f"\n   选项 1: 直接传递 API Key (推荐)")
+            print(f"   {direct_cmd_with_key}")
+            print(f"\n   选项 2: 使用代理模式 (需要 AIPROXY_TOKEN)")
+            print(f"   {proxy_cmd}")
+            print(f"\n   选项 3: 设置环境变量")
+            print(f"   $env:GEMINI_API_KEY='your-api-key'  # PowerShell")
+            print(f"   {' '.join(base_cmd_parts + ['--mode direct'])}\n")
             sys.exit(1)
-        model = args.model or "gemini-2.0-flash-exp"
+        # 直连模式使用和代理模式完全相同的模型
+        model = args.model or "models/nano-banana-pro-preview"
         print(f"[模式] 直连 Gemini API")
     
     print(f"[模型] {model}")
@@ -435,21 +477,19 @@ def main():
                 print("[INFO] 跳过预处理，使用原图继续")
         
         args.from_image = str(image_path)  # 更新为实际路径（可能已被预处理）
+    
+    # 调用生成器
+    if args.mode == "proxy":
+        from aiproxy_client import generate_character_multiview, analyze_image_for_character as analyze_via_proxy
         
-        # 严格模式跳过图片分析，直接使用图片
-        if args.strict:
-            print(f"\n[严格复制模式] 跳过图片分析，100%基于原图生成")
-            description = "(strict mode - no description needed)"
-        else:
+        # 处理图像参考模式（代理模式）
+        if args.from_image and not args.strict:
             print(f"\\n[图片参考模式] 分析图片: {args.from_image}")
             print("="*50)
             
-            from aiproxy_client import analyze_image_for_character
-            
-            # 用户提供的描述作为指导词（指定分析哪个人物或关注什么细节）
             user_guidance = args.description if args.description else None
             
-            extracted_description = analyze_image_for_character(
+            extracted_description = analyze_via_proxy(
                 image_path=args.from_image,
                 token=args.token,
                 user_guidance=user_guidance
@@ -461,7 +501,6 @@ def main():
                 print(extracted_description[:500] + "..." if len(extracted_description) > 500 else extracted_description)
                 print("-"*50)
                 
-                # 如果用户提供了修改需求，追加到描述中
                 if args.description:
                     modification_note = f"\n\n**USER MODIFICATION REQUEST**: {args.description}\nApply this modification to the character description above."
                     description = extracted_description + modification_note
@@ -473,10 +512,9 @@ def main():
                 if not args.description:
                     print("[ERROR] 图片分析失败且未提供描述，无法继续")
                     sys.exit(1)
-    
-    # 调用生成器
-    if args.mode == "proxy":
-        from aiproxy_client import generate_character_multiview
+        elif args.from_image and args.strict:
+            print(f"\n[严格复制模式] 跳过图片分析，100%基于原图生成")
+            description = "(strict mode - no description needed)"
         
         # 确定是否使用图片参考模式
         ref_image_path = args.from_image if args.from_image else None
@@ -534,8 +572,9 @@ def main():
                 
                 extracted_description = analyze_image_for_character(
                     image_path=args.from_image,
-                    api_key=args.api_key,
-                    user_guidance=user_guidance
+                    api_key=args.token,
+                    user_guidance=user_guidance,
+                    original_args=args
                 )
                 
                 if extracted_description:
@@ -551,10 +590,12 @@ def main():
                     else:
                         description = extracted_description
                 else:
-                    print("[WARNING] 图片分析失败，使用默认描述")
                     if not args.description:
-                        print("[ERROR] 图片分析失败且未提供描述，无法继续")
+                        print("\n[ERROR] 图片分析失败且未提供描述，无法继续")
                         sys.exit(1)
+                    else:
+                        print(f"[INFO] 将使用提供的描述继续: {args.description}")
+                        description = args.description
             else:
                 # 严格模式：跳过分析
                 print(f"\n[严格复制模式] 跳过图片分析，100% 基于原图生成")
@@ -573,7 +614,7 @@ def main():
             
         result = generate_character_views(
             character_description=description,
-            api_key=args.api_key,
+            api_key=args.token,
             model_name=model,
             output_dir=args.output,
             auto_cut=not args.no_cut,
@@ -583,7 +624,8 @@ def main():
             negative_prompt=negative_prompt,
             reference_image_path=ref_image_path,
             use_strict_mode=args.strict,
-            resolution=args.resolution
+            resolution=args.resolution,
+            original_args=args
         )
     
     if result:
