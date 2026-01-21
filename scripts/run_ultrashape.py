@@ -153,60 +153,58 @@ def apply_dtype_fix():
         
         F.scaled_dot_product_attention = patched_sdpa
        
-       # 补丁：修复 DINO v2 注意力内存溢出 (AttentionLayer)
-       # DINO 的 MatMul(Q, K^T) 会占用大量显存，需要启用梯度检查点
-       try:
-           from transformers.models.dinov2.modeling_dinov2 import Dinov2Attention
-           original_dinov2_attn_forward = Dinov2Attention.forward
-           
-           def patched_dinov2_attn_forward(self, hidden_states, head_mask=None, output_attentions=False):
-               """应用梯度检查点减少 DINO 注意力的峰值显存"""
-               # 低显存模式：在这里实施激进的显存节约
-               # 通过手动计算 attention 而不是使用 F.scaled_dot_product_attention
-               batch_size, seq_length, _ = hidden_states.shape
-               
-               # 只有在 seq_length 较大时才需要梯度检查点
-               if seq_length > 256 and hidden_states.is_cuda:
-                   # 分块计算 attention，避免一次性 MatMul 爆显存
-                   chunk_size = 64  # 每次处理 64 个 token
-                   if not self.training:
-                       # 推理模式：使用分块 attention
-                       mixed_query_layer = self.query(hidden_states)
-                       mixed_key_layer = self.key(hidden_states)
-                       mixed_value_layer = self.value(hidden_states)
-                       
-                       query_layer = mixed_query_layer.reshape(batch_size, seq_length, self.num_attention_heads, -1).permute(0, 2, 1, 3)
-                       key_layer = mixed_key_layer.reshape(batch_size, seq_length, self.num_attention_heads, -1).permute(0, 2, 1, 3)
-                       value_layer = mixed_value_layer.reshape(batch_size, seq_length, self.num_attention_heads, -1).permute(0, 2, 1, 3)
-                       
-                       # 分块计算 attention scores
-                       attention_scores_chunks = []
-                       for i in range(0, seq_length, chunk_size):
-                           end_i = min(i + chunk_size, seq_length)
-                           query_chunk = query_layer[:, :, i:end_i, :]
-                           scores = torch.matmul(query_chunk, key_layer.transpose(-1, -2)) / (self.attention_head_size ** 0.5)
-                           attention_scores_chunks.append(scores)
-                       
-                       attention_scores = torch.cat(attention_scores_chunks, dim=2)
-                       
-                       if head_mask is not None:
-                           attention_scores = attention_scores * head_mask
-                       
-                       attention_probs = torch.nn.functional.softmax(attention_scores, dim=-1)
-                       attention_probs = self.dropout(attention_probs)
-                       
-                       context_layer = torch.matmul(attention_probs, value_layer)
-                       context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
-                       new_context_layer_shape = context_layer.shape[:-2] + (self.all_head_size,)
-                       context_layer = context_layer.reshape(new_context_layer_shape)
-                       
-                       outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
-                       return outputs
-           
-           # 只在 seq_length 很大时应用补丁
-           # Dinov2Attention.forward = patched_dinov2_attn_forward
-       except Exception as e:
-           logging.debug(f"DINO 补丁应用失败: {e}")
+        # 补丁：修复 DINO v2 注意力内存溢出 (AttentionLayer)
+        # 目前默认不启用，只在需要时手动打开下面的赋值
+        try:
+            from transformers.models.dinov2.modeling_dinov2 import Dinov2Attention
+            original_dinov2_attn_forward = Dinov2Attention.forward
+
+            def patched_dinov2_attn_forward(self, hidden_states, head_mask=None, output_attentions=False):
+                """分块计算 DINO 注意力以降低显存峰值"""
+                batch_size, seq_length, _ = hidden_states.shape
+
+                # 只有在 token 很多时才需要分块
+                if seq_length > 256 and hidden_states.is_cuda and not self.training:
+                    chunk_size = 64  # 每块 64 token，避免一次性 MatMul 爆显存
+
+                    mixed_query_layer = self.query(hidden_states)
+                    mixed_key_layer = self.key(hidden_states)
+                    mixed_value_layer = self.value(hidden_states)
+
+                    query_layer = mixed_query_layer.reshape(batch_size, seq_length, self.num_attention_heads, -1).permute(0, 2, 1, 3)
+                    key_layer = mixed_key_layer.reshape(batch_size, seq_length, self.num_attention_heads, -1).permute(0, 2, 1, 3)
+                    value_layer = mixed_value_layer.reshape(batch_size, seq_length, self.num_attention_heads, -1).permute(0, 2, 1, 3)
+
+                    attention_scores_chunks = []
+                    for i in range(0, seq_length, chunk_size):
+                        end_i = min(i + chunk_size, seq_length)
+                        query_chunk = query_layer[:, :, i:end_i, :]
+                        scores = torch.matmul(query_chunk, key_layer.transpose(-1, -2)) / (self.attention_head_size ** 0.5)
+                        attention_scores_chunks.append(scores)
+
+                    attention_scores = torch.cat(attention_scores_chunks, dim=2)
+
+                    if head_mask is not None:
+                        attention_scores = attention_scores * head_mask
+
+                    attention_probs = torch.nn.functional.softmax(attention_scores, dim=-1)
+                    attention_probs = self.dropout(attention_probs)
+
+                    context_layer = torch.matmul(attention_probs, value_layer)
+                    context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
+                    new_context_layer_shape = context_layer.shape[:-2] + (self.all_head_size,)
+                    context_layer = context_layer.reshape(new_context_layer_shape)
+
+                    outputs = (context_layer, attention_probs) if output_attentions else (context_layer,)
+                    return outputs
+
+                # 默认回退原始实现
+                return original_dinov2_attn_forward(self, hidden_states, head_mask=head_mask, output_attentions=output_attentions)
+
+            # 如需启用分块注意力，取消下一行注释
+            # Dinov2Attention.forward = patched_dinov2_attn_forward
+        except Exception as e:
+            logging.debug(f"DINO 补丁应用失败: {e}")
         
         # 2. 修复 F.linear 函数（MoE 层使用）
         original_f_linear = F.linear
