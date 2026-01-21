@@ -356,7 +356,7 @@ def cut_and_save(image_path: str, output_dir: str, expected_views: list = None):
             input_path=image_path,
             output_dir=output_dir,
             remove_bg_flag=True,
-            expected_views=expected_views
+            expected_views=expected_views,
             margin=5
         )
     except ImportError:
