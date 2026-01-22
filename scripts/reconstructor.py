@@ -501,9 +501,17 @@ def run_hunyuan3d_21(image_path, output_dir, quality="balanced", no_texture=Fals
             logging.error("Failed to start 'hunyuan3d-2.1' container")
             return False
         
-        # 转换为容器内路径
-        container_image_path = f"/workspace/{image_path}"
-        container_output_dir = f"/workspace/{output_dir}"
+        # 转换为容器内路径（相对于项目根目录）
+        try:
+            rel_image = image_path.absolute().relative_to(PROJECT_ROOT.absolute())
+            container_image_path = f"/workspace/{rel_image.as_posix()}"
+            
+            rel_output = output_dir.absolute().relative_to(PROJECT_ROOT.absolute())
+            container_output_dir = f"/workspace/{rel_output.as_posix()}"
+        except ValueError:
+            logging.warning("Path is outside project root, trying to use as-is...")
+            container_image_path = str(image_path)
+            container_output_dir = str(output_dir)
         
         cmd = [
             "docker", "compose", "exec", "-T", "hunyuan3d-2.1",
