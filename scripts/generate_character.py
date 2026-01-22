@@ -510,7 +510,34 @@ def main():
         help="风格转换时是否保留原始细节 (默认: 是)"
     )
     
-    args = parser.parse_args()
+    # 在解析参数前，检查常见的参数错误并提供友好提示
+    friendly_hint_shown = False
+    for arg in sys.argv[1:]:
+        if arg.startswith('--'):
+            # 检查常见拼写错误
+            if arg == '--view':
+                print(f"\n[ERROR] Parameter '--view' does not exist")
+                print(f"[HINT] Did you mean '--views'?")
+                print(f"       Example: python scripts/generate_character.py --views 8\n")
+                friendly_hint_shown = True
+                break
+            # 检查带数字的无效参数（如 --14, --360 等）
+            elif len(arg) > 2 and arg[2:].replace('-', '').isdigit():
+                print(f"\n[ERROR] Invalid parameter: '{arg}'")
+                print(f"[HINT] To generate multi-view images, use one of:")
+                print(f"       --views 8              # Standard multi-view (8 fixed angles)")
+                print(f"       --iterative-360 8      # Iterative 360 (8 sequential angles, better consistency)\n")
+                friendly_hint_shown = True
+                break
+    
+    # 解析参数（如果显示了友好提示，argparse 会继续显示完整的 usage）
+    try:
+        args = parser.parse_args()
+    except SystemExit as e:
+        # 如果已经显示了友好提示，重新抛出让 argparse 显示完整帮助
+        if friendly_hint_shown:
+            pass  # argparse 已经打印了 usage，我们的提示在上面
+        raise
     
     # 根据模式自动设置token(如果未提供)
     if args.token is None:
