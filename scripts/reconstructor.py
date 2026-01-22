@@ -791,7 +791,9 @@ def run_ultrashape(image_path, mesh_path, output_dir, preset="lowmem", low_vram=
 
 def main():
     parser = argparse.ArgumentParser(description="Cortex3d Unified Reconstructor (Stage 2)")
-    parser.add_argument("image", type=Path, help="Path to input image (front view) OR prefix for multi-view images")
+    parser.add_argument("image", nargs="?", type=Path, help="Path to input image (front view) OR prefix for multi-view images")
+    parser.add_argument("--from-id", dest="from_id", type=str,
+                        help="Asset ID to reconstruct (searches for <id>_front.png in test_images/)")
     parser.add_argument("--algo", choices=["instantmesh", "triposr", "auto", "multiview", "trellis", "trellis2", "hunyuan3d", "hunyuan3d-2.1", "hunyuan3d-omni"], default="trellis", help="Reconstruction algorithm")
     parser.add_argument("--quality", choices=["balanced", "high", "ultra"], default="balanced", help="Quality preset")
     parser.add_argument("--output_dir", type=Path, default=OUTPUTS_DIR, help="Output directory")
@@ -816,6 +818,36 @@ def main():
                         help="Path to control data file for Hunyuan3D-Omni")
     
     args = parser.parse_args()
+    
+    # Handle --from-id: resolve asset ID to image path
+    if args.from_id:
+        test_images_dir = PROJECT_ROOT / "test_images"
+        # Try common patterns: <id>_front.png, <id>.png, <id>.jpg
+        candidates = [
+            test_images_dir / f"{args.from_id}_front.png",
+            test_images_dir / f"{args.from_id}.png",
+            test_images_dir / f"{args.from_id}.jpg",
+        ]
+    
+        found = None
+        for candidate in candidates:
+            if candidate.exists():
+                found = candidate
+                break
+    
+        if not found:
+            logging.error(f"Asset ID '{args.from_id}' not found in test_images/")
+            logging.error(f"Tried: {[c.name for c in candidates]}")
+            sys.exit(1)
+    
+        args.image = found
+        logging.info(f"Resolved asset ID '{args.from_id}' to: {args.image}")
+    
+    # Validate that we have an image to process
+    if not args.image:
+        logging.error("Error: Either provide an image path or use --from-id <asset-id>")
+        parser.print_help()
+        sys.exit(1)
     
     if not args.image.exists():
         logging.error(f"Image not found: {args.image}")
