@@ -19,7 +19,7 @@ template: |
   {view_descriptions}
 
   ⚠️ Each panel shows a UNIQUE camera angle. No duplicates!
-  ⚠️ REFERENCE OVERRIDE: If provided a reference image, ROTATE the object to show the requested angles, do not just copy the reference angle.
+  ⚠️ REFERENCE USAGE: If a reference image is provided, treat it as the baseline pose. The OBJECT REMAINS FIXED. Only the CAMERA moves around the object to show the requested angles. Do NOT rotate, re-pose, or re-orient the object to face the camera.
 
   ## ⚠️ CRITICAL: LEFT vs RIGHT DISTINCTION
   
@@ -37,6 +37,7 @@ template: |
   - SAME object in ALL {view_count} panels
   - SAME pose/orientation/details in all panels
   - Only the CAMERA ANGLE changes
+  - Head orientation (yaw/pitch/roll) relative to torso MUST remain identical across all panels. Do NOT turn the head to face the camera in non-front views.
 
   ## BACKGROUND
   - Solid neutral gray or white background
@@ -52,6 +53,7 @@ template: |
   - NO text labels
   - NO mirror flips between opposite side views
   - NO turntable, platform, or pedestal
+  - NO subject reorientation to face the camera in views other than FRONT; the subject remains stationary and unaltered.
 
   Generate a clean, professional reference sheet following ALL rules above.
 
@@ -60,10 +62,6 @@ variables:
   - style
   - view_count
   - layout_description
-  - panel_list
-  - view_descriptions
-
-default_style: "cinematic character"
   - panel_list
   - view_descriptions
 
