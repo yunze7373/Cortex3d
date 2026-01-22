@@ -123,13 +123,19 @@ def _iterative_360_generation(
             modified_description = character_description
             reference_context = f"\n\n⚠️ **CRITICAL for Consistency**: Keep the subject's pose, expression, and positioning IDENTICAL to the previous view. Only the camera angle changes to {angle}°."
         
-        # 调用单视角生成
+        # 调用单视角生成（使用简化流程：生成 -> 不切割 -> 去背景）
+        # 强制设置为不切割，因为迭代模式生成的是单个视角的单张图
+        temp_args = argparse.Namespace(**vars(original_args))
+        temp_args.views = "1"  # 单视角
+        temp_args.no_cut = True  # 不切割（单张图不需要切割）
+        temp_args.custom_views = [view_name.lower()]
+        
         result = generate_character_views(
             character_description=modified_description + reference_context,
             api_key=api_key,
             model_name=model_name,
             output_dir=output_dir,
-            auto_cut=auto_cut,
+            auto_cut=False,  # 强制不切割
             style=style,
             view_mode="1-view",  # 单视角
             custom_views=[view_name.lower()],  # 指定单个视角
@@ -137,13 +143,14 @@ def _iterative_360_generation(
             reference_image_path=current_reference,
             use_strict_mode=use_strict_mode,
             resolution=resolution,
-            original_args=original_args,
+            original_args=temp_args,
             export_prompt=export_prompt,
             subject_only=subject_only,
             with_props=with_props
         )
         
         if result:
+            # result 应该是去背景后的单个视角图像路径
             generated_images.append((view_name, result))
             print(f"✅ {view_name} 视图生成成功: {result}")
             
