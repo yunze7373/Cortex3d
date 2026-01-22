@@ -382,7 +382,8 @@ def generate_character_multiview(
     use_negative_prompt: bool = True,  # 是否使用负面提示词
     negative_categories: list = None,  # 负面提示词类别
     subject_only: bool = False,  # 只处理主体，移除背景物体
-    with_props: list = None  # 要包含的道具列表
+    with_props: list = None,  # 要包含的道具列表
+    export_prompt: bool = False  # 是否导出提示词而不调用 API
 ) -> Optional[str]:
     """
     生成多视角角色图像并保存
@@ -405,9 +406,10 @@ def generate_character_multiview(
         negative_categories: 负面提示词类别 ["anatomy", "quality", "layout"]
         subject_only: 只处理主体，移除背景物体
         with_props: 要包含的道具列表
+        export_prompt: 是否仅导出提示词而不调用 API (默认: False)
     
     Returns:
-        保存的图像路径 或 None
+        保存的图像路径 或 None (导出模式返回 None)
     """
     _ensure_imports()
     import uuid
@@ -510,6 +512,105 @@ def generate_character_multiview(
                 print(f"[参考图] 已加载 ({len(img_bytes)} bytes)")
         except Exception as e:
             print(f"[WARNING] 参考图片加载失败: {e}")
+    
+    # ===================================================================
+    # 导出提示词模式：输出参数而不调用 API
+    # ===================================================================
+    if export_prompt:
+        print("\n" + "="*70)
+        print("📋 导出提示词和参数 (复制到 Gemini App 使用)")
+        print("="*70)
+        
+        print(f"\n【推荐模型】")
+        print(f"   nano-banana-pro-preview (最佳图像生成模型)")
+        print(f"   备用: gemini-2.5-flash-image")
+        print(f"   提示: 在 AI Studio 或 API 中使用上述模型名称")
+        
+        print(f"\n【配置参数建议】")
+        print(f"   分辨率: {resolution}")
+        print(f"   宽高比: {aspect_ratio}")
+        
+        print(f"\n【完整提示词】")
+        print("-"*70)
+        print(prompt)
+        print("-"*70)
+        
+        # 显示负面提示词信息
+        if negative_prompt:
+            print(f"\n【负面提示词信息】")
+            print(f"   📋 原始负面提示词 (已转换为语义正面指令):")
+            print(f"   {negative_prompt}")
+            print(f"   ")
+            print(f"   ✅ Gemini 优化: 已自动转换为 'QUALITY REQUIREMENTS' 正面描述")
+            print(f"   💡 根据 Gemini API 文档建议，使用语义负面提示效果更好")
+        
+        if reference_image_data:
+            print(f"\n【⚠️  参考图像 - 重要】")
+            print(f"   文件路径: {reference_image_path}")
+            mime_ext = "PNG" if ".png" in reference_image_path.lower() else "JPEG"
+            print(f"   图像类型: {mime_ext}")
+            print(f"   ")
+            print(f"   📎 操作步骤:")
+            print(f"      1. 在 Gemini App 中点击 📎 (附件) 按钮")
+            print(f"      2. 上传图像: {reference_image_path}")
+            print(f"      3. 图像会显示在对话框中")
+            print(f"      4. 然后粘贴上面的【完整提示词】")
+            if use_strict_mode:
+                print(f"   ")
+                print(f"   🎯 严格模式: 生成的图像将 100% 基于上传的参考图")
+        
+        print(f"\n【安全设置】")
+        print(f"   骚扰: BLOCK_ONLY_HIGH")
+        print(f"   仇恨言论: BLOCK_ONLY_HIGH")
+        print(f"   性暗示: BLOCK_ONLY_HIGH")
+        print(f"   危险内容: BLOCK_ONLY_HIGH")
+        
+        print(f"\n{'='*70}")
+        print("💡 完整使用流程:")
+        print("="*70)
+        print("\n第一步: 打开 Gemini App")
+        print("   访问: https://gemini.google.com")
+        print("   或使用 Gemini 移动应用")
+        
+        print("\n第二步: 选择模型")
+        print("   在 AI Studio 中使用: nano-banana-pro-preview")
+        print("   或在代码中调用: models/nano-banana-pro-preview")
+        
+        if reference_image_data:
+            print("\n第三步: 上传参考图像 ⚠️ 先上传图像!")
+            print(f"   1. 点击对话框左下角的 📎 (附件) 图标")
+            print(f"   2. 选择图像文件: {reference_image_path}")
+            print(f"   3. 等待图像上传并显示在对话框中")
+            step_four = "第四步"
+        else:
+            step_four = "第三步"
+        
+        print(f"\n{step_four}: 粘贴提示词")
+        print("   1. 复制上面【完整提示词】部分的全部内容")
+        print("   2. 粘贴到 Gemini 对话框中")
+        if reference_image_data:
+            print("   3. 确认图像和提示词都已在对话框中")
+        
+        print(f"\n第{'五' if reference_image_data else '四'}步: 发送并等待")
+        print("   1. 点击发送按钮")
+        print("   2. 等待 30-60 秒生成完成")
+        print("   3. 生成的图像会显示在回复中")
+        
+        print(f"\n第{'六' if reference_image_data else '五'}步: 保存图像")
+        print("   1. 右键点击生成的图像")
+        print("   2. 选择 '保存图片为...'")
+        print("   3. 保存到您的输出目录")
+        
+        print("\n" + "="*70)
+        print("✅ 提示: 如果生成失败,请检查:")
+        print("   - 是否选择了支持图像生成的模型")
+        if reference_image_data:
+            print("   - 参考图像是否已正确上传")
+        print("   - 提示词是否完整复制(不要遗漏任何部分)")
+        print("="*70 + "\n")
+        
+        # 导出模式下不实际调用 API，直接返回
+        return None
     
     # 调用 AiProxy (实际生成)
     result = generate_image_via_proxy(

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Cortex3d - 完整的多视角角色图像生成脚本
 支持两种模式:
@@ -96,6 +97,45 @@ def _iterative_360_generation(
         ]
     else:
         raise ValueError(f"Unsupported view count: {view_count}")
+    
+    # ===================================================================
+    # 导出提示词模式：仅导出第一个视图的提示词
+    # ===================================================================
+    if export_prompt:
+        # 对于迭代 360 模式，仅导出第一个视图的提示词
+        print("\n" + "="*70)
+        print("📋 迭代 360 度模式 - 导出提示词参数")
+        print("="*70)
+        print(f"[视角数量] {view_count}-view")
+        print(f"[模式] 迭代生成 - 每个视角单独生成，使用前一个作为参考")
+        print(f"\n本次导出为第一个视角 ({angle_sequence[0]['name']}) 的提示词示例。")
+        print(f"后续视角将自动生成，并强调保持一致性。\n")
+        
+        # 调用单次生成以获得提示词导出（仅第一个视角）
+        temp_args = argparse.Namespace(**vars(original_args))
+        temp_args.views = "1"
+        temp_args.no_cut = True
+        temp_args.custom_views = [angle_sequence[0]["name"].lower()]
+        
+        result = generate_character_views(
+            character_description=character_description,
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir,
+            auto_cut=False,
+            style=style,
+            view_mode="1-view",
+            custom_views=[angle_sequence[0]["name"].lower()],
+            negative_prompt=negative_prompt,
+            reference_image_path=initial_reference_image,
+            use_strict_mode=use_strict_mode,
+            resolution=resolution,
+            original_args=temp_args,
+            export_prompt=True,  # 导出模式
+            subject_only=subject_only,
+            with_props=with_props
+        )
+        return None
     
     current_reference = initial_reference_image
     generated_images = []
@@ -224,6 +264,15 @@ def _iterative_360_generation(
 
 
 def main():
+    # 设置标准输出编码为 UTF-8（处理 Windows CP932 编码问题）
+    if sys.stdout.encoding and 'utf' not in sys.stdout.encoding.lower():
+        try:
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        except (AttributeError, RuntimeError):
+            # 某些环境中 reconfigure 可能不可用
+            pass
+    
     parser = argparse.ArgumentParser(
         description="Cortex3d - Generate multi-view character images from description"
     )
@@ -554,12 +603,21 @@ def main():
             args.token = os.environ.get("GEMINI_API_KEY")
     
     # Banner
-    print("""
+    try:
+        print("""
 ╔═══════════════════════════════════════════════════════════════╗
 ║                    Cortex3d 角色生成器                         ║
 ║         AI 多视角图像生成 → 切割 → 去背景 → 3D建模             ║
 ╚═══════════════════════════════════════════════════════════════╝
-    """)
+        """)
+    except UnicodeEncodeError:
+        # 在某些终端中使用 ASCII 艺术代替
+        print("""
+============================================================
+                     Cortex3d Character Generator
+        AI Multi-view Image Generation → Cropping → Background Removal → 3D Modeling
+============================================================
+        """)
     
     # =========================================================================
     # 图像编辑模式：使用 Gemini 对角色图像进行编辑
@@ -1113,7 +1171,8 @@ def main():
             use_negative_prompt=not args.no_negative,
             negative_categories=args.negative_categories,
             subject_only=args.subject_only,
-            with_props=args.with_props
+            with_props=args.with_props,
+            export_prompt=args.export_prompt
         )
     else:
         # Gemini 直连模式 - 完整支持所有参数
@@ -1311,6 +1370,11 @@ def main():
                 for f in sorted(files):
                      print(f"  📷 {f.name}")
         
+    elif args.export_prompt:
+        # 导出模式下，返回 None 是正常的行为（已导出提示词）
+        print("\n✅ 提示词导出完成！")
+        print("   您现在可以将提示词复制到 Gemini App 中使用")
+        sys.exit(0)
     else:
         print("\n❌ 生成失败，请检查错误信息")
         sys.exit(1)
