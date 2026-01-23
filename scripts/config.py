@@ -371,80 +371,259 @@ def get_character_prompt(
 # 旧版硬编码模板 (仅作回退使用)
 # =============================================================================
 
-_LEGACY_MULTIVIEW_TEMPLATE = """Generate a professional 3D character turntable reference sheet with exactly 4 panels arranged horizontally.
+_LEGACY_MULTIVIEW_TEMPLATE = """Generate a STRICT multi-view reference sheet with EXACTLY 4 panels.
 
-## OUTPUT REQUIREMENT
-Single image containing 4 panels in a row: [FRONT] [RIGHT] [BACK] [LEFT]
+This is a GEOMETRIC CAMERA ORBIT TASK, not a character redesign task.
 
+The subject is a STATIC OBJECT in 3D space.
+Only the CAMERA position changes.
+NO pose correction, NO aesthetic adjustment, NO reinterpretation.
+
+==================================================
+## OUTPUT LAYOUT (MANDATORY)
+Single image with exactly 4 equal-sized panels in ONE horizontal row only.
+
+Order (left to right):
+[FRONT 0°] [RIGHT 90°] [BACK 180°] [LEFT 270°]
+
+No labels, no text, no markers inside the image.
+==================================================
+
+## CAMERA DEFINITION (CRITICAL)
+
+Camera rotates around the subject at a fixed radius and height.
+Camera target is the subject's original center.
+
+The subject does NOT rotate.
+
+--------------------------------------------------
+### THE 4 REQUIRED VIEWS
+
+Panel 1 — FRONT (0°):
+- Camera faces the FRONT of the subject
+- Subject front is fully visible
+- This view must visually MATCH the reference image orientation
+
+Panel 2 — RIGHT (90°):
+- Camera is positioned on the SUBJECT'S RIGHT side
+- The SUBJECT'S RIGHT SIDE faces the camera
+- The subject's FRONT points toward the LEFT edge of the image
+
+Panel 3 — BACK (180°):
+- Camera faces the BACK of the subject
+- Subject back is fully visible
+- Subject front is completely hidden
+
+Panel 4 — LEFT (270°):
+- Camera is positioned on the SUBJECT'S LEFT side
+- The SUBJECT'S LEFT SIDE faces the camera
+- The subject's FRONT points toward the RIGHT edge of the image
+--------------------------------------------------
+
+==================================================
+## 🔒 ABSOLUTE SPATIAL LOCK — ZERO DEVIATION ALLOWED
+
+The subject is FROZEN in world space.
+
+ALL spatial relationships are locked relative to the BODY, not the camera.
+
+The following MUST remain 100% IDENTICAL across ALL panels:
+
+- Head tilt, head rotation
+- Eye direction and gaze angle (NO eye contact correction)
+- Facial expression
+- Shoulder angle
+- Arm position, bend angle, hand orientation
+- Leg stance, weight distribution, crossing order
+- Torso lean, twist, and center of mass
+- Clothing folds and attachment points
+- Accessories, weapons, props and their relative positions
+
+❌ DO NOT adjust pose for visibility
+❌ DO NOT rotate body to face the camera
+❌ DO NOT mirror or swap left/right anatomy
+❌ DO NOT "fix" anatomy per view
+
+ONLY perspective changes due to camera rotation are allowed.
+==================================================
+
+## 🎨 STYLE CONSTRAINTS
+- Cinematic character design
+- EXACT style match to reference image
+- Identical materials, lighting mood, and surface detail
+- Consistent rendering quality across all panels
+
+==================================================
 ## CHARACTER
 {character_description}
+
 Style: {style}
 
-## CRITICAL RULES - READ CAREFULLY
+==================================================
+## BACKGROUND & ENVIRONMENT
+- Pure neutral gray or white background
+- Seamless, studio-style environment
+- No visible floor, horizon, ground texture, or stage
+- No turntable, pedestal, disc, or platform
+- Subject appears naturally grounded without visible geometry
 
-### TURNTABLE ROTATION (NOT MIRROR!)
-Imagine the character standing on a rotating platform:
-- Panel 1 (FRONT): Platform at 0° - We see the FACE, chest, front of body
-- Panel 2 (RIGHT SIDE): Platform rotated 90° clockwise - We see the RIGHT ear, RIGHT shoulder, RIGHT hip
-- Panel 3 (BACK): Platform rotated 180° - We see back of HEAD, spine, buttocks
-- Panel 4 (LEFT SIDE): Platform rotated 270° clockwise - We see the LEFT ear, LEFT shoulder, LEFT hip
+==================================================
+## CONFIGURATION PARAMETERS
+Resolution: 4K
+Aspect Ratio: 3:2
+Sampling: deterministic (low randomness)
 
-⚠️ IMPORTANT: Panels 2 and 4 are NOT mirrors! They show OPPOSITE sides of the body!
+==================================================
+## FINAL HARD RULES
 
-### ANATOMICAL CORRECTNESS (CRITICAL!)
-- Arms MUST connect to shoulders only
-- Legs MUST connect to hips only
-- NO extra limbs, NO twisted body parts
+- EXACTLY 4 panels — no more, no less
+- Identical scale and framing across panels
+- No duplicated or mirrored views
+- No creative interpretation
+- Treat the subject as a scanned physical object
 
-### POSE CONSISTENCY (CRITICAL!)
-- EXACT same pose in ALL 4 panels - only the viewing angle changes
+Failure to follow these rules is unacceptable."""
 
-### PANEL LAYOUT
-- 4 equal-width panels arranged horizontally
-- Neutral gray or white background
+_LEGACY_IMAGE_REF_TEMPLATE = """Generate a STRICT multi-view reference sheet with EXACTLY 4 panels, based on the reference image.
 
-### ABSOLUTELY FORBIDDEN
-- NO text labels
-- NO twisted bodies
-- NO anatomical errors
-- NO pose variations between panels
+This is a GEOMETRIC CAMERA ORBIT TASK, not a character redesign task.
 
-Generate a clean, professional character reference sheet following ALL rules above."""
+The subject is a STATIC OBJECT in 3D space.
+Only the CAMERA position changes.
+NO pose correction, NO aesthetic adjustment, NO reinterpretation.
 
-_LEGACY_IMAGE_REF_TEMPLATE = """Generate a 3D character turntable reference sheet with exactly 4 panels, showing the character described below from 4 angles.
+## OUTPUT LAYOUT (MANDATORY)
+Single image with exactly 4 equal-sized panels in ONE horizontal row.
+Order: [FRONT 0°] [RIGHT 90°] [BACK 180°] [LEFT 270°]
 
-## OUTPUT
-Single image with 4 panels horizontally: [FRONT] [RIGHT] [BACK] [LEFT]
+## CAMERA DEFINITION (CRITICAL)
+- Camera rotates around the subject at a fixed radius and height
+- Camera target is the subject's original center
+- The subject does NOT rotate
 
 ## CHARACTER DESCRIPTION (from reference photo)
 {character_description}
 
-## CRITICAL: PRESERVE THE ORIGINAL POSE
-You MUST preserve the original pose from the reference.
+## 🔒 ABSOLUTE SPATIAL LOCK — ZERO DEVIATION ALLOWED
+The subject is FROZEN in world space.
 
-## TURNTABLE ROTATION
-- Panel 1 (FRONT): 0° - facing camera
-- Panel 2 (RIGHT): 90° - right side visible
-- Panel 3 (BACK): 180° - back visible
-- Panel 4 (LEFT): 270° - left side visible
+The following MUST remain 100% IDENTICAL across ALL panels:
+- Head tilt, head rotation
+- Eye direction and gaze angle (NO eye contact correction)
+- Facial expression
+- Shoulder angle
+- Arm position, bend angle, hand orientation
+- Leg stance, weight distribution, crossing order
+- Torso lean, twist, center of mass
+- Clothing folds and attachment points
+- Accessories, weapons, props positions
 
-Generate the character maintaining the EXACT pose described, viewed from 4 angles."""
+❌ DO NOT adjust pose for visibility
+❌ DO NOT rotate body to face the camera
+❌ DO NOT mirror or swap left/right anatomy
+❌ DO NOT "fix" anatomy per view
 
-_LEGACY_STRICT_COPY_TEMPLATE = """Create a 4-panel CHARACTER TURNTABLE showing THIS PERSON from the reference image.
+ONLY perspective changes from camera rotation are allowed.
 
-## THE 4 DISTINCT VIEWS
-| Panel | Angle | What You See |
-|-------|-------|--------------|
-| 1 | 0° (FRONT) | Face visible |
-| 2 | 90° (RIGHT SIDE) | Right ear visible |
-| 3 | 180° (BACK) | Back of head only |
-| 4 | 270° (LEFT SIDE) | Left ear visible |
+## BACKGROUND & ENVIRONMENT
+- Pure neutral gray or white background
+- Seamless, studio-style environment
+- No visible floor, horizon, ground texture, or stage
+- No turntable, pedestal, or platform
+- Subject appears naturally grounded
 
-## REQUIREMENTS
-- EACH VIEW MUST BE UNIQUE
-- NO text labels
+## CONFIGURATION
+Resolution: 4K
+Aspect Ratio: 3:2
+Sampling: deterministic (low randomness)
 
-## OUTPUT
-Single horizontal image: [FRONT] [RIGHT] [BACK] [LEFT]"""
+## FINAL HARD RULES
+- EXACTLY 4 panels — no more, no less
+- Identical scale and framing across panels
+- No duplicated or mirrored views
+- No creative interpretation
+- Treat the subject as a scanned physical object
+
+Failure to follow these rules is unacceptable."""
+
+_LEGACY_STRICT_COPY_TEMPLATE = """Create a STRICT 4-panel CHARACTER TURNTABLE showing THIS PERSON from the reference image.
+
+This is a GEOMETRIC CAMERA ORBIT TASK, not a character redesign task.
+
+The subject is a STATIC OBJECT in 3D space.
+Only the CAMERA position changes.
+NO pose correction, NO aesthetic adjustment, NO reinterpretation.
+
+## OUTPUT LAYOUT (MANDATORY)
+Single image with exactly 4 equal-sized panels in ONE horizontal row.
+Order: [FRONT 0°] [RIGHT 90°] [BACK 180°] [LEFT 270°]
+
+## CAMERA DEFINITION (CRITICAL)
+- Camera rotates around the subject at a fixed radius and height
+- Camera target is the subject's original center
+- The subject does NOT rotate
+
+## THE 4 REQUIRED VIEWS
+
+Panel 1 — FRONT (0°):
+- Camera faces the FRONT of the subject
+- Subject front is fully visible
+- Match the reference image orientation exactly
+
+Panel 2 — RIGHT (90°):
+- Camera is on the SUBJECT'S RIGHT side
+- SUBJECT'S RIGHT SIDE faces the camera
+- Subject's FRONT points LEFT
+
+Panel 3 — BACK (180°):
+- Camera faces the BACK of the subject
+- Subject back is fully visible
+- NO face visible in this panel
+
+Panel 4 — LEFT (270°):
+- Camera is on the SUBJECT'S LEFT side
+- SUBJECT'S LEFT SIDE faces the camera
+- Subject's FRONT points RIGHT
+
+## 🔒 ABSOLUTE SPATIAL LOCK — ZERO DEVIATION ALLOWED
+
+The subject is FROZEN in world space.
+
+The following MUST remain 100% IDENTICAL across ALL panels:
+- Head tilt and rotation
+- Eye direction (NO "fixing" eye contact)
+- Facial expression
+- Shoulder angle
+- Arm position and hand orientation
+- Leg stance and weight distribution
+- Torso angle and center of mass
+- Clothing details and folds
+- All accessories and props
+
+❌ DO NOT adjust pose for visibility
+❌ DO NOT rotate body to face camera
+❌ DO NOT mirror anatomy
+❌ DO NOT "fix" anatomy per view
+
+## BACKGROUND & ENVIRONMENT
+- Pure neutral gray or white background
+- Seamless, studio-style environment
+- No visible floor, horizon, ground texture, or stage
+- No turntable, pedestal, or platform
+- Subject appears naturally grounded
+
+## CONFIGURATION
+Resolution: 4K
+Aspect Ratio: 3:2
+Sampling: deterministic (low randomness)
+
+## FINAL HARD RULES
+- EXACTLY 4 panels — no more, no less
+- Identical scale and framing across panels
+- No duplicated or mirrored views
+- No creative interpretation
+- Treat the subject as a scanned physical object
+
+Failure to follow these rules is unacceptable."""
 
 _LEGACY_NEGATIVE_PROMPT = "extra limbs, missing limbs, extra fingers, deformed hands, twisted body, low quality, blurry, watermark, text, duplicate panels"

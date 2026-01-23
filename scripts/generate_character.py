@@ -380,20 +380,124 @@ def main():
     parser.add_argument(
         "--style",
         default=None,
-        help="Style description. Default: 'cinematic character'. Presets: see --photorealistic, --anime"
+        help="Style description or preset name. Use --list-styles to see all presets."
     )
     
     parser.add_argument(
         "--photorealistic", "--real",
         dest="photorealistic",
         action="store_true",
-        help="Preset: Generate photorealistic images (8k, raw photo, realistic texture)"
+        help="Preset: Photorealistic (8k, raw photo, realistic texture)"
     )
     
     parser.add_argument(
         "--anime",
         action="store_true",
-        help="Preset: Generate anime style images"
+        help="Preset: Anime/manga style (cel shaded, vibrant colors)"
+    )
+    
+    # =========================================================================
+    # 扩展风格预设参数
+    # =========================================================================
+    parser.add_argument(
+        "--ghibli",
+        action="store_true",
+        help="Preset: Studio Ghibli / Miyazaki style (watercolor, whimsical)"
+    )
+    
+    parser.add_argument(
+        "--pixel",
+        action="store_true",
+        help="Preset: Pixel art / retro game style (16-bit, crisp pixels)"
+    )
+    
+    parser.add_argument(
+        "--minecraft", "--voxel",
+        dest="minecraft",
+        action="store_true",
+        help="Preset: Minecraft / voxel block style (cubic geometry)"
+    )
+    
+    parser.add_argument(
+        "--clay", "--claymation",
+        dest="clay",
+        action="store_true",
+        help="Preset: Claymation / plasticine style (stop-motion aesthetic)"
+    )
+    
+    parser.add_argument(
+        "--plush", "--felt",
+        dest="plush",
+        action="store_true",
+        help="Preset: Plush toy / felt fabric style (soft, kawaii)"
+    )
+    
+    parser.add_argument(
+        "--paper", "--papercraft",
+        dest="paper",
+        action="store_true",
+        help="Preset: Paper cutout / Paper Mario style (flat 2.5D)"
+    )
+    
+    parser.add_argument(
+        "--cyberpunk", "--neon",
+        dest="cyberpunk",
+        action="store_true",
+        help="Preset: Cyberpunk / neon sci-fi style"
+    )
+    
+    parser.add_argument(
+        "--fantasy", "--medieval",
+        dest="fantasy",
+        action="store_true",
+        help="Preset: High fantasy / medieval RPG style"
+    )
+    
+    parser.add_argument(
+        "--watercolor",
+        action="store_true",
+        help="Preset: Traditional watercolor painting style"
+    )
+    
+    parser.add_argument(
+        "--oil", "--oil-painting",
+        dest="oil",
+        action="store_true",
+        help="Preset: Classical oil painting style"
+    )
+    
+    parser.add_argument(
+        "--3d-toon", "--pixar",
+        dest="toon3d",
+        action="store_true",
+        help="Preset: 3D cartoon / Pixar-Disney style"
+    )
+    
+    parser.add_argument(
+        "--comic", "--marvel",
+        dest="comic",
+        action="store_true",
+        help="Preset: American comic book / superhero style"
+    )
+    
+    parser.add_argument(
+        "--minimal", "--flat",
+        dest="minimal",
+        action="store_true",
+        help="Preset: Minimalist / flat design style"
+    )
+    
+    parser.add_argument(
+        "--lowpoly",
+        action="store_true",
+        help="Preset: Low poly / geometric 3D style"
+    )
+    
+    parser.add_argument(
+        "--list-styles",
+        dest="list_styles",
+        action="store_true",
+        help="List all available style presets and exit"
     )
     
     parser.add_argument(
@@ -618,6 +722,32 @@ def main():
         AI Multi-view Image Generation → Cropping → Background Removal → 3D Modeling
 ============================================================
         """)
+    
+    # =========================================================================
+    # 列出所有可用风格预设
+    # =========================================================================
+    if getattr(args, 'list_styles', False):
+        from prompts.styles import STYLE_PRESETS, list_all_styles
+        
+        print("\n📎 可用风格预设:")
+        print("=" * 70)
+        
+        seen = set()
+        for preset in STYLE_PRESETS.values():
+            if preset.name not in seen:
+                aliases = ", ".join([f"--{a}" for a in preset.aliases[:2]])
+                print(f"\n  --{preset.name:<14} {preset.description}")
+                print(f"      别名: {aliases}")
+                print(f"      关键词: {', '.join(preset.keywords[:4])}")
+                seen.add(preset.name)
+        
+        print("\n" + "=" * 70)
+        print("💡 使用方法:")
+        print("   python scripts/generate_character.py --from-image img.png --pixel")
+        print("   python scripts/generate_character.py --from-image img.png --style minecraft")
+        print("   python scripts/generate_character.py --from-image img.png --ghibli --custom-views front left")
+        print("")
+        sys.exit(0)
     
     # =========================================================================
     # 图像编辑模式：使用 Gemini 对角色图像进行编辑
@@ -1001,39 +1131,89 @@ def main():
             print("[错误] 描述不能为空")
             sys.exit(1)
 
-    # 确定风格
+    # 确定风格 - 使用新的风格预设系统
+    from prompts.styles import get_style_preset, find_matching_style, get_style_help
+    
     style = args.style
+    active_preset = None  # 记录激活的预设
     
-    # 优先处理 Preset 参数
-    if args.photorealistic:
-        preset = "Photorealistic, 8k, raw photo, realistic texture, hyperrealistic photography, highly detailed skin texture, cinematic lighting"
-        style = f"{preset}, {style}" if style else preset
-        print(f"[预设风格] Photorealistic ({style})")
-    elif args.anime:
-        preset = "Anime style, cell shaded, vibrant colors, 2D art style, studio ghibli style"
-        style = f"{preset}, {style}" if style else preset
-        print(f"[预设风格] Anime ({style})")
+    # 风格参数映射表
+    style_flags = {
+        'photorealistic': args.photorealistic,
+        'anime': args.anime,
+        'ghibli': getattr(args, 'ghibli', False),
+        'pixel': getattr(args, 'pixel', False),
+        'minecraft': getattr(args, 'minecraft', False),
+        'clay': getattr(args, 'clay', False),
+        'plush': getattr(args, 'plush', False),
+        'paper': getattr(args, 'paper', False),
+        'cyberpunk': getattr(args, 'cyberpunk', False),
+        'fantasy': getattr(args, 'fantasy', False),
+        'watercolor': getattr(args, 'watercolor', False),
+        'oil': getattr(args, 'oil', False),
+        '3d-toon': getattr(args, 'toon3d', False),
+        'comic': getattr(args, 'comic', False),
+        'minimal': getattr(args, 'minimal', False),
+        'lowpoly': getattr(args, 'lowpoly', False),
+    }
     
+    # 查找激活的风格预设
+    for preset_name, is_active in style_flags.items():
+        if is_active:
+            active_preset = get_style_preset(preset_name)
+            if active_preset:
+                preset_prompt = active_preset.prompt
+                style = f"{preset_prompt}, {style}" if style else preset_prompt
+                print(f"[预设风格] {active_preset.name.upper()} ({active_preset.description})")
+                break
+    
+    # 如果没有预设激活，尝试从 --style 参数匹配预设
+    if not active_preset and style:
+        matched = find_matching_style(style)
+        if matched:
+            active_preset = matched
+            style = matched.prompt
+            print(f"[匹配风格] {matched.name.upper()} ({matched.description})")
+    
+    # 如果仍然没有风格，使用自动匹配
     if not style:
-        # 简单的关键词风格匹配
         desc_lower = description.lower()
         if "cyberpunk" in desc_lower or "neon" in desc_lower or "mech" in desc_lower:
-            style = "Cyberpunk sci-fi style"
+            active_preset = get_style_preset("cyberpunk")
+            style = active_preset.prompt if active_preset else "Cyberpunk sci-fi style"
         elif "knight" in desc_lower or "magic" in desc_lower or "fantasy" in desc_lower or "dragon" in desc_lower:
-            style = "High fantasy style"
+            active_preset = get_style_preset("fantasy")
+            style = active_preset.prompt if active_preset else "High fantasy style"
         elif "anime" in desc_lower or "manga" in desc_lower:
-            style = "Anime style"
+            active_preset = get_style_preset("anime")
+            style = active_preset.prompt if active_preset else "Anime style"
+        elif "pixel" in desc_lower or "8bit" in desc_lower or "retro" in desc_lower:
+            active_preset = get_style_preset("pixel")
+            style = active_preset.prompt if active_preset else "Pixel art style"
         else:
             style = "Cinematic character design"
         print(f"[自动匹配风格] {style}")
     else:
-        print(f"[指定风格] {style}")
+        if not active_preset:
+            print(f"[自定义风格] {style}")
 
-    # 自动增强提示词 (特别是面部)
-    enhancements = ", detailed face, delicate features, high resolution, 8k, masterpiece, photorealistic, sharp focus"
+    # 自动增强提示词 (根据风格预设选择合适的增强词)
+    if active_preset:
+        enhancements = active_preset.enhancements
+    else:
+        # 回退：根据关键词检测
+        style_lower = style.lower() if style else ""
+        non_realistic_keywords = ["anime", "manga", "cartoon", "2d", "cel", "ghibli", "pixel", 
+                                   "minecraft", "clay", "plush", "paper", "comic", "minimal", 
+                                   "lowpoly", "watercolor", "oil"]
+        if any(kw in style_lower for kw in non_realistic_keywords):
+            enhancements = ", detailed, high resolution, masterpiece, sharp, clean"
+        else:
+            enhancements = ", detailed face, delicate features, high resolution, 8k, masterpiece, photorealistic, sharp focus"
+    
     if "face" not in description.lower() and "feature" not in description.lower():
          description += enhancements
-         print(f"[提示词增强] {description}")
+         print(f"[提示词增强] {enhancements.strip(', ')}")
     
     # =========================================================================
     # 从参考图片生成多视角图
@@ -1271,8 +1451,8 @@ def main():
                 output_dir=args.output,
                 auto_cut=not args.no_cut,
                 style=style,
-                view_mode=f"{args.views}-view",
-                custom_views=args.custom_views,
+                view_mode=view_mode,  # 使用已计算的 view_mode（支持 custom）
+                custom_views=custom_views,  # 使用已计算的 custom_views
                 negative_prompt=negative_prompt,
                 reference_image_path=ref_image_path,
                 use_strict_mode=args.strict,

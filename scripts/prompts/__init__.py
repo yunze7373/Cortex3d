@@ -33,335 +33,7 @@ class PromptLibrary:
     
     def __init__(self):
         self._cache: Dict[str, dict] = {}
-        self._fallback_templates = self._init_fallback_templates()
     
-    def _init_fallback_templates(self) -> Dict[str, dict]:
-        """初始化硬编码的回退模板（YAML 加载失败时使用）"""
-        return {
-            "multiview/standard": {
-                "name": "standard_multiview",
-                "version": "2.0",
-                "layout": "1x4_horizontal",
-                "template": self._get_standard_template()
-            },
-            "multiview/image_ref": {
-                "name": "image_reference",
-                "version": "1.0",
-                "template": self._get_image_ref_template()
-            },
-            "multiview/strict_copy": {
-                "name": "strict_copy",
-                "version": "1.0",
-                "template": self._get_strict_copy_template()
-            },
-            "multiview/universal": {
-                "name": "universal_multiview",
-                "version": "1.0",
-                "template": self._get_universal_template()
-            },
-            "multiview/six_view": {
-                "name": "six_view_multiview",
-                "version": "1.0",
-                "template": self._get_six_view_template()
-            },
-            "multiview/eight_view": {
-                "name": "eight_view_multiview",
-                "version": "1.0",
-                "template": self._get_eight_view_template()
-            },
-            "negative/anatomy": {
-                "prompts": [
-                    "extra limbs", "missing limbs", "extra fingers", "missing fingers",
-                    "extra arms", "extra legs", "deformed hands", "deformed feet",
-                    "twisted body", "unnatural pose", "broken anatomy", "fused limbs",
-                    "floating limbs", "disconnected body parts"
-                ]
-            },
-            "negative/quality": {
-                "prompts": [
-                    "low quality", "blurry", "pixelated", "jpeg artifacts",
-                    "watermark", "text", "logo", "signature", "cropped",
-                    "out of frame", "mutated", "disfigured", "bad proportions",
-                    "duplicate panels", "mirror flip"
-                ]
-            },
-            "negative/layout": {
-                "prompts": [
-                    "2x2 grid layout", "vertical layout", "stacked panels",
-                    "overlapping views", "unequal panel sizes", "diagonal arrangement",
-                    "circular layout", "text labels", "view labels",
-                    "front back left right text"
-                ]
-            }
-        }
-    
-    def _get_standard_template(self) -> str:
-        """标准4视角模板"""
-        return """Generate a professional 3D character turntable reference sheet with exactly 4 panels arranged horizontally.
-
-## OUTPUT REQUIREMENT
-Single image containing 4 panels in a row: [FRONT] [RIGHT] [BACK] [LEFT]
-
-## CHARACTER
-{character_description}
-Style: {style}
-
-## CRITICAL RULES - READ CAREFULLY
-
-### TURNTABLE ROTATION (NOT MIRROR!)
-Imagine the character standing on a rotating platform:
-- Panel 1 (FRONT): Platform at 0° - We see the FACE, chest, front of body
-- Panel 2 (RIGHT SIDE): Platform rotated 90° clockwise - We see the RIGHT ear, RIGHT shoulder, RIGHT hip
-- Panel 3 (BACK): Platform rotated 180° - We see back of HEAD, spine, buttocks
-- Panel 4 (LEFT SIDE): Platform rotated 270° clockwise - We see the LEFT ear, LEFT shoulder, LEFT hip
-
-⚠️ IMPORTANT: Panels 2 and 4 are NOT mirrors! They show OPPOSITE sides of the body!
-- RIGHT SIDE shows: right ear, right arm, right leg
-- LEFT SIDE shows: left ear, left arm, left leg
-
-### ANATOMICAL CORRECTNESS (CRITICAL!)
-- Arms MUST connect to shoulders only
-- Legs MUST connect to hips only
-- Head MUST connect to neck only
-- NO extra limbs, NO twisted body parts
-- Upper body and lower body MUST face the SAME direction in each panel
-- The entire body rotates together as one unit
-
-### POSE CONSISTENCY (CRITICAL!)
-- EXACT same pose in ALL 4 panels - only the viewing angle changes
-- Same arm positions, same leg positions, same head tilt
-- If holding an object in right hand → it stays in right hand in ALL views
-- This is ONE character photographed from 4 angles, NOT 4 different poses
-
-### PANEL LAYOUT
-- 4 equal-width panels arranged horizontally (side by side)
-- Character centered in each panel
-- Same scale/size in all panels
-- Clean separation between panels
-- Neutral gray or white background
-
-### LIGHTING
-- Flat, even studio lighting (no harsh shadows)
-- Face clearly visible without shadow obstruction
-- Consistent lighting direction across all panels
-
-### ABSOLUTELY FORBIDDEN
-- NO text labels (no "front", "back", "left", "right")
-- NO twisted bodies (upper body facing different direction than legs)
-- NO mirror flips (left and right views must show different sides)
-- NO anatomical errors (no extra limbs, no wrong joint positions)
-- NO pose variations between panels
-
-Generate a clean, professional character reference sheet following ALL rules above."""
-
-    def _get_image_ref_template(self) -> str:
-        """图片参考模式模板（支持任意视角数量）"""
-        return """Generate a 3D character reference sheet with exactly {view_count} panel(s), showing the character from the reference image.
-
-## OUTPUT REQUIREMENT
-Single image with {view_count} panel(s): {panel_list}
-
-## CHARACTER DESCRIPTION (from reference photo)
-{character_description}
-
-## CRITICAL: GENERATE EXACTLY THESE SPECIFIC VIEW(S)
-You MUST generate exactly the following view(s) of the character:
-{view_descriptions}
-
-⚠️ SINGLE VIEW MODE: If only 1 panel is requested, output ONLY that one specific angle. Do NOT create multiple panels.
-⚠️ REFERENCE PHOTO OVERRIDE: The reference photo may show the character from a different angle. You MUST IGNORE the camera angle in the reference photo and ROTATE the character to match the requested angle(s) above.
-⚠️ FORCE ROTATION: Extract the character's appearance from the reference, then ROTATE them to the exact specified angle(s).
-
-## CRITICAL: PRESERVE THE ORIGINAL POSE
-⚠️ The character has a SPECIFIC pose from the reference photo. You MUST preserve this pose:
-- If the character is WALKING → show walking pose from the requested angle(s)
-- If the character is SITTING → show sitting pose from the requested angle(s)
-- If one leg is forward → keep that leg forward
-- If arms are in a specific position → maintain that position
-
-DO NOT change the pose to a generic standing pose!
-
-## ANATOMICAL RULES
-- Arms connect to shoulders only
-- Legs connect to hips only
-- Upper and lower body face the SAME direction
-- NO twisted bodies, NO extra limbs
-
-## PANEL LAYOUT
-- {view_count} panel(s) arranged as {layout_description}
-- Character centered in each panel
-- Same scale in all panels
-- Neutral gray background
-- NO text labels
-
-## LIGHTING
-- Flat, even studio lighting
-- No harsh shadows
-- Character clearly visible
-
-## ABSOLUTELY FORBIDDEN
-- NO text labels on the image
-- NO additional views beyond what is specified above
-- Do NOT generate 4 views if only 1 or 2 are requested
-- NO pose changes from the reference (except for rotation)
-
-Generate ONLY the specified view(s) of the character, maintaining the EXACT pose from the reference."""
-
-    def _get_strict_copy_template(self) -> str:
-        """严格复制模式模板"""
-        return """Create a 4-panel CHARACTER TURNTABLE showing THIS PERSON from the reference image.
-
-## TASK: TURNTABLE ROTATION (90° between each view)
-Imagine THIS PERSON is standing on a rotating platform. The platform rotates exactly 90° between each panel.
-
-## THE 4 DISTINCT VIEWS (MUST BE DIFFERENT)
-Each panel shows THIS PERSON from a COMPLETELY DIFFERENT angle:
-
-| Panel | Angle | What You See | Key Identifier |
-|-------|-------|--------------|----------------|
-| 1 | 0° (FRONT) | Face visible, looking at camera | BOTH EYES visible |
-| 2 | 90° (RIGHT SIDE) | Profile view, facing right | RIGHT EAR visible, NO face |
-| 3 | 180° (BACK) | Back of head, no face | BACK OF HEAD only |
-| 4 | 270° (LEFT SIDE) | Profile view, facing left | LEFT EAR visible, NO face |
-
-## STRICT REQUIREMENTS
-1. ⚠️ EACH VIEW MUST BE UNIQUE - no duplicate angles
-2. ⚠️ Panel 1 and 3 must be OPPOSITE (face vs back of head)
-3. ⚠️ Panel 2 and 4 must be OPPOSITE (right ear vs left ear)
-4. Keep THIS PERSON's face, hair, clothes, and accessories identical across all views
-5. Only the CAMERA POSITION changes, character stays the same
-
-## FORBIDDEN
-❌ Two panels showing the face (front) 
-❌ Two panels showing the back
-❌ Two panels showing the same side profile
-❌ Similar angles in adjacent panels
-❌ Text labels on the image
-
-## OUTPUT
-Single horizontal image: [FRONT 0°] [RIGHT 90°] [BACK 180°] [LEFT 270°]
-Gray background. Full body visible in all panels.
-
-Generate 4 DISTINCT turntable views of THIS PERSON."""
-
-    def _get_universal_template(self) -> str:
-        """通用多视角模板（支持任意视角数量，包括单视角）"""
-        return """Generate a professional 3D character reference sheet with exactly {view_count} panel(s) arranged as {layout_description}.
-
-## OUTPUT REQUIREMENT
-Single image containing {view_count} panel(s): {panel_list}
-
-## CHARACTER
-{character_description}
-Style: {style}
-
-## CRITICAL: GENERATE EXACTLY THESE VIEWS
-You MUST generate exactly the following view(s), no more, no less:
-{view_descriptions}
-
-⚠️ IMPORTANT FOR SINGLE VIEW: If only 1 panel is requested, generate ONLY that one specific angle. Do NOT generate multiple views.
-⚠️ REFERENCE PHOTO OVERRIDE: If a reference photo is provided, you MUST IGNORE the camera angle in the reference photo. Instead, ROTATE the character to match the requested angle(s) above.
-⚠️ FORCE ROTATION: Do not just copy the reference photo's perspective. ROTATE the character to the exact angle(s) specified.
-
-## ANATOMICAL CORRECTNESS (CRITICAL!)
-- Arms MUST connect to shoulders only
-- Legs MUST connect to hips only
-- Head MUST connect to neck only
-- NO extra limbs, NO twisted body parts
-- Upper body and lower body MUST face the SAME direction in each panel
-- The entire body rotates together as one unit
-
-## POSE CONSISTENCY (if multiple panels)
-- EXACT same pose in ALL panels - only the viewing angle changes
-- Same arm positions, same leg positions, same head tilt
-- This is ONE character photographed from the specified angle(s)
-
-## PANEL LAYOUT
-- {view_count} panel(s) arranged as {layout_description}
-- Character centered in each panel
-- Same scale/size in all panels
-- Clean separation between panels (if multiple)
-- Neutral gray or white background
-
-## LIGHTING
-- Flat, even studio lighting (no harsh shadows)
-- Face clearly visible without shadow obstruction (if visible from the angle)
-- Consistent lighting direction across all panels
-
-## ABSOLUTELY FORBIDDEN
-- NO text labels (no "front", "back", "left", "right", no angle numbers)
-- NO twisted bodies (upper body facing different direction than legs)
-- NO anatomical errors (no extra limbs, no wrong joint positions)
-- NO additional views beyond what is requested
-- Do NOT generate 4 views if only 1 is requested
-
-Generate ONLY the specified view(s) following ALL rules above."""
-
-    def _get_six_view_template(self) -> str:
-        """6视角专用模板"""
-        return """Generate a professional 3D character reference sheet with exactly 6 panels in a 2x3 grid layout.
-
-## OUTPUT REQUIREMENT
-Single image containing 6 panels arranged as 2 rows x 3 columns:
-Row 1: [FRONT 0°] [FRONT-RIGHT 45°] [RIGHT 90°]
-Row 2: [BACK 180°] [LEFT 270°] [FRONT-LEFT 315°]
-
-## CHARACTER
-{character_description}
-Style: {style}
-
-## TURNTABLE ROTATION
-Imagine the character standing on a rotating platform:
-- Panel 1 (FRONT): Platform at 0° - Face visible, looking at camera
-- Panel 2 (FRONT-RIGHT): Platform at 45° - Right cheek visible, 3/4 view from front-right
-- Panel 3 (RIGHT): Platform at 90° - Right ear visible, full profile view
-- Panel 4 (BACK): Platform at 180° - Back of head visible, NO face
-- Panel 5 (LEFT): Platform at 270° - Left ear visible, full profile view
-- Panel 6 (FRONT-LEFT): Platform at 315° - Left cheek visible, 3/4 view from front-left
-
-## CRITICAL RULES
-- EXACT same pose in ALL 6 panels - only viewing angle changes
-- NO text labels on the image
-- NO anatomical errors (extra limbs, twisted body)
-- Consistent lighting and character scale across all panels
-- Arms MUST connect to shoulders, Legs MUST connect to hips
-- Clean separation between panels with neutral background
-
-Generate a professional 6-view character reference sheet."""
-
-    def _get_eight_view_template(self) -> str:
-        """8视角专用模板"""
-        return """Generate a professional 3D character reference sheet with exactly 8 panels in a 2x4 grid layout.
-
-## OUTPUT REQUIREMENT
-Single image containing 8 panels arranged as 2 rows x 4 columns:
-Row 1: [FRONT 0°] [FRONT-RIGHT 45°] [RIGHT 90°] [BACK 180°]
-Row 2: [LEFT 270°] [FRONT-LEFT 315°] [TOP ↓] [BOTTOM ↑]
-
-## CHARACTER
-{character_description}
-Style: {style}
-
-## VIEW DESCRIPTIONS
-- Panel 1 (FRONT): Platform at 0° - Face visible, looking at camera
-- Panel 2 (FRONT-RIGHT): Platform at 45° - Right cheek visible, 3/4 view
-- Panel 3 (RIGHT): Platform at 90° - Right ear visible, full profile view
-- Panel 4 (BACK): Platform at 180° - Back of head visible, NO face
-- Panel 5 (LEFT): Platform at 270° - Left ear visible, full profile view
-- Panel 6 (FRONT-LEFT): Platform at 315° - Left cheek visible, 3/4 view
-- Panel 7 (TOP): Bird's eye view - Looking straight down at top of head and shoulders
-- Panel 8 (BOTTOM): Worm's eye view - Looking straight up at soles of feet
-
-## CRITICAL RULES
-- EXACT same pose in all horizontal views (Panels 1-6)
-- TOP and BOTTOM views show the character from directly above/below
-- NO text labels on the image
-- NO anatomical errors
-- Consistent lighting and scale
-- Clean panel separation with neutral background
-
-Generate a professional 8-view character reference sheet including top and bottom perspectives."""
-
     def load_prompt(self, category: str, name: str) -> dict:
         """
         加载指定提示词模板
@@ -379,26 +51,22 @@ Generate a professional 8-view character reference sheet including top and botto
         if cache_key in self._cache:
             return self._cache[cache_key]
         
-        # 尝试从 YAML 文件加载
+        # 从 YAML 文件加载
         yaml_path = PROMPTS_DIR / category / f"{name}.yaml"
         
-        if YAML_AVAILABLE and yaml_path.exists():
-            try:
-                with open(yaml_path, 'r', encoding='utf-8') as f:
-                    template = yaml.safe_load(f)
-                self._cache[cache_key] = template
-                return template
-            except Exception as e:
-                print(f"[WARNING] 加载 YAML 失败 ({yaml_path}): {e}, 使用回退模板")
+        if not yaml_path.exists():
+            raise ValueError(f"未找到提示词模板: {yaml_path}")
         
-        # 使用回退模板
-        if cache_key in self._fallback_templates:
-            template = self._fallback_templates[cache_key]
+        if not YAML_AVAILABLE:
+            raise ImportError("需要安装 PyYAML: pip install pyyaml")
+        
+        try:
+            with open(yaml_path, 'r', encoding='utf-8') as f:
+                template = yaml.safe_load(f)
             self._cache[cache_key] = template
             return template
-        
-        # 未找到模板
-        raise ValueError(f"未找到提示词模板: {cache_key}")
+        except Exception as e:
+            raise ValueError(f"加载模板失败 ({yaml_path}): {e}")
 
     def get_multiview_prompt(self, mode: str = "standard") -> str:
         """
@@ -492,6 +160,25 @@ Generate a professional 8-view character reference sheet including top and botto
         else:
             layout_desc = f"{cols} panels in a horizontal row"
         
+        # 构建输出类型描述
+        output_type_description = f"Generate a STRICT multi-view reference sheet with EXACTLY {view_count} panels."
+        
+        # 检测风格类型
+        style_lower = style.lower() if style else ""
+        photorealistic_keywords = ["photorealistic", "photo", "realistic", "raw", "real", "8k"]
+        if any(kw in style_lower for kw in photorealistic_keywords):
+            output_type_description = f"Generate a STRICT multi-view photo composite with EXACTLY {view_count} panels."
+        
+        # 构建 TOP/BOTTOM 说明（仅当包含这些视角时）
+        view_names = [v.name for v in views]
+        top_bottom_instructions = ""
+        if any(v in ["top", "bottom"] for v in view_names):
+            top_bottom_instructions = """## ⚠️ TOP & BOTTOM VIEW NOTES
+- TOP view: Camera directly above, looking DOWN at top of head/shoulders
+- BOTTOM view: Camera directly below, looking UP at soles of feet
+- These views show the subject from extreme vertical angles
+"""
+        
         # 格式化
         try:
             return template_str.format(
@@ -500,7 +187,11 @@ Generate a professional 8-view character reference sheet including top and botto
                 view_count=view_count,
                 layout_description=layout_desc,
                 panel_list=format_panel_list(views),
-                view_descriptions=format_view_descriptions(views)
+                view_descriptions=format_view_descriptions(views),
+                top_bottom_instructions=top_bottom_instructions,
+                output_type_description=output_type_description,
+                spatial_lock_instructions=self._get_spatial_lock_instructions(view_count),
+                final_rules_instructions=self._get_final_rules_instructions(view_count)
             )
         except KeyError:
             # 某些模板可能不需要所有变量
@@ -564,6 +255,12 @@ Generate a professional 8-view character reference sheet including top and botto
         # 构建 TOP/BOTTOM 说明（仅当包含这些视角时）
         top_bottom_instructions = self._get_top_bottom_instructions(view_names)
         
+        # 构建空间锁定指令（单视角时简化）
+        spatial_lock_instructions = self._get_spatial_lock_instructions(view_count)
+        
+        # 构建最终规则指令（单视角时简化）
+        final_rules_instructions = self._get_final_rules_instructions(view_count)
+        
         template = self.load_prompt("multiview", "image_ref")
         return template.get("template", "").format(
             character_description=character_description,
@@ -574,7 +271,9 @@ Generate a professional 8-view character reference sheet including top and botto
             reference_context=reference_context,
             style_instructions=style_instructions,
             output_type_description=output_type_description,
-            top_bottom_instructions=top_bottom_instructions
+            top_bottom_instructions=top_bottom_instructions,
+            spatial_lock_instructions=spatial_lock_instructions,
+            final_rules_instructions=final_rules_instructions
         )
     
     def _get_output_type_description(self, style: str = None, view_count: int = 4) -> str:
@@ -620,30 +319,74 @@ Generate a professional 8-view character reference sheet including top and botto
         Returns:
             风格指令字符串
         """
-        # 加载模板中的风格预设
+        # 从风格预设系统获取
+        from prompts.styles import find_matching_style
+        
+        if style:
+            matched_preset = find_matching_style(style)
+            if matched_preset:
+                return matched_preset.style_instruction
+        
+        # 未匹配预设时，加载模板中的默认风格
         template = self.load_prompt("multiview", "image_ref")
         style_presets = template.get("style_presets", {})
         
         if not style:
             return style_presets.get("default", "Match the reference image style.")
         
-        style_lower = style.lower()
-        
-        # 检测是否为写实风格
-        photorealistic_keywords = ["photorealistic", "photo", "realistic", "raw", "real", "8k", "hyperrealistic"]
-        if any(kw in style_lower for kw in photorealistic_keywords):
-            return style_presets.get("photorealistic", f"Generate in photorealistic style: {style}")
-        
-        # 检测是否为动画风格
-        anime_keywords = ["anime", "manga", "cartoon", "2d", "cell shaded", "ghibli"]
-        if any(kw in style_lower for kw in anime_keywords):
-            return style_presets.get("anime", f"Generate in anime style: {style}")
-        
-        # 默认：使用用户指定的风格
+        # 自定义风格：使用通用模板
         return f"""**STYLE REQUIREMENT:**
 {style}
 - Maintain this exact style consistently across all panels
 - Match the visual characteristics of the reference image"""
+
+    def _get_spatial_lock_instructions(self, view_count: int) -> str:
+        """
+        根据视角数量返回空间锁定指令
+        单视角时移除多面板相关描述
+        """
+        if view_count == 1:
+            return """**🔒 SPATIAL LOCK:**
+- Fixed body proportions and anatomy
+- Fixed outfit, accessories, and equipment
+- Fixed hair length, style, and color
+- Fixed facial features and expression
+- Fixed pose and gesture
+- Consistent lighting direction
+- Same character, same moment, one perfect angle"""
+        else:
+            return f"""**🔒 ABSOLUTE SPATIAL LOCK (apply across ALL {view_count} panels):**
+- Fixed body proportions and anatomy — identical in every panel
+- Fixed outfit, accessories, equipment — no variation allowed
+- Fixed hair length, style, and color — exact match required
+- Fixed facial features and expression — same in every panel
+- Fixed pose and gesture — synchronized across views
+- Fixed object scale — character appears same size in all panels
+- Consistent lighting direction — unified across the sheet
+- Same character, same moment, multiple angles captured simultaneously"""
+
+    def _get_final_rules_instructions(self, view_count: int) -> str:
+        """
+        根据视角数量返回最终规则指令
+        单视角时简化规则
+        """
+        if view_count == 1:
+            return """**📋 FINAL RULES:**
+1. Single clean panel with consistent proportions
+2. Maintain exact character appearance from reference
+3. High quality, no distortion or artifacts
+4. Character centered and well-framed
+
+❗ Failure to follow these rules is unacceptable."""
+        else:
+            return f"""**📋 FINAL HARD RULES:**
+1. Identical scale and framing across all {view_count} panels
+2. Zero variation in outfit, hair, or accessories
+3. Unified lighting across the entire sheet
+4. High quality with no panel-to-panel inconsistencies
+5. Character consistency is non-negotiable
+
+❗ Failure to follow these rules is unacceptable."""
 
     def build_strict_copy_prompt(
         self,
@@ -707,7 +450,9 @@ Generate a professional 8-view character reference sheet including top and botto
             reference_context=reference_context,
             style_instructions=style_instructions,
             output_type_description=output_type_description,
-            top_bottom_instructions=top_bottom_instructions
+            top_bottom_instructions=top_bottom_instructions,
+            spatial_lock_instructions=self._get_spatial_lock_instructions(view_count),
+            final_rules_instructions=self._get_final_rules_instructions(view_count)
         )
 
 

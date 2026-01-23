@@ -1,6 +1,6 @@
 name: eight_view_multiview
-version: "1.0"
-description: "8视角生成模板 - 包含顶部和底部视图"
+version: "3.0"
+description: "8视角生成模板 v3.0 - 几何摄像机环绕范式，高成功率"
 layout: "2x4_grid"
 views:
   - front
@@ -13,37 +13,79 @@ views:
   - bottom
 
 template: |
-  Generate a professional 3D character reference sheet with exactly 8 panels in a 2x4 grid layout.
+  {output_type_description}
 
-  ## OUTPUT REQUIREMENT
-  Single image containing 8 panels arranged as 2 rows x 4 columns:
+  This is a GEOMETRIC CAMERA ORBIT TASK, not a character redesign task.
+
+  The subject is a STATIC OBJECT in 3D space.
+  Only the CAMERA position changes.
+  NO pose correction, NO aesthetic adjustment, NO reinterpretation.
+
+  ==================================================
+  ## OUTPUT LAYOUT (MANDATORY)
+  Single image containing 8 panels in a 2×4 grid:
   Row 1: [FRONT 0°] [FRONT-RIGHT 45°] [RIGHT 90°] [BACK 180°]
   Row 2: [LEFT 270°] [FRONT-LEFT 315°] [TOP ↓] [BOTTOM ↑]
 
-  ## CHARACTER
+  No labels, no text, no markers inside the image.
+  ==================================================
+
+  ## CHARACTER DETAILS
   {character_description}
+
+  ## STYLE REQUIREMENTS
   Style: {style}
 
-  ## VIEW DESCRIPTIONS
-  - Panel 1 (FRONT): Platform at 0° - Face visible, looking at camera
-  - Panel 2 (FRONT-RIGHT): Platform at 45° - Right cheek visible, 3/4 view
-  - Panel 3 (RIGHT): Platform at 90° - Right ear visible, full profile view
-  - Panel 4 (BACK): Platform at 180° - Back of head visible, NO face
-  - Panel 5 (LEFT): Platform at 270° - Left ear visible, full profile view
-  - Panel 6 (FRONT-LEFT): Platform at 315° - Left cheek visible, 3/4 view
-  - Panel 7 (TOP): Bird's eye view - Looking straight down at top of head and shoulders
-  - Panel 8 (BOTTOM): Worm's eye view - Looking straight up at soles of feet
+  ## CAMERA DEFINITION (CRITICAL)
 
-  ## CRITICAL RULES
-  - EXACT same pose in all horizontal views (Panels 1-6)
-  - TOP and BOTTOM views show the character from directly above/below
-  - NO text labels on the image
-  - NO anatomical errors
-  - Consistent lighting and scale
-  - Clean panel separation with neutral background
+  Camera rotates around the subject at a fixed radius.
+  For horizontal views (Panels 1-6): camera at eye level.
+  For TOP view: camera directly above looking down.
+  For BOTTOM view: camera directly below looking up.
 
-  Generate a professional 8-view character reference sheet including top and bottom perspectives.
+  Camera target is the subject's center.
+
+  The subject does NOT rotate.
+
+  ## THE 8 REQUIRED CAMERA POSITIONS
+
+  - Panel 1 (FRONT 0°): Camera directly in front of subject
+  - Panel 2 (FRONT-RIGHT 45°): Camera at 45° to subject's right-front
+  - Panel 3 (RIGHT 90°): Camera directly to subject's right side
+  - Panel 4 (BACK 180°): Camera directly behind subject (NO face visible)
+  - Panel 5 (LEFT 270°): Camera directly to subject's left side
+  - Panel 6 (FRONT-LEFT 315°): Camera at 45° to subject's left-front
+  - Panel 7 (TOP): Bird's eye view - Camera directly above, looking down at top of head
+  - Panel 8 (BOTTOM): Worm's eye view - Camera directly below, looking up at soles of feet
+
+  ==================================================
+  {spatial_lock_instructions}
+  ==================================================
+  {top_bottom_instructions}
+  ## ⚠️ LEFT vs RIGHT VIEW DISTINCTION
+  
+  For the RIGHT view, the camera is positioned to the right of the subject, so the subject's front points toward the LEFT edge of the image.
+  For the LEFT view, the camera is positioned to the left of the subject, so the subject's front points toward the RIGHT edge of the image.
+
+  ## BACKGROUND & ENVIRONMENT
+  - Pure neutral gray or white background
+  - Seamless, studio-style environment
+  - No visible floor, horizon, ground texture, or stage
+  - No turntable, pedestal, disc, or platform
+  - Subject appears naturally grounded without visible geometry
+
+  ## CONFIGURATION PARAMETERS
+  Resolution: 4K
+  Aspect Ratio: 3:2
+  Sampling: deterministic (low randomness)
+
+  ==================================================
+  {final_rules_instructions}
 
 variables:
   - character_description
   - style
+  - top_bottom_instructions
+  - output_type_description
+  - spatial_lock_instructions
+  - final_rules_instructions

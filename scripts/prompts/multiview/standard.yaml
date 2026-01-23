@@ -1,69 +1,90 @@
 name: standard_multiview
-version: "2.3"
-description: "标准4视角生成模板 - 通用方向描述，适用于任何对象"
+version: "3.1"
+description: "标准4视角生成模板 v3.1 - 几何摄像机环绕范式，支持动态参数"
 layout: "1x4_horizontal"
 
 template: |
-  Generate a professional 3D reference sheet with exactly 4 panels arranged horizontally.
+  {output_type_description}
 
-  ## OUTPUT REQUIREMENT
-  Single image containing 4 panels in a row: [FRONT] [RIGHT] [BACK] [LEFT]
+  This is a GEOMETRIC CAMERA ORBIT TASK, not a character redesign task.
 
-  ## OBJECT/CHARACTER
+  The subject is a STATIC OBJECT in 3D space.
+  Only the CAMERA position changes.
+  NO pose correction, NO aesthetic adjustment, NO reinterpretation.
+
+  ==================================================
+  ## OUTPUT LAYOUT (MANDATORY)
+  Single image with {layout_description}: {panel_list}
+
+  No labels, no text, no markers inside the image.
+  ==================================================
+
+  ## CAMERA DEFINITION (CRITICAL)
+
+  Camera rotates around the subject at a fixed radius and height.
+  Camera target is the subject's original center.
+
+  The subject does NOT rotate.
+
+  --------------------------------------------------
+  ### THE {view_count} REQUIRED VIEWS
+  {view_descriptions}
+  --------------------------------------------------
+
+  ==================================================
+  {spatial_lock_instructions}
+  ==================================================
+  {top_bottom_instructions}
+  ## ⚠️ LEFT vs RIGHT VIEW DISTINCTION
+  
+  For the RIGHT view, the camera is positioned to the right of the subject, so the subject's front points toward the LEFT edge of the image.
+  For the LEFT view, the camera is positioned to the left of the subject, so the subject's front points toward the RIGHT edge of the image.
+
+  ## 🎨 STYLE CONSTRAINTS
+  - {style}
+  - EXACT style match to input description
+  - Identical materials, lighting mood, and surface detail
+  - Consistent rendering quality across all panels
+
+  ==================================================
+  ## CHARACTER/OBJECT
   {character_description}
-  Style: {style}
 
-  ## CAMERA POSITIONS (4 angles orbiting the object)
-  
-  Imagine the object in the center. The camera orbits around it clockwise:
-  
-  - Panel 1 (FRONT, 0°): Camera in front of the object
-    → We see the FRONT surface of the object
-    
-  - Panel 2 (RIGHT, 90°): Camera on the RIGHT side of the object
-    → We see the RIGHT surface of the object
-    → The object's FRONT points toward the LEFT edge of the image
-    
-  - Panel 3 (BACK, 180°): Camera behind the object
-    → We see the BACK surface of the object
-    
-  - Panel 4 (LEFT, 270°): Camera on the LEFT side of the object
-    → We see the LEFT surface of the object
-    → The object's FRONT points toward the RIGHT edge of the image
+  ==================================================
+  ## BACKGROUND & ENVIRONMENT
+  - Pure neutral gray or white background
+  - Seamless, studio-style environment
+  - No visible floor, horizon, ground texture, or stage
+  - No turntable, pedestal, disc, or platform
+  - Subject appears naturally grounded without visible geometry
 
-  ## ⚠️ CRITICAL: LEFT vs RIGHT - DO NOT CONFUSE!
-  
-  The key difference between Panel 2 (RIGHT) and Panel 4 (LEFT):
-  
-  | View  | Camera Position | Object's Front Points To |
-  |-------|-----------------|-------------------------|
-  | RIGHT | Right of object | LEFT edge of image      |
-  | LEFT  | Left of object  | RIGHT edge of image     |
-  
-  ⚠️ These are OPPOSITE views from opposite sides - NOT mirrors!
-  ⚠️ If panels 2 and 4 look similar, you made an error!
+  ==================================================
+  ## CONFIGURATION PARAMETERS
+  Resolution: 4K
+  Aspect Ratio: 3:2
+  Sampling: deterministic (low randomness)
 
-  ## CONSISTENCY RULES
-  - SAME object in ALL 4 panels - only the camera angle changes
-  - SAME pose/orientation/details in all panels
-  - SAME scale and centering in all panels
-
-  ## BACKGROUND
-  - Solid neutral gray or white background
-  - ❌ NO turntable, platform, or any surface under the object
-  - ✅ Object appears to float naturally
-
-  ## ABSOLUTELY FORBIDDEN
-  - NO text labels
-  - NO mirror flips (panels 2 and 4 must show DIFFERENT sides)
-  - NO turntable or platform
-
-  Generate a clean, professional reference sheet following ALL rules above.
+  ==================================================
+  {final_rules_instructions}
 
 variables:
   - character_description
   - style
+  - view_count
+  - layout_description
+  - panel_list
+  - view_descriptions
+  - top_bottom_instructions
+  - output_type_description
+  - spatial_lock_instructions
+  - final_rules_instructions
 
-default_style: "cinematic character"
+# 动态内容预设
+dynamic_content:
+  output_type_default: |
+    Generate a STRICT multi-view reference sheet with EXACTLY {view_count} panels.
+  output_type_photorealistic: |
+    Generate a STRICT multi-view photo composite with EXACTLY {view_count} panels.
+  - style
 
 default_style: "cinematic character"

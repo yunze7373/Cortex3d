@@ -1,14 +1,31 @@
 name: strict_copy
-version: "3.2"
-description: "严格复制模式 - Gemini优化，无表格，纯自然语言"
+version: "4.0"
+description: "严格复制模式 v4.0 - 几何摄像机环绕范式，高成功率"
 
 template: |
   {output_type_description}
 
-  ## OUTPUT LAYOUT
+  This is a GEOMETRIC CAMERA ORBIT TASK, not a character redesign task.
+
+  The subject is a STATIC OBJECT in 3D space.
+  Only the CAMERA position changes.
+  NO pose correction, NO aesthetic adjustment, NO reinterpretation.
+
+  ==================================================
+  ## OUTPUT LAYOUT (MANDATORY)
   Single image with {layout_description}: {panel_list}
 
+  No labels, no text, no markers inside the image.
+  ==================================================
+
   {reference_context}
+
+  ## CAMERA DEFINITION (CRITICAL)
+
+  Camera rotates around the subject at a fixed radius and height.
+  Camera target is the subject's original center.
+
+  The subject does NOT rotate.
 
   ## THE {view_count} REQUIRED VIEWS
   {view_descriptions}
@@ -16,47 +33,35 @@ template: |
   ## ⚠️ STYLE REQUIREMENTS
   {style_instructions}
 
-  ## 🚨 ABSOLUTE RULE: POSE/POSITION IS LOCKED - ZERO CHANGES ALLOWED 🚨
-  
-  The subject is FROZEN. Only the camera moves around it.
-  
-  ### 🔒 SPATIAL LOCK INSTRUCTIONS:
-  
-  Every element must match the reference EXACTLY across all views:
-  - HEAD: Must remain LOCKED in the same tilt and rotation.
-  - GAZE: Must remain LOCKED relative to the body, never correcting toward camera.
-  - ARMS: Must remain LOCKED in the same position and bend angle.
-  - LEGS: Must remain LOCKED in the same stance and crossing order.
-  - TORSO: Must remain LOCKED in the same lean and twist.
-  - OBJECTS: Must remain LOCKED in the same position relative to subject.
-
-  ### 🎯 KEY CONCEPT: Positions are relative to BODY, not CAMERA
-  
-  When camera moves, the APPEARANCE changes but ACTUAL POSITIONS stay the same.
-  
-  ❌ WRONG: "Correcting" poses to look more standard in each view
-  ❌ WRONG: Swapping left/right positions based on camera angle
-  ❌ WRONG: Making subject face forward in every view
-  ✅ RIGHT: All spatial relationships from reference are preserved
+  ==================================================
+  {spatial_lock_instructions}
+  ==================================================
   {top_bottom_instructions}
   ## ⚠️ STRICT COPY REQUIREMENTS
   1. **100% IDENTICAL** - Every detail must match the reference exactly
   2. **NO CREATIVE CHANGES** - Do not add, remove, or modify ANY features
   3. **ONLY CAMERA MOVES** - The subject stays frozen, only viewpoint changes
+  4. **Treat as scanned physical object** - No interpretation allowed
 
   ## ⚠️ LEFT vs RIGHT VIEW DISTINCTION
   
   For the RIGHT view, the camera is positioned to the right of the subject, so the subject's front points toward the LEFT edge of the image.
   For the LEFT view, the camera is positioned to the left of the subject, so the subject's front points toward the RIGHT edge of the image.
 
-  ## BACKGROUND & PHYSICS
-  - Solid neutral gray or white background
-  - No visible floor, horizon line, or surface texture
-  - Feet may lightly contact an implied surface (no visible geometry)
-  - ❌ NO turntable, platform, pedestal, or disc under feet
-  - ✅ Clean seamless background, natural grounded positioning
+  ## BACKGROUND & ENVIRONMENT
+  - Pure neutral gray or white background
+  - Seamless, studio-style environment
+  - No visible floor, horizon, ground texture, or stage
+  - No turntable, pedestal, disc, or platform
+  - Subject appears naturally grounded without visible geometry
 
-  ⚠️ Generate EXACTLY {view_count} view(s) - 100% faithful to reference.
+  ## CONFIGURATION PARAMETERS
+  Resolution: 4K
+  Aspect Ratio: 3:2
+  Sampling: deterministic (low randomness)
+
+  ==================================================
+  {final_rules_instructions}
 
 variables:
   - view_count
@@ -67,3 +72,5 @@ variables:
   - style_instructions
   - output_type_description
   - top_bottom_instructions
+  - spatial_lock_instructions
+  - final_rules_instructions
