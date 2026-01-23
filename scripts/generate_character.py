@@ -728,6 +728,55 @@ def main():
         help="合成输出文件名 (可选，默认自动生成)"
     )
     
+    # =========================================================================
+    # P0 功能: 高保真细节保留 (Detail Preserve Edit)
+    # =========================================================================
+    parser.add_argument(
+        "--mode-preserve",
+        action="store_true",
+        dest="mode_preserve",
+        help="激活高保真编辑模式: 在修改图像时保留关键细节(面部、徽标等)。比普通编辑更适合需要保留精细特征的场景"
+    )
+    
+    parser.add_argument(
+        "--preserve-image",
+        type=str,
+        dest="preserve_image",
+        metavar="IMAGE",
+        help="主图片路径 (包含要保留细节的图片)"
+    )
+    
+    parser.add_argument(
+        "--preserve-element",
+        type=str,
+        dest="preserve_element",
+        metavar="IMAGE",
+        default=None,
+        help="元素图片路径 (可选，要添加到主图的元素，如 logo、配饰等)"
+    )
+    
+    parser.add_argument(
+        "--preserve-details",
+        type=str,
+        dest="preserve_details",
+        help="要保留的关键细节描述。例: '保持女性的面部特征完全不变'"
+    )
+    
+    parser.add_argument(
+        "--preserve-instruction",
+        type=str,
+        dest="preserve_instruction",
+        help="修改指令。例: '将 logo 添加到她的黑色 T 恤上'"
+    )
+    
+    parser.add_argument(
+        "--preserve-output-name",
+        type=str,
+        dest="preserve_output_name",
+        default=None,
+        help="输出文件名 (可选)"
+    )
+    
     # 在解析参数前，检查常见的参数错误并提供友好提示
     friendly_hint_shown = False
     for arg in sys.argv[1:]:
@@ -1061,6 +1110,97 @@ def main():
             sys.exit(0)
         except Exception as e:
             print(f"[ERROR] 合成过程出错: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    
+    # =========================================================================
+    # 高保真细节保留模式检查 (--mode-preserve)
+    # =========================================================================
+    if args.mode_preserve:
+        print("\n" + "═"*60)
+        print("🔍 激活高保真细节保留模式")
+        print("═"*60)
+        print("  用途: 在修改图像时保留关键细节 (面部、徽标、特定元素)")
+        print("  示例: 给人物 T 恤添加 logo 但保持面部不变")
+        
+        # 验证必需参数
+        if not args.preserve_image:
+            print("[ERROR] --mode-preserve 需要 --preserve-image 参数（主图片路径）")
+            print("        示例: --preserve-image person.png")
+            sys.exit(1)
+        
+        if not args.preserve_instruction:
+            print("[ERROR] --mode-preserve 需要 --preserve-instruction 参数（修改指令）")
+            print("        示例: --preserve-instruction '将 logo 添加到 T 恤上'")
+            sys.exit(1)
+        
+        # 查找主图片
+        main_image = Path(args.preserve_image)
+        if not main_image.exists():
+            for search_dir in [Path("."), Path("test_images"), Path("reference_images"), Path(args.output)]:
+                candidate = search_dir / args.preserve_image
+                if candidate.exists():
+                    main_image = candidate
+                    break
+        
+        if not main_image.exists():
+            print(f"[ERROR] 主图片不存在: {args.preserve_image}")
+            sys.exit(1)
+        
+        # 查找元素图片 (可选)
+        element_image = None
+        if args.preserve_element:
+            element_path = Path(args.preserve_element)
+            if not element_path.exists():
+                for search_dir in [Path("."), Path("test_images"), Path("reference_images"), Path(args.output)]:
+                    candidate = search_dir / args.preserve_element
+                    if candidate.exists():
+                        element_path = candidate
+                        break
+            
+            if not element_path.exists():
+                print(f"[ERROR] 元素图片不存在: {args.preserve_element}")
+                sys.exit(1)
+            
+            element_image = str(element_path)
+        
+        print(f"\n  └─ 主图片: {main_image.name}")
+        if element_image:
+            print(f"  └─ 元素图片: {Path(element_image).name}")
+        if args.preserve_details:
+            print(f"  └─ 保留细节: {args.preserve_details[:60]}{'...' if len(args.preserve_details) > 60 else ''}")
+        print(f"  └─ 修改指令: {args.preserve_instruction[:60]}{'...' if len(args.preserve_instruction) > 60 else ''}")
+        print(f"  └─ 调用模式: {args.mode.upper()}")
+        print("")
+        
+        # 导入高保真编辑函数
+        from gemini_generator import preserve_detail_edit
+        
+        # 执行高保真编辑
+        try:
+            output_path = preserve_detail_edit(
+                main_image_path=str(main_image),
+                instruction=args.preserve_instruction,
+                preserve_details=args.preserve_details,
+                element_image_path=element_image,
+                api_key=args.token,
+                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                output_dir=args.output,
+                output_name=args.preserve_output_name,
+                mode=args.mode
+            )
+            
+            if output_path:
+                print(f"\n✅ 高保真编辑完成！")
+                print(f"   输出: {output_path}")
+            else:
+                print(f"\n❌ 编辑失败，请检查日志")
+                sys.exit(1)
+            
+            sys.exit(0)
+        except Exception as e:
+            print(f"[ERROR] 高保真编辑出错: {e}")
             import traceback
             traceback.print_exc()
             sys.exit(1)

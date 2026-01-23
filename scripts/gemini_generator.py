@@ -1095,6 +1095,405 @@ def style_transfer_character(
 
 
 # =============================================================================
+# P0 功能: 高保真细节保留编辑 (Preserve Detail Edit)
+# =============================================================================
+
+def preserve_detail_edit(
+    main_image_path: str,
+    instruction: str,
+    preserve_details: str = None,
+    element_image_path: str = None,
+    api_key: str = None,
+    model_name: str = None,
+    output_dir: str = "test_images",
+    output_name: str = None,
+    mode: str = "proxy",
+    proxy_base_url: str = None
+) -> Optional[str]:
+    """
+    高保真细节保留编辑
+    
+    在修改图像时保留关键细节（如面部特征、徽标位置等）。
+    适用于需要精确控制哪些元素保持不变的场景。
+    
+    Args:
+        main_image_path: 主图片路径（包含要保留细节的图片）
+        instruction: 修改指令
+        preserve_details: 要保留的关键细节描述（如 "保持女性的面部特征完全不变"）
+        element_image_path: 可选的元素图片路径（如 logo、配饰等要添加的元素）
+        api_key: API Key
+        model_name: 模型名称 (默认: gemini-2.5-flash-image)
+        output_dir: 输出目录
+        output_name: 输出文件名 (可选)
+        mode: API 调用模式 ("proxy" 或 "direct")
+        proxy_base_url: 代理服务地址 (仅 proxy 模式)
+    
+    Returns:
+        编辑后图像的路径
+    
+    示例:
+        # 给人物 T 恤添加 logo，保持面部不变
+        preserve_detail_edit(
+            main_image_path="woman.png",
+            instruction="将 logo 添加到她的黑色 T 恤上，让 logo 看起来像自然印在面料上",
+            preserve_details="确保女性的面部和特征保持完全不变",
+            element_image_path="logo.png"
+        )
+        
+        # 改变背景但保持人物细节
+        preserve_detail_edit(
+            main_image_path="portrait.png",
+            instruction="将背景改为海滩日落场景",
+            preserve_details="保持人物的面部、发型、服装的所有细节完全不变"
+        )
+    """
+    from pathlib import Path
+    
+    _ensure_imports()
+    
+    if not model_name:
+        model_name = "gemini-2.5-flash-image"
+    
+    print(f"\n[高保真细节保留编辑]")
+    print(f"  主图片: {Path(main_image_path).name}")
+    if element_image_path:
+        print(f"  元素图片: {Path(element_image_path).name}")
+    print(f"  修改指令: {instruction[:80]}{'...' if len(instruction) > 80 else ''}")
+    if preserve_details:
+        print(f"  保留细节: {preserve_details[:80]}{'...' if len(preserve_details) > 80 else ''}")
+    print(f"  模型: {model_name}")
+    print(f"  调用模式: {mode.upper()}")
+    
+    # 构建完整的提示词，强调细节保留
+    full_prompt_parts = []
+    
+    # 添加修改指令
+    full_prompt_parts.append(instruction)
+    
+    # 添加细节保留要求
+    if preserve_details:
+        full_prompt_parts.append(f"\n\nCRITICAL REQUIREMENT: {preserve_details}")
+    else:
+        # 默认的细节保留提示
+        full_prompt_parts.append("\n\nIMPORTANT: Preserve all fine details of the original subject, including facial features, expressions, and any identifying characteristics.")
+    
+    # 添加自然融合提示
+    if element_image_path:
+        full_prompt_parts.append("\n\nThe added element should blend naturally with the original image, matching the lighting, perspective, and style of the original.")
+    
+    full_prompt = "".join(full_prompt_parts)
+    
+    # 根据模式选择调用方式
+    if mode == "proxy":
+        return _preserve_edit_via_proxy(
+            main_image_path=main_image_path,
+            element_image_path=element_image_path,
+            prompt=full_prompt,
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir,
+            output_name=output_name,
+            proxy_base_url=proxy_base_url
+        )
+    else:
+        return _preserve_edit_via_direct(
+            main_image_path=main_image_path,
+            element_image_path=element_image_path,
+            prompt=full_prompt,
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir,
+            output_name=output_name
+        )
+
+
+def _preserve_edit_via_proxy(
+    main_image_path: str,
+    element_image_path: str,
+    prompt: str,
+    api_key: str,
+    model_name: str,
+    output_dir: str,
+    output_name: str = None,
+    proxy_base_url: str = None
+) -> Optional[str]:
+    """通过 AiProxy 代理进行高保真编辑"""
+    import requests
+    import base64
+    from pathlib import Path
+    
+    proxy_base_url = proxy_base_url or os.environ.get("AIPROXY_BASE_URL", "https://bot.bigjj.click/aiproxy")
+    
+    # 准备图片数据
+    images_data = []
+    
+    # 主图片
+    with open(main_image_path, 'rb') as f:
+        main_bytes = f.read()
+    suffix = Path(main_image_path).suffix.lower()
+    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+    main_mime = mime_map.get(suffix, "image/jpeg")
+    main_b64 = base64.b64encode(main_bytes).decode("utf-8")
+    images_data.append(f"data:{main_mime};base64,{main_b64}")
+    
+    # 元素图片 (可选)
+    if element_image_path:
+        with open(element_image_path, 'rb') as f:
+            elem_bytes = f.read()
+        suffix = Path(element_image_path).suffix.lower()
+        elem_mime = mime_map.get(suffix, "image/jpeg")
+        elem_b64 = base64.b64encode(elem_bytes).decode("utf-8")
+        images_data.append(f"data:{elem_mime};base64,{elem_b64}")
+    
+    # 调用 AiProxy
+    endpoint = f"{proxy_base_url.rstrip('/')}/generate"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    # 根据图片数量选择 payload 格式
+    if len(images_data) == 1:
+        payload = {
+            "prompt": prompt,
+            "model": model_name,
+            "image": images_data[0],
+            "safetySettings": [
+                { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH" }
+            ]
+        }
+    else:
+        payload = {
+            "prompt": prompt,
+            "model": model_name,
+            "images": images_data,
+            "safetySettings": [
+                { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH" }
+            ]
+        }
+    
+    try:
+        print(f"\n[AiProxy] 调用高保真编辑: {endpoint}")
+        print(f"[AiProxy] 模型: {model_name}")
+        print(f"[AiProxy] 图片数量: {len(images_data)}")
+        
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=180
+        )
+        
+        if response.status_code != 200:
+            print(f"[ERROR] AiProxy 调用失败: {response.status_code}")
+            print(f"        {response.text[:200]}")
+            return None
+        
+        result = response.json()
+        
+        # 提取图像数据
+        reply = result.get("reply", "")
+        from aiproxy_client import extract_image_from_reply
+        image_data = extract_image_from_reply(reply)
+        
+        if not image_data:
+            print("[ERROR] AiProxy 响应中未找到图像数据")
+            return None
+        
+        image_bytes, _ = image_data
+        
+        # 保存编辑后的图像
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
+        if output_name:
+            filename = output_name if output_name.endswith('.png') else f"{output_name}.png"
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"preserve_edit_{timestamp}.png"
+        
+        output_path = Path(output_dir) / filename
+        
+        with open(output_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        print(f"✅ 高保真编辑完成: {output_path}")
+        return str(output_path)
+        
+    except Exception as e:
+        print(f"[ERROR] 代理高保真编辑失败: {e}")
+        return None
+
+
+def _preserve_edit_via_direct(
+    main_image_path: str,
+    element_image_path: str,
+    prompt: str,
+    api_key: str,
+    model_name: str,
+    output_dir: str,
+    output_name: str = None
+) -> Optional[str]:
+    """直连 Gemini API 进行高保真编辑"""
+    from pathlib import Path
+    from PIL import Image
+    
+    try:
+        # 使用新的 google.genai SDK
+        from google import genai as new_genai
+        
+        client = new_genai.Client(api_key=api_key)
+        
+        # 加载图片
+        main_img = Image.open(main_image_path)
+        
+        # 构建内容
+        if element_image_path:
+            elem_img = Image.open(element_image_path)
+            contents = [main_img, elem_img, prompt]
+        else:
+            contents = [main_img, prompt]
+        
+        print(f"\n[Gemini] 调用高保真编辑 API...")
+        print(f"[Gemini] 模型: {model_name}")
+        
+        response = client.models.generate_content(
+            model=model_name,
+            contents=contents,
+        )
+        
+        # 提取生成的图像
+        for part in response.parts:
+            if hasattr(part, 'inline_data') and part.inline_data is not None:
+                # 保存编辑后的图像
+                Path(output_dir).mkdir(parents=True, exist_ok=True)
+                
+                if output_name:
+                    filename = output_name if output_name.endswith('.png') else f"{output_name}.png"
+                else:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"preserve_edit_{timestamp}.png"
+                
+                output_path = Path(output_dir) / filename
+                
+                image = part.as_image()
+                image.save(str(output_path))
+                
+                print(f"✅ 高保真编辑完成: {output_path}")
+                return str(output_path)
+            elif hasattr(part, 'text') and part.text:
+                print(f"[Gemini 响应] {part.text[:200]}...")
+        
+        print("[ERROR] API 未返回图像数据")
+        return None
+        
+    except ImportError:
+        # 回退到旧的 google.generativeai
+        print("[INFO] 使用旧版 google.generativeai SDK")
+        
+        _ensure_imports()
+        
+        if api_key:
+            genai.configure(api_key=api_key)
+        
+        import base64
+        
+        contents = []
+        
+        # 主图片
+        with open(main_image_path, 'rb') as f:
+            main_bytes = f.read()
+        suffix = Path(main_image_path).suffix.lower()
+        main_mime = "image/png" if suffix == ".png" else "image/jpeg"
+        main_b64 = base64.b64encode(main_bytes).decode("utf-8")
+        contents.append({
+            "inline_data": {"mime_type": main_mime, "data": main_b64}
+        })
+        
+        # 元素图片 (可选)
+        if element_image_path:
+            with open(element_image_path, 'rb') as f:
+                elem_bytes = f.read()
+            suffix = Path(element_image_path).suffix.lower()
+            elem_mime = "image/png" if suffix == ".png" else "image/jpeg"
+            elem_b64 = base64.b64encode(elem_bytes).decode("utf-8")
+            contents.append({
+                "inline_data": {"mime_type": elem_mime, "data": elem_b64}
+            })
+        
+        contents.append(prompt)
+        
+        try:
+            model = genai.GenerativeModel(model_name)
+            
+            print(f"\n[Gemini] 调用高保真编辑 API...")
+            response = model.generate_content(
+                contents,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=4096,
+                    temperature=0.7,
+                ),
+                safety_settings=[]
+            )
+            
+            if not response or not response.candidates:
+                print("[ERROR] 编辑失败: 无返回内容")
+                return None
+            
+            # 提取生成的图像
+            image_data = None
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'inline_data') and part.inline_data:
+                    if part.inline_data.mime_type.startswith('image/'):
+                        image_data = part.inline_data.data
+                        break
+            
+            if not image_data:
+                print("[ERROR] API 未返回图像数据")
+                return None
+            
+            # 保存编辑后的图像
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            
+            if output_name:
+                filename = output_name if output_name.endswith('.png') else f"{output_name}.png"
+            else:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"preserve_edit_{timestamp}.png"
+            
+            output_path = Path(output_dir) / filename
+            
+            if isinstance(image_data, str):
+                image_bytes = base64.b64decode(image_data)
+            else:
+                image_bytes = image_data
+            
+            with open(output_path, 'wb') as f:
+                f.write(image_bytes)
+            
+            print(f"✅ 高保真编辑完成: {output_path}")
+            return str(output_path)
+            
+        except Exception as e:
+            print(f"[ERROR] 编辑失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    except Exception as e:
+        print(f"[ERROR] 编辑失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+# =============================================================================
 # P0 功能: 高级合成 (Multi-Image Composite)
 # =============================================================================
 
