@@ -587,29 +587,35 @@ def edit_character_elements(
     edit_instruction: str,
     character_description: str,
     api_key: str,
-    model_name: str = DEFAULT_MODEL,
+    model_name: str = None,  # 默认使用 gemini-2.5-flash-image
     output_dir: str = "test_images",
     auto_cut: bool = True,
     style: str = "cinematic character",
     export_prompt: bool = False,
     subject_only: bool = False,
-    with_props: list = None
+    with_props: list = None,
+    mode: str = "proxy",  # 新增: 支持 proxy/direct
+    proxy_base_url: str = None
 ) -> Optional[str]:
     """
     编辑角色的元素(添加/移除/修改)
+    
+    使用 Gemini 2.5 Flash Image 模型进行图像编辑，保持原始风格、光照和透视效果。
     
     Args:
         source_image_path: 源图像路径
         edit_instruction: 编辑指令 ("add:xxx", "remove:xxx", "modify:xxx")
         character_description: 角色描述
-        api_key: Gemini API Key
-        model_name: 模型名称
+        api_key: API Key (代理模式为 proxy token，直连模式为 Gemini API Key)
+        model_name: 模型名称 (默认: gemini-2.5-flash-image)
         output_dir: 输出目录
         auto_cut: 是否自动切割
         style: 风格描述
         export_prompt: 是否导出提示词
         subject_only: 是否仅主体
         with_props: 配件列表
+        mode: API 调用模式 ("proxy" 或 "direct")
+        proxy_base_url: 代理服务地址 (仅 proxy 模式)
     
     Returns:
         编辑后图像的路径
@@ -619,14 +625,20 @@ def edit_character_elements(
     
     _ensure_imports()
     
+    # 使用正确的图像编辑模型
+    if not model_name:
+        model_name = "gemini-2.5-flash-image"
+    
     # 解析编辑指令
     edit_type, edit_detail = parse_edit_instruction(edit_instruction)
     
     print(f"\n[编辑模式] {edit_type.upper()}")
     print(f"  原图: {Path(source_image_path).name}")
     print(f"  操作: {edit_detail}")
+    print(f"  模型: {model_name}")
+    print(f"  调用模式: {mode.upper()}")
     
-    # 构建提示词
+    # 构建提示词 - 使用 Gemini 官方推荐的格式
     prompt = compose_edit_prompt(
         edit_type=edit_type,
         edit_instruction=edit_detail,
@@ -641,6 +653,144 @@ def edit_character_elements(
         print("="*70)
         return None
     
+    # 根据模式选择调用方式
+    if mode == "proxy":
+        return _edit_via_proxy(
+            source_image_path=source_image_path,
+            prompt=prompt,
+            edit_type=edit_type,
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir,
+            proxy_base_url=proxy_base_url
+        )
+    else:
+        return _edit_via_direct(
+            source_image_path=source_image_path,
+            prompt=prompt,
+            edit_type=edit_type,
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir
+        )
+
+
+def _edit_via_proxy(
+    source_image_path: str,
+    prompt: str,
+    edit_type: str,
+    api_key: str,
+    model_name: str,
+    output_dir: str,
+    proxy_base_url: str = None
+) -> Optional[str]:
+    """通过 AiProxy 代理进行图像编辑"""
+    import requests
+    import base64
+    from pathlib import Path
+    
+    proxy_base_url = proxy_base_url or os.environ.get("AIPROXY_BASE_URL", "https://bot.bigjj.click/aiproxy")
+    
+    # 加载源图像
+    with open(source_image_path, 'rb') as f:
+        image_bytes = f.read()
+    
+    # 判断 MIME 类型
+    suffix = Path(source_image_path).suffix.lower()
+    mime_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp"
+    }
+    mime_type = mime_map.get(suffix, "image/jpeg")
+    b64_image = base64.b64encode(image_bytes).decode("utf-8")
+    
+    # 调用 AiProxy
+    endpoint = f"{proxy_base_url.rstrip('/')}/generate"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "prompt": prompt,
+        "model": model_name,
+        "image": f"data:{mime_type};base64,{b64_image}",
+        "safetySettings": [
+            { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH" }
+        ]
+    }
+    
+    try:
+        print(f"\n[AiProxy] 调用图像编辑: {endpoint}")
+        print(f"[AiProxy] 模型: {model_name}")
+        
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=180
+        )
+        
+        if response.status_code != 200:
+            print(f"[ERROR] AiProxy 调用失败: {response.status_code}")
+            print(f"        {response.text[:200]}")
+            return None
+        
+        result = response.json()
+        
+        # 提取图像数据 (从 reply 中提取)
+        reply = result.get("reply", "")
+        
+        # 使用 aiproxy_client 中的提取函数
+        from aiproxy_client import extract_image_from_reply
+        image_data = extract_image_from_reply(reply)
+        
+        if not image_data:
+            print("[ERROR] AiProxy 响应中未找到图像数据")
+            return None
+        
+        image_bytes, _ = image_data
+        
+        # 保存编辑后的图像
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = Path(output_dir) / f"{edit_type}_edited_{timestamp}.png"
+        
+        with open(output_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        print(f"✅ 编辑完成: {output_path}")
+        return str(output_path)
+        
+    except Exception as e:
+        print(f"[ERROR] 代理编辑失败: {e}")
+        return None
+
+
+def _edit_via_direct(
+    source_image_path: str,
+    prompt: str,
+    edit_type: str,
+    api_key: str,
+    model_name: str,
+    output_dir: str
+) -> Optional[str]:
+    """直连 Gemini API 进行图像编辑"""
+    from pathlib import Path
+    from image_editor_utils import load_image_as_base64
+    
+    _ensure_imports()
+    
+    # 配置 API
+    if api_key:
+        genai.configure(api_key=api_key)
+    
     # 加载源图像
     image_b64 = load_image_as_base64(source_image_path)
     if image_b64 is None:
@@ -650,65 +800,103 @@ def edit_character_elements(
     mime_type = "image/png" if source_image_path.endswith('.png') else "image/jpeg"
     
     try:
-        # 调用 Gemini API
-        model = genai.GenerativeModel(model_name)
-        
-        contents = [
-            prompt,
-            {
-                "inline_data": {
-                    "mime_type": mime_type,
-                    "data": image_b64
-                }
-            }
-        ]
-        
-        generation_config = genai.types.GenerationConfig(
-            max_output_tokens=4096,
-            temperature=0.7,
-        )
-        
-        print("\n[进度] 调用 Gemini API 进行编辑...")
-        response = model.generate_content(
-            contents,
-            generation_config=generation_config,
-            safety_settings=[]
-        )
-        
-        if not response or not response.candidates:
-            print("[ERROR] 编辑失败: 无返回内容")
-            return None
-        
-        # 提取生成的图像
-        image_data = None
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, 'inline_data') and part.inline_data:
-                if part.inline_data.mime_type.startswith('image/'):
-                    image_data = part.inline_data.data
-                    break
-        
-        if not image_data:
+        # 调用 Gemini API - 使用新的 google.genai 客户端
+        # 注意: gemini-2.5-flash-image 需要使用新 SDK
+        try:
+            from google import genai as new_genai
+            from google.genai import types
+            from PIL import Image
+            
+            client = new_genai.Client(api_key=api_key)
+            image_input = Image.open(source_image_path)
+            
+            print(f"\n[Gemini] 调用图像编辑 API...")
+            print(f"[Gemini] 模型: {model_name}")
+            
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[prompt, image_input],
+            )
+            
+            # 提取生成的图像
+            for part in response.parts:
+                if hasattr(part, 'inline_data') and part.inline_data is not None:
+                    # 保存编辑后的图像
+                    Path(output_dir).mkdir(parents=True, exist_ok=True)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    output_path = Path(output_dir) / f"{edit_type}_edited_{timestamp}.png"
+                    
+                    image = part.as_image()
+                    image.save(str(output_path))
+                    
+                    print(f"✅ 编辑完成: {output_path}")
+                    return str(output_path)
+                elif hasattr(part, 'text') and part.text:
+                    print(f"[Gemini 响应] {part.text[:200]}...")
+            
             print("[ERROR] API 未返回图像数据")
             return None
-        
-        # 保存编辑后的图像
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = Path(output_dir) / f"{edit_type}_edited_{timestamp}.png"
-        
-        import struct
-        if isinstance(image_data, str):
-            import base64
-            image_bytes = base64.b64decode(image_data)
-        else:
-            image_bytes = image_data
-        
-        with open(output_path, 'wb') as f:
-            f.write(image_bytes)
-        
-        print(f"✅ 编辑完成: {output_path}")
-        return str(output_path)
+            
+        except ImportError:
+            # 回退到旧的 google.generativeai
+            print("[INFO] 使用旧版 google.generativeai SDK")
+            
+            model = genai.GenerativeModel(model_name)
+            
+            contents = [
+                prompt,
+                {
+                    "inline_data": {
+                        "mime_type": mime_type,
+                        "data": image_b64
+                    }
+                }
+            ]
+            
+            generation_config = genai.types.GenerationConfig(
+                max_output_tokens=4096,
+                temperature=0.7,
+            )
+            
+            print(f"\n[Gemini] 调用图像编辑 API...")
+            response = model.generate_content(
+                contents,
+                generation_config=generation_config,
+                safety_settings=[]
+            )
+            
+            if not response or not response.candidates:
+                print("[ERROR] 编辑失败: 无返回内容")
+                return None
+            
+            # 提取生成的图像
+            image_data = None
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'inline_data') and part.inline_data:
+                    if part.inline_data.mime_type.startswith('image/'):
+                        image_data = part.inline_data.data
+                        break
+            
+            if not image_data:
+                print("[ERROR] API 未返回图像数据")
+                return None
+            
+            # 保存编辑后的图像
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = Path(output_dir) / f"{edit_type}_edited_{timestamp}.png"
+            
+            if isinstance(image_data, str):
+                import base64
+                image_bytes = base64.b64decode(image_data)
+            else:
+                image_bytes = image_data
+            
+            with open(output_path, 'wb') as f:
+                f.write(image_bytes)
+            
+            print(f"✅ 编辑完成: {output_path}")
+            return str(output_path)
         
     except Exception as e:
         print(f"[ERROR] 编辑失败: {e}")
@@ -723,10 +911,12 @@ def refine_character_details(
     issue_description: str,
     character_description: str,
     api_key: str,
-    model_name: str = DEFAULT_MODEL,
+    model_name: str = None,  # 默认使用 gemini-2.5-flash-image
     output_dir: str = "test_images",
     auto_cut: bool = True,
-    export_prompt: bool = False
+    export_prompt: bool = False,
+    mode: str = "proxy",  # 新增: 支持 proxy/direct
+    proxy_base_url: str = None
 ) -> Optional[str]:
     """
     优化角色的特定细节部位(语义遮盖)
@@ -736,11 +926,13 @@ def refine_character_details(
         detail_part: 要优化的部位 (face/hands/pose/custom)
         issue_description: 问题描述
         character_description: 角色描述
-        api_key: Gemini API Key
-        model_name: 模型名称
+        api_key: API Key (代理模式为 proxy token，直连模式为 Gemini API Key)
+        model_name: 模型名称 (默认: gemini-2.5-flash-image)
         output_dir: 输出目录
         auto_cut: 是否自动切割
         export_prompt: 是否导出提示词
+        mode: API 调用模式 ("proxy" 或 "direct")
+        proxy_base_url: 代理服务地址 (仅 proxy 模式)
     
     Returns:
         优化后图像的路径
@@ -749,6 +941,10 @@ def refine_character_details(
     from image_editor_utils import compose_refine_prompt, load_image_as_base64
     
     _ensure_imports()
+    
+    # 使用正确的图像编辑模型
+    if not model_name:
+        model_name = "gemini-2.5-flash-image"
     
     # 构建部位标签
     part_labels = {
@@ -764,6 +960,8 @@ def refine_character_details(
     print(f"\n[细节优化] {detail_part.upper()}")
     print(f"  原图: {Path(source_image_path).name}")
     print(f"  问题: {issue_description}")
+    print(f"  模型: {model_name}")
+    print(f"  调用模式: {mode.upper()}")
     
     # 构建提示词
     prompt = compose_refine_prompt(
@@ -780,80 +978,26 @@ def refine_character_details(
         print("="*70)
         return None
     
-    # 加载源图像
-    image_b64 = load_image_as_base64(source_image_path)
-    if image_b64 is None:
-        print(f"[ERROR] 无法加载源图像: {source_image_path}")
-        return None
-    
-    mime_type = "image/png" if source_image_path.endswith('.png') else "image/jpeg"
-    
-    try:
-        # 调用 Gemini API
-        model = genai.GenerativeModel(model_name)
-        
-        contents = [
-            prompt,
-            {
-                "inline_data": {
-                    "mime_type": mime_type,
-                    "data": image_b64
-                }
-            }
-        ]
-        
-        generation_config = genai.types.GenerationConfig(
-            max_output_tokens=4096,
-            temperature=0.7,
+    # 根据模式选择调用方式 (复用 edit 函数的代理/直连逻辑)
+    if mode == "proxy":
+        return _edit_via_proxy(
+            source_image_path=source_image_path,
+            prompt=prompt,
+            edit_type=f"refined_{detail_part}",
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir,
+            proxy_base_url=proxy_base_url
         )
-        
-        print("\n[进度] 调用 Gemini API 进行优化...")
-        response = model.generate_content(
-            contents,
-            generation_config=generation_config,
-            safety_settings=[]
+    else:
+        return _edit_via_direct(
+            source_image_path=source_image_path,
+            prompt=prompt,
+            edit_type=f"refined_{detail_part}",
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir
         )
-        
-        if not response or not response.candidates:
-            print("[ERROR] 优化失败: 无返回内容")
-            return None
-        
-        # 提取生成的图像
-        image_data = None
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, 'inline_data') and part.inline_data:
-                if part.inline_data.mime_type.startswith('image/'):
-                    image_data = part.inline_data.data
-                    break
-        
-        if not image_data:
-            print("[ERROR] API 未返回图像数据")
-            return None
-        
-        # 保存优化后的图像
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = Path(output_dir) / f"refined_{detail_part}_{timestamp}.png"
-        
-        import struct
-        if isinstance(image_data, str):
-            import base64
-            image_bytes = base64.b64decode(image_data)
-        else:
-            image_bytes = image_data
-        
-        with open(output_path, 'wb') as f:
-            f.write(image_bytes)
-        
-        print(f"✅ 优化完成: {output_path}")
-        return str(output_path)
-        
-    except Exception as e:
-        print(f"[ERROR] 优化失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
 
 
 # =============================================================================
@@ -865,10 +1009,12 @@ def style_transfer_character(
     style_preset: str,
     character_description: str,
     api_key: str,
-    model_name: str = DEFAULT_MODEL,
+    model_name: str = None,  # 默认使用 gemini-2.5-flash-image
     output_dir: str = "test_images",
     custom_style: Optional[str] = None,
-    preserve_details: bool = True
+    preserve_details: bool = True,
+    mode: str = "proxy",  # 新增: 支持 proxy/direct
+    proxy_base_url: str = None
 ) -> Optional[str]:
     """
     应用风格转换到角色图像
@@ -877,11 +1023,13 @@ def style_transfer_character(
         source_image_path: 源图像路径
         style_preset: 风格预设 (anime/cinematic/oil-painting/watercolor/comic/3d)
         character_description: 角色描述
-        api_key: Gemini API Key
-        model_name: 模型名称
+        api_key: API Key (代理模式为 proxy token，直连模式为 Gemini API Key)
+        model_name: 模型名称 (默认: gemini-2.5-flash-image)
         output_dir: 输出目录
         custom_style: 自定义风格描述 (覆盖预设)
         preserve_details: 是否保留原始细节
+        mode: API 调用模式 ("proxy" 或 "direct")
+        proxy_base_url: 代理服务地址 (仅 proxy 模式)
     
     Returns:
         风格转换后图像的路径
@@ -890,6 +1038,10 @@ def style_transfer_character(
     from image_editor_utils import compose_style_transfer_prompt, load_image_as_base64
     
     _ensure_imports()
+    
+    # 使用正确的图像编辑模型
+    if not model_name:
+        model_name = "gemini-2.5-flash-image"
     
     # 风格预设映射
     style_presets = {
@@ -907,6 +1059,8 @@ def style_transfer_character(
     print(f"\n[风格转换模式]")
     print(f"  源图: {Path(source_image_path).name}")
     print(f"  风格: {style_preset}" + (f" (自定义)" if custom_style else ""))
+    print(f"  模型: {model_name}")
+    print(f"  调用模式: {mode.upper()}")
     
     # 构建提示词
     prompt = compose_style_transfer_prompt(
@@ -918,77 +1072,374 @@ def style_transfer_character(
     if preserve_details:
         prompt += "\n\nImportant: Preserve all anatomical details, proportions, and character identity while applying the style."
     
-    # 加载源图像
-    image_b64 = load_image_as_base64(source_image_path)
-    if image_b64 is None:
-        print(f"[ERROR] 无法加载源图像: {source_image_path}")
+    # 根据模式选择调用方式 (复用 edit 函数的代理/直连逻辑)
+    if mode == "proxy":
+        return _edit_via_proxy(
+            source_image_path=source_image_path,
+            prompt=prompt,
+            edit_type=f"styled_{style_preset}",
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir,
+            proxy_base_url=proxy_base_url
+        )
+    else:
+        return _edit_via_direct(
+            source_image_path=source_image_path,
+            prompt=prompt,
+            edit_type=f"styled_{style_preset}",
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir
+        )
+
+
+# =============================================================================
+# P0 功能: 高级合成 (Multi-Image Composite)
+# =============================================================================
+
+def composite_images(
+    image_paths: list,
+    instruction: str,
+    api_key: str,
+    model_name: str = None,
+    output_dir: str = "test_images",
+    output_name: str = None,
+    mode: str = "proxy",
+    proxy_base_url: str = None
+) -> Optional[str]:
+    """
+    组合多张图片创建新场景
+    
+    用于换衣服、换配饰、创意拼贴、产品模型等高级合成场景。
+    模型会保持原始图片的风格、光照和透视效果。
+    
+    Args:
+        image_paths: 要合成的图片路径列表 (至少2张)
+        instruction: 合成指令，描述如何组合这些图片
+        api_key: API Key (代理模式为 proxy token，直连模式为 Gemini API Key)
+        model_name: 模型名称 (默认: gemini-2.5-flash-image)
+        output_dir: 输出目录
+        output_name: 输出文件名 (可选，默认自动生成)
+        mode: API 调用模式 ("proxy" 或 "direct")
+        proxy_base_url: 代理服务地址 (仅 proxy 模式)
+    
+    Returns:
+        合成后图像的路径
+    
+    示例:
+        # 换衣服
+        composite_images(
+            image_paths=["model.png", "dress.png"],
+            instruction="让模特穿上这件裙子，保持自然的光影效果"
+        )
+        
+        # 换配饰
+        composite_images(
+            image_paths=["person.png", "hat.png", "bag.png"],
+            instruction="给人物戴上帽子并拿上包包"
+        )
+    """
+    from pathlib import Path
+    
+    _ensure_imports()
+    
+    if not model_name:
+        model_name = "gemini-2.5-flash-image"
+    
+    if len(image_paths) < 2:
+        print("[ERROR] 合成需要至少2张图片")
         return None
     
-    mime_type = "image/png" if source_image_path.endswith('.png') else "image/jpeg"
+    print(f"\n[高级合成]")
+    print(f"  输入图片: {len(image_paths)} 张")
+    for i, p in enumerate(image_paths, 1):
+        print(f"    [{i}] {Path(p).name}")
+    print(f"  指令: {instruction[:80]}{'...' if len(instruction) > 80 else ''}")
+    print(f"  模型: {model_name}")
+    print(f"  调用模式: {mode.upper()}")
+    
+    # 根据模式选择调用方式
+    if mode == "proxy":
+        return _composite_via_proxy(
+            image_paths=image_paths,
+            instruction=instruction,
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir,
+            output_name=output_name,
+            proxy_base_url=proxy_base_url
+        )
+    else:
+        return _composite_via_direct(
+            image_paths=image_paths,
+            instruction=instruction,
+            api_key=api_key,
+            model_name=model_name,
+            output_dir=output_dir,
+            output_name=output_name
+        )
+
+
+def _composite_via_proxy(
+    image_paths: list,
+    instruction: str,
+    api_key: str,
+    model_name: str,
+    output_dir: str,
+    output_name: str = None,
+    proxy_base_url: str = None
+) -> Optional[str]:
+    """通过 AiProxy 代理进行多图合成"""
+    import requests
+    import base64
+    from pathlib import Path
+    
+    proxy_base_url = proxy_base_url or os.environ.get("AIPROXY_BASE_URL", "https://bot.bigjj.click/aiproxy")
+    
+    # 准备多张图片的 base64 数据
+    images_data = []
+    for img_path in image_paths:
+        with open(img_path, 'rb') as f:
+            image_bytes = f.read()
+        
+        suffix = Path(img_path).suffix.lower()
+        mime_map = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp"
+        }
+        mime_type = mime_map.get(suffix, "image/jpeg")
+        b64_image = base64.b64encode(image_bytes).decode("utf-8")
+        images_data.append({
+            "mime_type": mime_type,
+            "data": f"data:{mime_type};base64,{b64_image}"
+        })
+    
+    # 调用 AiProxy - 多图合成
+    endpoint = f"{proxy_base_url.rstrip('/')}/generate"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    # 构建 payload - 多图合成需要特殊格式
+    # AiProxy 需要支持 images 数组或多个 image 字段
+    payload = {
+        "prompt": instruction,
+        "model": model_name,
+        "images": [img["data"] for img in images_data],  # 多图数组
+        "safetySettings": [
+            { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH" },
+            { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH" }
+        ]
+    }
     
     try:
-        # 调用 Gemini API
-        model = genai.GenerativeModel(model_name)
+        print(f"\n[AiProxy] 调用多图合成: {endpoint}")
+        print(f"[AiProxy] 模型: {model_name}")
+        print(f"[AiProxy] 图片数量: {len(images_data)}")
         
-        contents = [
-            prompt,
-            {
-                "inline_data": {
-                    "mime_type": mime_type,
-                    "data": image_b64
-                }
-            }
-        ]
-        
-        generation_config = genai.types.GenerationConfig(
-            max_output_tokens=4096,
-            temperature=0.7,
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=180
         )
         
-        print("\n[进度] 调用 Gemini API 进行风格转换...")
-        response = model.generate_content(
-            contents,
-            generation_config=generation_config,
-            safety_settings=[]
-        )
-        
-        if not response or not response.candidates:
-            print("[ERROR] 风格转换失败: 无返回内容")
+        if response.status_code != 200:
+            print(f"[ERROR] AiProxy 调用失败: {response.status_code}")
+            print(f"        {response.text[:200]}")
             return None
         
-        # 提取生成的图像
-        image_data = None
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, 'inline_data') and part.inline_data:
-                if part.inline_data.mime_type.startswith('image/'):
-                    image_data = part.inline_data.data
-                    break
+        result = response.json()
+        
+        # 提取图像数据
+        reply = result.get("reply", "")
+        from aiproxy_client import extract_image_from_reply
+        image_data = extract_image_from_reply(reply)
         
         if not image_data:
-            print("[ERROR] API 未返回图像数据")
+            print("[ERROR] AiProxy 响应中未找到图像数据")
             return None
         
-        # 保存风格转换后的图像
+        image_bytes, _ = image_data
+        
+        # 保存合成后的图像
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = Path(output_dir) / f"styled_{style_preset}_{timestamp}.png"
-        
-        import struct
-        if isinstance(image_data, str):
-            import base64
-            image_bytes = base64.b64decode(image_data)
+        if output_name:
+            filename = output_name if output_name.endswith('.png') else f"{output_name}.png"
         else:
-            image_bytes = image_data
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"composite_{timestamp}.png"
+        
+        output_path = Path(output_dir) / filename
         
         with open(output_path, 'wb') as f:
             f.write(image_bytes)
         
-        print(f"✅ 风格转换完成: {output_path}")
+        print(f"✅ 合成完成: {output_path}")
         return str(output_path)
         
     except Exception as e:
-        print(f"[ERROR] 风格转换失败: {e}")
+        print(f"[ERROR] 代理合成失败: {e}")
+        return None
+
+
+def _composite_via_direct(
+    image_paths: list,
+    instruction: str,
+    api_key: str,
+    model_name: str,
+    output_dir: str,
+    output_name: str = None
+) -> Optional[str]:
+    """直连 Gemini API 进行多图合成"""
+    from pathlib import Path
+    from PIL import Image
+    
+    try:
+        # 使用新的 google.genai SDK
+        from google import genai as new_genai
+        
+        client = new_genai.Client(api_key=api_key)
+        
+        # 加载所有图片
+        images = []
+        for img_path in image_paths:
+            img = Image.open(img_path)
+            images.append(img)
+        
+        # 构建内容: [image1, image2, ..., instruction]
+        contents = images + [instruction]
+        
+        print(f"\n[Gemini] 调用多图合成 API...")
+        print(f"[Gemini] 模型: {model_name}")
+        
+        response = client.models.generate_content(
+            model=model_name,
+            contents=contents,
+        )
+        
+        # 提取生成的图像
+        for part in response.parts:
+            if hasattr(part, 'inline_data') and part.inline_data is not None:
+                # 保存合成后的图像
+                Path(output_dir).mkdir(parents=True, exist_ok=True)
+                
+                if output_name:
+                    filename = output_name if output_name.endswith('.png') else f"{output_name}.png"
+                else:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"composite_{timestamp}.png"
+                
+                output_path = Path(output_dir) / filename
+                
+                image = part.as_image()
+                image.save(str(output_path))
+                
+                print(f"✅ 合成完成: {output_path}")
+                return str(output_path)
+            elif hasattr(part, 'text') and part.text:
+                print(f"[Gemini 响应] {part.text[:200]}...")
+        
+        print("[ERROR] API 未返回图像数据")
+        return None
+        
+    except ImportError:
+        # 回退到旧的 google.generativeai
+        print("[INFO] 使用旧版 google.generativeai SDK")
+        
+        _ensure_imports()
+        
+        if api_key:
+            genai.configure(api_key=api_key)
+        
+        # 加载图片并转为 base64
+        import base64
+        
+        contents = []
+        for img_path in image_paths:
+            with open(img_path, 'rb') as f:
+                image_bytes = f.read()
+            
+            suffix = Path(img_path).suffix.lower()
+            mime_type = "image/png" if suffix == ".png" else "image/jpeg"
+            b64_image = base64.b64encode(image_bytes).decode("utf-8")
+            
+            contents.append({
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": b64_image
+                }
+            })
+        
+        contents.append(instruction)
+        
+        try:
+            model = genai.GenerativeModel(model_name)
+            
+            print(f"\n[Gemini] 调用多图合成 API...")
+            response = model.generate_content(
+                contents,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=4096,
+                    temperature=0.7,
+                ),
+                safety_settings=[]
+            )
+            
+            if not response or not response.candidates:
+                print("[ERROR] 合成失败: 无返回内容")
+                return None
+            
+            # 提取生成的图像
+            image_data = None
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'inline_data') and part.inline_data:
+                    if part.inline_data.mime_type.startswith('image/'):
+                        image_data = part.inline_data.data
+                        break
+            
+            if not image_data:
+                print("[ERROR] API 未返回图像数据")
+                return None
+            
+            # 保存合成后的图像
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            
+            if output_name:
+                filename = output_name if output_name.endswith('.png') else f"{output_name}.png"
+            else:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"composite_{timestamp}.png"
+            
+            output_path = Path(output_dir) / filename
+            
+            if isinstance(image_data, str):
+                image_bytes = base64.b64decode(image_data)
+            else:
+                image_bytes = image_data
+            
+            with open(output_path, 'wb') as f:
+                f.write(image_bytes)
+            
+            print(f"✅ 合成完成: {output_path}")
+            return str(output_path)
+            
+        except Exception as e:
+            print(f"[ERROR] 合成失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    except Exception as e:
+        print(f"[ERROR] 合成失败: {e}")
         import traceback
         traceback.print_exc()
         return None

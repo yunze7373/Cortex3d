@@ -356,9 +356,11 @@ Generate ONE clean panel of the {view_name} view."""
         
         result = response.json()
         
-        # 提取文本响应
+        # 提取文本响应 - AiProxy 返回的格式是 {"reply": "..."}
         if isinstance(result, dict):
-            if "text" in result:
+            if "reply" in result:
+                return result["reply"]
+            elif "text" in result:
                 return result["text"]
             elif "response" in result:
                 return result["response"]
@@ -671,7 +673,7 @@ Generate ONE clean panel of the {view_name} view."""
         
         payload = {
             "prompt": prompt,
-            "model": "models/gemini-2.0-flash-exp-image-generation",  # 图生成模型
+            "model": "gemini-2.5-flash-image",  # 图生成模型 (支持图像输入和输出)
             "image": f"data:{mime_type};base64,{b64_image}",
             "image_size": "2K",
             "aspect_ratio": "1:1",  # 单视角用方形
@@ -699,26 +701,38 @@ Generate ONE clean panel of the {view_name} view."""
             
             result = response.json()
             
-            # 提取图像数据
-            image_data = None
-            if isinstance(result, dict):
-                if "image" in result:
-                    image_data = result["image"]
-                elif "data" in result:
-                    image_data = result["data"]
-                elif "base64" in result:
-                    image_data = result["base64"]
+            # AiProxy 返回格式: {"reply": "...html-image-hidden..."}
+            # 图像数据以 HTML img 标签内的 base64 形式嵌入在 reply 字段中
+            reply = result.get("reply", "")
             
-            if not image_data:
-                self._log(f"[补全] AiProxy 响应中未找到图片")
+            if not reply:
+                self._log(f"[补全] AiProxy 响应中无 reply 字段")
                 return None
             
-            # 解码 base64 图像
-            if image_data.startswith("data:"):
-                # 去除 data URL 前缀
-                image_data = image_data.split(",", 1)[1]
-            
-            image_bytes = base64.b64decode(image_data)
+            # 使用 aiproxy_client 的辅助函数提取图像
+            try:
+                from aiproxy_client import extract_image_from_reply
+                image_result = extract_image_from_reply(reply)
+                
+                if not image_result:
+                    self._log(f"[补全] AiProxy 响应中未找到图片数据")
+                    return None
+                
+                image_bytes, mime_type = image_result
+                self._log(f"[补全] 成功提取图像: {len(image_bytes)} bytes, {mime_type}")
+                
+            except ImportError:
+                # 如果无法导入 aiproxy_client，尝试内联解析
+                import re as regex
+                pattern = r'data:(image/[^;]+);base64,([A-Za-z0-9+/=]+)'
+                match = regex.search(pattern, reply)
+                
+                if not match:
+                    self._log(f"[补全] AiProxy 响应中未找到图片数据 (内联解析)")
+                    return None
+                
+                b64_data = match.group(2)
+                image_bytes = base64.b64decode(b64_data)
             
             # 保存文件
             filename = self._get_output_filename(reference_image_path, missing_view, asset_id)
@@ -748,29 +762,65 @@ Generate ONE clean panel of the {view_name} view."""
         ref_img = Image.open(reference_image_path)
         
         try:
-            model = genai.GenerativeModel("models/gemini-2.0-flash-exp-image-generation")
-            response = model.generate_content(
-                [prompt, ref_img],
-                generation_config=genai.GenerationConfig(
-                    response_modalities=["image", "text"]
-                )
+            # 尝试使用新的 google.genai SDK
+            from google import genai as new_genai
+            
+            client = new_genai.Client(api_key=self.api_key)
+            
+            response = client.models.generate_content(
+                model="gemini-2.5-flash-image",  # 使用 2.5 flash image 模型
+                contents=[ref_img, prompt],
             )
             
             # 提取生成的图片
             for part in response.parts:
-                if hasattr(part, 'inline_data') and part.inline_data:
+                if hasattr(part, 'inline_data') and part.inline_data is not None:
                     filename = self._get_output_filename(reference_image_path, missing_view, asset_id)
                     output_path = Path(output_dir) / filename
                     output_path.parent.mkdir(parents=True, exist_ok=True)
                     
-                    with open(output_path, 'wb') as f:
-                        f.write(part.inline_data.data)
+                    # 使用 as_image() 方法保存
+                    image = part.as_image()
+                    image.save(str(output_path))
                     
                     self._log(f"[补全] 生成成功: {output_path}")
                     return str(output_path)
             
             self._log(f"[补全] 响应中未找到图片")
             return None
+            
+        except ImportError:
+            # 回退到旧版 SDK
+            self._log(f"[INFO] 使用旧版 google.generativeai SDK")
+            
+            try:
+                model = genai.GenerativeModel("gemini-2.0-flash-exp-image-generation")
+                response = model.generate_content(
+                    [prompt, ref_img],
+                    generation_config=genai.GenerationConfig(
+                        response_modalities=["image", "text"]
+                    )
+                )
+                
+                # 提取生成的图片
+                for part in response.parts:
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        filename = self._get_output_filename(reference_image_path, missing_view, asset_id)
+                        output_path = Path(output_dir) / filename
+                        output_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        with open(output_path, 'wb') as f:
+                            f.write(part.inline_data.data)
+                        
+                        self._log(f"[补全] 生成成功: {output_path}")
+                        return str(output_path)
+                
+                self._log(f"[补全] 响应中未找到图片")
+                return None
+                
+            except Exception as e:
+                self._log(f"[补全] 旧版 SDK 生成失败: {e}")
+                return None
             
         except Exception as e:
             self._log(f"[补全] 生成失败: {e}")

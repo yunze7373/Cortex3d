@@ -695,6 +695,39 @@ def main():
         help="风格转换时是否保留原始细节 (默认: 是)"
     )
     
+    # =========================================================================
+    # P0 高优先级功能 - 高级合成：组合多张图片
+    # =========================================================================
+    parser.add_argument(
+        "--mode-composite",
+        action="store_true",
+        dest="mode_composite",
+        help="激活合成模式: 组合多张图片创建新场景。用于换衣服、换配饰、创意拼贴等"
+    )
+    
+    parser.add_argument(
+        "--composite-images",
+        nargs="+",
+        dest="composite_images",
+        metavar="IMAGE",
+        help="要合成的多张图片路径。例: model.png dress.png hat.png"
+    )
+    
+    parser.add_argument(
+        "--composite-instruction",
+        type=str,
+        dest="composite_instruction",
+        help="合成指令。例: '让第二张图的人穿上第一张图的裙子' 或 'Put the hat from image 2 on the person in image 1'"
+    )
+    
+    parser.add_argument(
+        "--composite-output-name",
+        type=str,
+        dest="composite_output_name",
+        default=None,
+        help="合成输出文件名 (可选，默认自动生成)"
+    )
+    
     # 在解析参数前，检查常见的参数错误并提供友好提示
     friendly_hint_shown = False
     for arg in sys.argv[1:]:
@@ -799,12 +832,13 @@ def main():
         print(f"  └─ 源图像: {args.from_edited}")
         print(f"  └─ 编辑操作: {args.edit_elements}")
         print(f"  └─ 输出目录: {args.output}")
+        print(f"  └─ 调用模式: {args.mode.upper()}")
         print("")
         
         # 导入编辑函数
         from gemini_generator import edit_character_elements
         
-        # 执行编辑
+        # 执行编辑 (遵守 proxy/direct 设置)
         character_desc = args.character if args.character else "a character"
         try:
             output_path = edit_character_elements(
@@ -812,8 +846,9 @@ def main():
                 edit_instruction=args.edit_elements,
                 character_description=character_desc,
                 api_key=args.token,
-                model_name=args.model,
-                output_dir=args.output
+                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                output_dir=args.output,
+                mode=args.mode  # 传入 proxy/direct 模式
             )
             
             if output_path:
@@ -857,12 +892,13 @@ def main():
         if args.detail_issue:
             print(f"  └─ 问题描述: {args.detail_issue}")
         print(f"  └─ 输出目录: {args.output}")
+        print(f"  └─ 调用模式: {args.mode.upper()}")
         print("")
         
         # 导入细节修复函数
         from gemini_generator import refine_character_details
         
-        # 执行细节修复
+        # 执行细节修复 (遵守 proxy/direct 设置)
         character_desc = args.character if args.character else "a character"
         detail_issue = args.detail_issue if args.detail_issue else "please improve the quality"
         
@@ -873,8 +909,9 @@ def main():
                 issue_description=detail_issue,
                 character_description=character_desc,
                 api_key=args.token,
-                model_name=args.model,
-                output_dir=args.output
+                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                output_dir=args.output,
+                mode=args.mode  # 传入 proxy/direct 模式
             )
             
             if output_path:
@@ -920,12 +957,13 @@ def main():
         print(f"  └─ 风格: {style_preset}")
         print(f"  └─ 保留细节: {'是' if args.preserve_details else '否'}")
         print(f"  └─ 输出目录: {args.output}")
+        print(f"  └─ 调用模式: {args.mode.upper()}")
         print("")
         
         # 导入风格转换函数
         from gemini_generator import style_transfer_character
         
-        # 执行风格转换
+        # 执行风格转换 (遵守 proxy/direct 设置)
         character_desc = args.character if args.character else "a character"
         try:
             output_path = style_transfer_character(
@@ -933,10 +971,11 @@ def main():
                 style_preset=style_preset if not args.custom_style else "custom",
                 character_description=character_desc,
                 api_key=args.token,
-                model_name=args.model,
+                model_name=args.model if args.model else "gemini-2.5-flash-image",
                 output_dir=args.output,
                 custom_style=args.custom_style if args.custom_style else None,
-                preserve_details=args.preserve_details
+                preserve_details=args.preserve_details,
+                mode=args.mode  # 传入 proxy/direct 模式
             )
             
             if output_path:
@@ -949,6 +988,79 @@ def main():
             sys.exit(0)
         except Exception as e:
             print(f"[ERROR] 风格转换过程出错: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    
+    # =========================================================================
+    # 高级合成模式：组合多张图片创建新场景
+    # =========================================================================
+    if args.mode_composite:
+        print("[高级合成模式]")
+        print("  用途: 换衣服、换配饰、创意拼贴、产品模型等")
+        
+        # 验证必需参数
+        if not args.composite_images or len(args.composite_images) < 2:
+            print("[ERROR] --mode-composite 需要 --composite-images 参数（至少2张图片）")
+            print("        示例: --composite-images model.png dress.png")
+            sys.exit(1)
+        
+        if not args.composite_instruction:
+            print("[ERROR] --mode-composite 需要 --composite-instruction 参数（合成指令）")
+            print("        示例: --composite-instruction '让模特穿上这件裙子'")
+            sys.exit(1)
+        
+        # 验证所有图片存在
+        image_paths = []
+        for img_path in args.composite_images:
+            p = Path(img_path)
+            if not p.exists():
+                # 尝试在常见目录查找
+                for search_dir in [Path("."), Path("test_images"), Path("reference_images"), Path(args.output)]:
+                    candidate = search_dir / img_path
+                    if candidate.exists():
+                        p = candidate
+                        break
+            
+            if not p.exists():
+                print(f"[ERROR] 图片不存在: {img_path}")
+                sys.exit(1)
+            
+            image_paths.append(str(p))
+        
+        print(f"\n  └─ 输入图片 ({len(image_paths)} 张):")
+        for i, img in enumerate(image_paths, 1):
+            print(f"      [{i}] {Path(img).name}")
+        print(f"  └─ 合成指令: {args.composite_instruction}")
+        print(f"  └─ 输出目录: {args.output}")
+        print(f"  └─ 调用模式: {args.mode.upper()}")
+        print("")
+        
+        # 导入合成函数
+        from gemini_generator import composite_images
+        
+        # 执行合成 (遵守 proxy/direct 设置)
+        try:
+            output_path = composite_images(
+                image_paths=image_paths,
+                instruction=args.composite_instruction,
+                api_key=args.token,
+                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                output_dir=args.output,
+                output_name=args.composite_output_name,
+                mode=args.mode
+            )
+            
+            if output_path:
+                print(f"\n✅ 合成完成！")
+                print(f"   输出: {output_path}")
+            else:
+                print(f"\n❌ 合成失败，请检查日志")
+                sys.exit(1)
+            
+            sys.exit(0)
+        except Exception as e:
+            print(f"[ERROR] 合成过程出错: {e}")
             import traceback
             traceback.print_exc()
             sys.exit(1)
