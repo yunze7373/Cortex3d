@@ -193,6 +193,43 @@ def main():
         print(f"  图片: {args.image}")
         print(f"  模式: {args.mode.upper()}")
     
+    # 包装验证逻辑，添加优雅的错误处理
+    try:
+        _run_validation(args, validator, image_path, expected_views)
+    except Exception as e:
+        error_msg = str(e)
+        print(f"\n" + "─" * 50)
+        print("⚠️ 验证过程出错")
+        print("─" * 50)
+        
+        # 根据错误类型给出友好提示
+        if "API_KEY_INVALID" in error_msg or "API key not valid" in error_msg:
+            print("  原因: API Key 无效或未配置")
+            if args.mode == "proxy":
+                print("  解决: 检查 --token 参数或 AiProxy 服务配置")
+            else:
+                print("  解决: 设置有效的 GEMINI_API_KEY 环境变量")
+        elif "quota" in error_msg.lower() or "rate" in error_msg.lower():
+            print("  原因: API 配额耗尽或请求频率过高")
+            print("  解决: 稍后重试，或升级 API 配额")
+        elif "timeout" in error_msg.lower() or "connection" in error_msg.lower():
+            print("  原因: 网络连接超时")
+            print("  解决: 检查网络连接，或稍后重试")
+        elif "permission" in error_msg.lower() or "403" in error_msg:
+            print("  原因: 权限不足")
+            print("  解决: 检查 API Key 是否有正确的权限")
+        else:
+            # 通用错误，显示简化信息
+            print(f"  错误: {error_msg[:200]}")
+            if len(error_msg) > 200:
+                print("  (错误信息已截断)")
+        
+        sys.exit(1)
+
+
+def _run_validation(args, validator, image_path, expected_views):
+    """执行实际的验证逻辑（从 main 中提取，便于错误处理）"""
+    
     # 仅分析模式
     if args.analyze_only:
         if not args.quiet:
