@@ -123,6 +123,13 @@ def main():
     )
     
     parser.add_argument(
+        "--mode",
+        choices=["proxy", "direct"],
+        default="proxy",
+        help="API 调用模式: proxy (通过 AiProxy 代理) 或 direct (直连 Google API)。默认: proxy"
+    )
+    
+    parser.add_argument(
         "--quiet", "-q",
         action="store_true",
         help="安静模式，减少输出"
@@ -172,10 +179,11 @@ def main():
         print("       使用 --token 参数或设置 GEMINI_API_KEY 环境变量")
         sys.exit(1)
     
-    # 创建验证器
+    # 创建验证器 (遵守 proxy/direct 设置)
     validator = ViewValidator(
         api_key=api_key,
-        verbose=not args.quiet
+        verbose=not args.quiet,
+        mode=args.mode
     )
     
     if not args.quiet:
@@ -183,6 +191,7 @@ def main():
         print("🔍 Cortex3d 视角验证工具")
         print("=" * 60)
         print(f"  图片: {args.image}")
+        print(f"  模式: {args.mode.upper()}")
     
     # 仅分析模式
     if args.analyze_only:

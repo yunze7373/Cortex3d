@@ -1515,9 +1515,15 @@ def main():
             
             print(f"  └─ 资源 ID: {asset_id}")
             print(f"  └─ 期望视角: {expected_views}")
+            print(f"  └─ 验证模式: {args.mode.upper()}")
             
-            # 创建验证器
-            validator = ViewValidator(api_key=args.token, verbose=True)
+            # 创建验证器 (遵守 proxy/direct 设置)
+            validator = ViewValidator(
+                api_key=args.token,
+                verbose=True,
+                mode=args.mode,
+                proxy_base_url=None  # 使用默认的 AIPROXY_BASE_URL
+            )
             
             if args.validate_only:
                 # 仅验证模式

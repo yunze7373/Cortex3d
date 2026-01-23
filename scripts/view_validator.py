@@ -232,30 +232,46 @@ Generate ONE clean panel of the {view_name} view."""
         api_key: str = None,
         model_name: str = "gemini-2.0-flash",
         max_retries: int = 3,
-        verbose: bool = True
+        verbose: bool = True,
+        mode: str = "proxy",
+        proxy_base_url: str = None
     ):
         """
         初始化验证器
         
         Args:
-            api_key: Gemini API 密钥
+            api_key: Gemini API 密钥 (direct 模式) 或 AiProxy 令牌 (proxy 模式)
             model_name: 用于分析的模型
             max_retries: 补全的最大重试次数
             verbose: 是否输出详细日志
+            mode: API 调用模式 ("proxy" 或 "direct")
+            proxy_base_url: 代理服务地址 (仅 proxy 模式)
         """
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         self.model_name = model_name
         self.max_retries = max_retries
         self.verbose = verbose
-        
-        if not GENAI_AVAILABLE:
-            raise ImportError("需要安装 google-generativeai: pip install google-generativeai")
+        self.mode = mode
+        self.proxy_base_url = proxy_base_url or os.environ.get("AIPROXY_BASE_URL", "https://bot.bigjj.click/aiproxy")
         
         if not PIL_AVAILABLE:
             raise ImportError("需要安装 Pillow: pip install Pillow")
         
-        if self.api_key:
-            genai.configure(api_key=self.api_key)
+        # 只有 direct 模式才需要 genai
+        if self.mode == "direct":
+            if not GENAI_AVAILABLE:
+                raise ImportError("需要安装 google-generativeai: pip install google-generativeai")
+            if self.api_key:
+                genai.configure(api_key=self.api_key)
+        else:
+            # proxy 模式需要 requests
+            try:
+                import requests
+                self._requests = requests
+            except ImportError:
+                raise ImportError("需要安装 requests: pip install requests")
+        
+        self._log(f"[ViewValidator] 模式: {self.mode.upper()}")
     
     def _log(self, message: str):
         """输出日志"""
@@ -278,6 +294,97 @@ Generate ONE clean panel of the {view_name} view."""
         }
         return view_info.get(view_name, ("?", f"Unknown view: {view_name}"))
     
+    def _analyze_via_proxy(self, image_path: str) -> str:
+        """
+        通过 AiProxy 代理调用 AI 分析图片
+        
+        Args:
+            image_path: 图片路径
+        
+        Returns:
+            AI 响应文本
+        """
+        import base64
+        
+        # 读取图片并编码
+        with open(image_path, "rb") as f:
+            image_bytes = f.read()
+        
+        # 判断 MIME 类型
+        suffix = Path(image_path).suffix.lower()
+        mime_map = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp"
+        }
+        mime_type = mime_map.get(suffix, "image/jpeg")
+        
+        b64_image = base64.b64encode(image_bytes).decode("utf-8")
+        
+        # 调用 AiProxy
+        endpoint = f"{self.proxy_base_url.rstrip('/')}/generate"
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "prompt": self.DETECTION_PROMPT,
+            "model": "gemini-2.0-flash",  # 分析使用 flash 模型
+            "image": f"data:{mime_type};base64,{b64_image}",
+            "safetySettings": [
+                { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH" }
+            ]
+        }
+        
+        self._log(f"[AiProxy] 调用视角分析: {endpoint}")
+        
+        response = self._requests.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=120
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"AiProxy 调用失败: {response.status_code} {response.text}")
+        
+        result = response.json()
+        
+        # 提取文本响应
+        if isinstance(result, dict):
+            if "text" in result:
+                return result["text"]
+            elif "response" in result:
+                return result["response"]
+            elif "choices" in result:
+                return result["choices"][0].get("text", "")
+        
+        return str(result)
+    
+    def _analyze_via_direct(self, image_path: str) -> str:
+        """
+        直连 Gemini API 分析图片
+        
+        Args:
+            image_path: 图片路径
+        
+        Returns:
+            AI 响应文本
+        """
+        img = Image.open(image_path)
+        model = genai.GenerativeModel(self.model_name)
+        response = model.generate_content([
+            self.DETECTION_PROMPT,
+            img
+        ])
+        return response.text
+    
     def analyze_image(self, image_path: str) -> ValidationResult:
         """
         分析多视角图片，检测每个面板的实际视角
@@ -290,18 +397,11 @@ Generate ONE clean panel of the {view_name} view."""
         """
         self._log(f"[分析] 正在分析图片: {image_path}")
         
-        # 加载图片
-        img = Image.open(image_path)
-        
-        # 调用 AI 分析
-        model = genai.GenerativeModel(self.model_name)
-        response = model.generate_content([
-            self.DETECTION_PROMPT,
-            img
-        ])
-        
-        # 解析响应
-        response_text = response.text
+        # 根据模式选择分析方法
+        if self.mode == "proxy":
+            response_text = self._analyze_via_proxy(image_path)
+        else:
+            response_text = self._analyze_via_direct(image_path)
         self._log(f"[AI响应] {response_text[:500]}...")
         
         # 提取 JSON
@@ -493,10 +593,160 @@ Generate ONE clean panel of the {view_name} view."""
             style_instructions=style_instructions
         )
         
+        # 根据模式选择生成方法
+        if self.mode == "proxy":
+            return self._generate_view_via_proxy(
+                prompt=prompt,
+                reference_image_path=reference_image_path,
+                missing_view=missing_view,
+                output_dir=output_dir,
+                asset_id=asset_id
+            )
+        else:
+            return self._generate_view_via_direct(
+                prompt=prompt,
+                reference_image_path=reference_image_path,
+                missing_view=missing_view,
+                output_dir=output_dir,
+                asset_id=asset_id
+            )
+    
+    def _get_output_filename(
+        self,
+        reference_image_path: str,
+        missing_view: str,
+        asset_id: str = None
+    ) -> str:
+        """
+        生成输出文件名
+        
+        格式: {asset_id}_{view}.png (如 294829fb-xxx_right.png)
+        """
+        if asset_id:
+            return f"{asset_id}_{missing_view}.png"
+        else:
+            # 如果没有提供 asset_id，尝试从参考图片名提取
+            ref_stem = Path(reference_image_path).stem
+            # 移除可能已有的 _view 后缀
+            for suffix in ['_front', '_right', '_back', '_left', '_top', '_bottom', 
+                           '_front_right', '_front_left', '_back_right', '_back_left']:
+                if ref_stem.endswith(suffix):
+                    ref_stem = ref_stem[:-len(suffix)]
+                    break
+            return f"{ref_stem}_{missing_view}.png"
+    
+    def _generate_view_via_proxy(
+        self,
+        prompt: str,
+        reference_image_path: str,
+        missing_view: str,
+        output_dir: str,
+        asset_id: str = None
+    ) -> Optional[str]:
+        """通过 AiProxy 代理生成视角"""
+        import base64
+        
+        # 读取参考图片
+        with open(reference_image_path, "rb") as f:
+            image_bytes = f.read()
+        
+        # 判断 MIME 类型
+        suffix = Path(reference_image_path).suffix.lower()
+        mime_map = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp"
+        }
+        mime_type = mime_map.get(suffix, "image/jpeg")
+        b64_image = base64.b64encode(image_bytes).decode("utf-8")
+        
+        # 调用 AiProxy 图像生成
+        endpoint = f"{self.proxy_base_url.rstrip('/')}/generate"
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "prompt": prompt,
+            "model": "models/gemini-2.0-flash-exp-image-generation",  # 图生成模型
+            "image": f"data:{mime_type};base64,{b64_image}",
+            "image_size": "2K",
+            "aspect_ratio": "1:1",  # 单视角用方形
+            "safetySettings": [
+                { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH" },
+                { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH" }
+            ]
+        }
+        
+        try:
+            self._log(f"[AiProxy] 调用图像生成: {endpoint}")
+            
+            response = self._requests.post(
+                endpoint,
+                headers=headers,
+                json=payload,
+                timeout=180  # 图像生成需要更长时间
+            )
+            
+            if response.status_code != 200:
+                self._log(f"[补全] AiProxy 调用失败: {response.status_code} {response.text[:200]}")
+                return None
+            
+            result = response.json()
+            
+            # 提取图像数据
+            image_data = None
+            if isinstance(result, dict):
+                if "image" in result:
+                    image_data = result["image"]
+                elif "data" in result:
+                    image_data = result["data"]
+                elif "base64" in result:
+                    image_data = result["base64"]
+            
+            if not image_data:
+                self._log(f"[补全] AiProxy 响应中未找到图片")
+                return None
+            
+            # 解码 base64 图像
+            if image_data.startswith("data:"):
+                # 去除 data URL 前缀
+                image_data = image_data.split(",", 1)[1]
+            
+            image_bytes = base64.b64decode(image_data)
+            
+            # 保存文件
+            filename = self._get_output_filename(reference_image_path, missing_view, asset_id)
+            output_path = Path(output_dir) / filename
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(output_path, 'wb') as f:
+                f.write(image_bytes)
+            
+            self._log(f"[补全] 生成成功: {output_path}")
+            return str(output_path)
+            
+        except Exception as e:
+            self._log(f"[补全] 代理生成失败: {e}")
+            return None
+    
+    def _generate_view_via_direct(
+        self,
+        prompt: str,
+        reference_image_path: str,
+        missing_view: str,
+        output_dir: str,
+        asset_id: str = None
+    ) -> Optional[str]:
+        """直连 Gemini API 生成视角"""
         # 加载参考图片
         ref_img = Image.open(reference_image_path)
         
-        # 调用图像生成模型
         try:
             model = genai.GenerativeModel("models/gemini-2.0-flash-exp-image-generation")
             response = model.generate_content(
@@ -509,21 +759,7 @@ Generate ONE clean panel of the {view_name} view."""
             # 提取生成的图片
             for part in response.parts:
                 if hasattr(part, 'inline_data') and part.inline_data:
-                    # 使用统一的资源 ID 命名
-                    # 格式: {asset_id}_{view}.png (如 294829fb-xxx_right.png)
-                    if asset_id:
-                        filename = f"{asset_id}_{missing_view}.png"
-                    else:
-                        # 如果没有提供 asset_id，尝试从参考图片名提取
-                        ref_stem = Path(reference_image_path).stem
-                        # 移除可能已有的 _view 后缀
-                        for suffix in ['_front', '_right', '_back', '_left', '_top', '_bottom', 
-                                       '_front_right', '_front_left', '_back_right', '_back_left']:
-                            if ref_stem.endswith(suffix):
-                                ref_stem = ref_stem[:-len(suffix)]
-                                break
-                        filename = f"{ref_stem}_{missing_view}.png"
-                    
+                    filename = self._get_output_filename(reference_image_path, missing_view, asset_id)
                     output_path = Path(output_dir) / filename
                     output_path.parent.mkdir(parents=True, exist_ok=True)
                     
@@ -534,7 +770,6 @@ Generate ONE clean panel of the {view_name} view."""
                     return str(output_path)
             
             self._log(f"[补全] 响应中未找到图片")
-            return None
             return None
             
         except Exception as e:
