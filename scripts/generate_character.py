@@ -576,6 +576,31 @@ def main():
     )
     
     # =========================================================================
+    # 智能视角验证与自动补全 (Auto View Validation & Completion)
+    # =========================================================================
+    parser.add_argument(
+        "--auto-complete",
+        action="store_true",
+        dest="auto_complete",
+        help="自动验证生成的多视角图并补全缺失视角。AI会检测每个面板的实际视角，发现缺失则自动补生成。"
+    )
+    
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        dest="validate_only",
+        help="仅验证生成的图片视角，不进行补全。输出检测结果和建议。"
+    )
+    
+    parser.add_argument(
+        "--max-completion-retries",
+        type=int,
+        dest="max_completion_retries",
+        default=3,
+        help="自动补全的最大重试次数 (默认: 3)"
+    )
+    
+    # =========================================================================
     # P0 高优先级编辑功能 - 添加/移除元素
     # =========================================================================
     parser.add_argument(
@@ -1462,6 +1487,107 @@ def main():
                 subject_only=args.subject_only,
                 with_props=args.with_props
             )
+    
+    # =========================================================================
+    # 视角验证与自动补全
+    # =========================================================================
+    if result and (args.auto_complete or args.validate_only):
+        print("\n" + "═" * 50)
+        print("🔍 启动视角验证...")
+        print("═" * 50)
+        
+        try:
+            from view_validator import ViewValidator
+            
+            # 从生成结果中提取资源 ID
+            result_path = Path(result)
+            asset_id = result_path.stem  # 如 294829fb-6da7-45a7-bbfe-5318999084c7
+            
+            # 确定期望的视角列表
+            if custom_views:
+                expected_views = custom_views
+            elif args.views == "8":
+                expected_views = ["front", "front_right", "right", "back", "back_left", "left", "top", "bottom"]
+            elif args.views == "6":
+                expected_views = ["front", "front_right", "right", "back", "back_left", "left"]
+            else:  # 默认 4 视角
+                expected_views = ["front", "right", "back", "left"]
+            
+            print(f"  └─ 资源 ID: {asset_id}")
+            print(f"  └─ 期望视角: {expected_views}")
+            
+            # 创建验证器
+            validator = ViewValidator(api_key=args.token, verbose=True)
+            
+            if args.validate_only:
+                # 仅验证模式
+                validation = validator.validate(result, expected_views)
+                
+                print("\n" + "-" * 40)
+                print("📊 验证结果:")
+                print("-" * 40)
+                print(f"  检测到的视角: {validation.detected_views}")
+                print(f"  期望的视角: {validation.expected_views}")
+                print(f"  缺失的视角: {validation.missing_views}")
+                print(f"  重复的视角: {validation.duplicate_views}")
+                print(f"  验证通过: {'✅ 是' if validation.is_complete else '❌ 否'}")
+                
+                if validation.suggestions:
+                    print("\n💡 建议:")
+                    for suggestion in validation.suggestions:
+                        print(f"  - {suggestion}")
+            else:
+                # 自动补全模式
+                # 优先使用切割后的 front 视图作为参考图，保证角色一致性
+                # 如: test_images/294829fb-xxx_front.png
+                front_reference = None
+                output_path = Path(args.output)
+                for ext in ['.png', '.jpg', '.webp']:
+                    front_path = output_path / f"{asset_id}_front{ext}"
+                    if front_path.exists():
+                        front_reference = str(front_path)
+                        print(f"  └─ 参考图: {front_path.name} (切割后的 front 视图)")
+                        break
+                
+                if not front_reference:
+                    # 回退到用户指定的参考图或原始生成图
+                    front_reference = args.from_image if args.from_image else result
+                    print(f"  └─ 参考图: {Path(front_reference).name} (未找到 front 视图)")
+                
+                completion_result = validator.validate_and_complete(
+                    image_path=result,
+                    expected_views=expected_views,
+                    reference_image=front_reference,
+                    style=style,
+                    output_dir=args.output,
+                    max_iterations=args.max_completion_retries,
+                    asset_id=asset_id
+                )
+                
+                print("\n" + "-" * 40)
+                print("📊 补全结果:")
+                print("-" * 40)
+                print(f"  资源 ID: {completion_result.get('asset_id', asset_id)}")
+                print(f"  状态: {completion_result['final_status']}")
+                print(f"  迭代次数: {completion_result['iterations']}")
+                print(f"  验证通过: {'✅ 是' if completion_result['validation_passed'] else '❌ 否'}")
+                
+                if completion_result['generated_panels']:
+                    print("\n📁 生成的补全面板:")
+                    for panel in completion_result['generated_panels']:
+                        print(f"  - {panel['view']}: {panel['path']}")
+                
+                if completion_result['missing_views']:
+                    print(f"\n⚠️ 仍缺失的视角: {completion_result['missing_views']}")
+                    print("   提示: 可以手动使用 --custom-views 单独生成这些视角")
+                    
+        except ImportError as e:
+            print(f"\n[警告] 视角验证模块加载失败: {e}")
+            print("        请确保已安装 google-generativeai 和 Pillow")
+        except Exception as e:
+            print(f"\n[错误] 视角验证失败: {e}")
+            import traceback
+            traceback.print_exc()
     
     if result:
         print("\n" + "═" * 50)
