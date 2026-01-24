@@ -1732,47 +1732,70 @@ def _analyze_image_via_proxy(image_path, prompt, api_key, model_name, proxy_base
     
     proxy_base_url = proxy_base_url or os.environ.get("AIPROXY_BASE_URL", "https://bot.bigjj.click/aiproxy")
     
-    with open(image_path, 'rb') as f:
-        image_bytes = f.read()
-    
-    suffix = Path(image_path).suffix.lower()
-    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
-    mime_type = mime_map.get(suffix, "image/jpeg")
-    b64_image = base64.b64encode(image_bytes).decode("utf-8")
-    
-    endpoint = f"{proxy_base_url.rstrip('/')}/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    
-    payload = {
-        "model": model_name,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_image}"}}
-                ]
-            }
-        ]
-    }
-    
-    response = requests.post(endpoint, headers=headers, json=payload, timeout=60)
-    if response.status_code == 200:
-        return response.json()["choices"][0]["message"]["content"]
-    return None
+    try:
+        with open(image_path, 'rb') as f:
+            image_bytes = f.read()
+        
+        suffix = Path(image_path).suffix.lower()
+        mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+        mime_type = mime_map.get(suffix, "image/jpeg")
+        b64_image = base64.b64encode(image_bytes).decode("utf-8")
+        
+        endpoint = f"{proxy_base_url.rstrip('/')}/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        
+        payload = {
+            "model": model_name,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_image}"}}
+                    ]
+                }
+            ]
+        }
+        
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=60)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if "choices" in result and len(result["choices"]) > 0:
+                return result["choices"][0]["message"]["content"]
+            else:
+                print(f"     [DEBUG] 响应格式异常: {result}")
+                return None
+        else:
+            print(f"     [DEBUG] API调用失败: {response.status_code}")
+            print(f"     [DEBUG] 响应: {response.text[:200]}")
+            return None
+            
+    except Exception as e:
+        print(f"     [DEBUG] 分析请求异常: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def _analyze_image_via_direct(image_path, prompt, api_key, model_name):
     """直接调用Gemini分析图片"""
-    _ensure_imports()
-    
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name)
-    
-    image = PIL_Image.open(image_path)
-    response = model.generate_content([prompt, image])
-    
-    return response.text if response else None
+    try:
+        _ensure_imports()
+        
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name)
+        
+        image = PIL_Image.open(image_path)
+        response = model.generate_content([prompt, image])
+        
+        return response.text if response else None
+        
+    except Exception as e:
+        print(f"     [DEBUG] 直连分析异常: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def _extract_clothing_via_proxy(image_path, prompt, api_key, model_name, output_dir, output_name, proxy_base_url=None):
