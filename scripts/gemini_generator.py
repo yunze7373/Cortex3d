@@ -1678,13 +1678,17 @@ Requirements:
 Generate an image showing only the extracted clothing item."""
 
         try:
+            # 对于图像生成（提取衣服），必须使用图像生成模型
+            # 而不是之前分析用的文本模型
+            image_gen_model = "gemini-2.5-flash-image"  # 图像生成模型
+            
             # 调用AI生成提取后的衣服图片
             if mode == "proxy":
                 extracted_path = _extract_clothing_via_proxy(
                     image_path=str(intermediate_path),
                     prompt=extraction_prompt,
                     api_key=api_key,
-                    model_name=model_name,
+                    model_name=image_gen_model,  # 使用图像生成模型
                     output_dir=str(output_path_obj),
                     output_name=f"_extracted_clothing_{img_name}.png",
                     proxy_base_url=proxy_base_url
@@ -1694,7 +1698,7 @@ Generate an image showing only the extracted clothing item."""
                     image_path=str(intermediate_path),
                     prompt=extraction_prompt,
                     api_key=api_key,
-                    model_name=model_name,
+                    model_name=image_gen_model,  # 使用图像生成模型
                     output_dir=str(output_path_obj),
                     output_name=f"_extracted_clothing_{img_name}.png"
                 )
