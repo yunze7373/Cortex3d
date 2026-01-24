@@ -81,10 +81,7 @@ variables:
 
 # 动态内容预设
 dynamic_content:
-  output_type_default: |
-    Generate a STRICT multi-view reference sheet with EXACTLY {view_count} panels.
-  output_type_photorealistic: |
-    Generate a STRICT multi-view photo composite with EXACTLY {view_count} panels.
-  - style
+  output_type_default: "Generate a STRICT multi-view reference sheet with EXACTLY {view_count} panels."
+  output_type_photorealistic: "Generate a STRICT multi-view photo composite with EXACTLY {view_count} panels."
 
 default_style: "cinematic character"
