@@ -1,17 +1,27 @@
 name: clothing
-version: "2.0"
-description: "换装合成模板 - 高保真细节保留（遵循Google官方推荐格式）"
+version: "2.1"
+description: "换装合成模板 - 高保真细节保留 + 完全替换旧衣服（遵循Google官方推荐格式）"
 
 # 参考文档: https://ai.google.dev/gemini-api/docs/image-generation
 # 第5节: 高保真细节保留
+# v2.1更新: 增强旧衣服完全移除指令，避免残留
 
 template: |
   You are given TWO images:
   - **IMAGE 1 (FIRST IMAGE)**: A photo of a PERSON. This is the SUBJECT whose face, body, pose, and background must be preserved EXACTLY.
-  - **IMAGE 2 (SECOND IMAGE)**: A photo of CLOTHING/GARMENT. This clothing should be placed onto the person.
+  - **IMAGE 2 (SECOND IMAGE)**: A photo of CLOTHING/GARMENT. This clothing should COMPLETELY REPLACE the original clothing on the person.
 
   ## YOUR TASK
-  Put the clothing from IMAGE 2 onto the person in IMAGE 1.
+  **COMPLETELY REPLACE** all clothing on the person in IMAGE 1 with the clothing from IMAGE 2.
+
+  ## ⚠️ CRITICAL: COMPLETE CLOTHING REMOVAL REQUIREMENT
+  **You MUST completely remove ALL traces of the original clothing from IMAGE 1:**
+  - Remove ALL visible parts of the original garment (sleeves, collars, hems, straps, buttons, zippers, pockets, etc.)
+  - Remove ANY accessories attached to the original clothing (belts, tags, decorations)
+  - Remove ANY undergarments or layered clothing that shouldn't be visible with the new outfit
+  - **NO REMNANTS**: There should be ZERO pixels from the original clothing visible in the final image
+  - Pay special attention to **edges and seams** where old clothing might blend with new
+  - Check **shoulders, neckline, waistline, and cuffs** - common areas for clothing remnants
 
   ## CRITICAL PRESERVATION REQUIREMENTS
   The following features of the PERSON in IMAGE 1 must remain **100% IDENTICAL**:
@@ -21,19 +31,27 @@ template: |
   - **Body proportions**: Height, build, shape - must be identical  
   - **Pose**: Body position, hand placement, leg stance, head angle - must be identical
   - **Background**: Environment, lighting direction, shadows - must be unchanged
+  - **Hands and accessories** (rings, watches, phones in hand): Must remain as in original
 
   ## CLOTHING TRANSFER REQUIREMENTS
-  The clothing from IMAGE 2 should:
+  The NEW clothing from IMAGE 2 should:
+  - **Completely cover** all areas where the original clothing was
   - Fit naturally on the person's body shape from IMAGE 1
   - Show realistic fabric draping and wrinkles matching the pose
   - Reflect the same lighting conditions as IMAGE 1
-  - Create consistent shadows
+  - Create consistent shadows matching the scene
+
+  ## QUALITY CHECK BEFORE OUTPUT
+  Before generating, mentally verify:
+  ✓ Is ANY part of the old clothing still visible? If yes, remove it.
+  ✓ Are there any strange color patches or textures that don't belong to the new outfit? Remove them.
+  ✓ Do the edges of the new clothing look clean and natural? Refine if needed.
 
   {style_instructions}
 
   **SPECIFIC INSTRUCTION:** {instruction}
 
-  Generate a single {output_format} composite image showing the person from IMAGE 1 wearing the clothing from IMAGE 2. No text or annotations.
+  Generate a single {output_format} composite image showing the person from IMAGE 1 wearing ONLY the clothing from IMAGE 2, with NO traces of original clothing. No text or annotations.
 
 variables:
   - instruction

@@ -1,14 +1,22 @@
 name: full_outfit
-version: "2.0"
-description: "完整换装模板（含多件服饰）- 高保真细节保留"
+version: "2.1"
+description: "完整换装模板（含多件服饰）- 高保真细节保留 + 完全替换旧衣服"
 
 template: |
   You are given TWO images:
   - **IMAGE 1 (FIRST IMAGE)**: A photo of a PERSON. This is the SUBJECT whose face, body, and background must be preserved EXACTLY.
-  - **IMAGE 2 (SECOND IMAGE)**: A photo of a COMPLETE OUTFIT (full clothing ensemble). This entire outfit should replace the person's current clothing.
+  - **IMAGE 2 (SECOND IMAGE)**: A photo of a COMPLETE OUTFIT (full clothing ensemble). This entire outfit should COMPLETELY REPLACE the person's current clothing.
 
   ## YOUR TASK
-  Replace ALL clothing on the person in IMAGE 1 with the complete outfit from IMAGE 2.
+  **COMPLETELY REPLACE** ALL clothing on the person in IMAGE 1 with the complete outfit from IMAGE 2.
+
+  ## ⚠️ CRITICAL: COMPLETE CLOTHING REMOVAL REQUIREMENT
+  **You MUST completely remove ALL traces of the original clothing from IMAGE 1:**
+  - Remove ALL visible parts of ALL original garments (tops, bottoms, shoes, etc.)
+  - Remove ANY accessories attached to original clothing
+  - Remove ANY undergarments or layered clothing that shouldn't be visible
+  - **NO REMNANTS**: There should be ZERO pixels from original clothing visible
+  - Pay special attention to **edges, seams, shoulders, neckline, waistline, and cuffs**
 
   ## CRITICAL PRESERVATION REQUIREMENTS
   The following features of the PERSON in IMAGE 1 must remain **100% IDENTICAL**:
@@ -18,20 +26,27 @@ template: |
   - **Body proportions**: Height, build, shape - must be identical
   - **Pose**: Body position, hand placement, leg stance, head angle - must be identical
   - **Background**: Environment, lighting direction, shadows - must be unchanged
+  - **Hands and accessories** (rings, watches, phones in hand): Must remain as in original
 
   ## OUTFIT TRANSFER REQUIREMENTS
   The complete outfit from IMAGE 2 should:
+  - **Completely cover** all areas where original clothing was
   - Include ALL clothing items visible (top, bottom, shoes, accessories if present)
   - Fit naturally on the person's body shape from IMAGE 1
   - Show realistic fabric draping and wrinkles matching the pose
   - Maintain color accuracy from the original outfit
   - Create consistent shadows matching the lighting in IMAGE 1
 
+  ## QUALITY CHECK BEFORE OUTPUT
+  ✓ Is ANY part of old clothing still visible? Remove it.
+  ✓ Are there strange color patches that don't belong? Remove them.
+  ✓ Do clothing edges look clean and natural? Refine if needed.
+
   {style_instructions}
 
   **SPECIFIC INSTRUCTION:** {instruction}
 
-  Generate a single {output_format} composite image showing the person from IMAGE 1 wearing the complete outfit from IMAGE 2. No text or annotations.
+  Generate a single {output_format} composite image showing the person from IMAGE 1 wearing ONLY the complete outfit from IMAGE 2, with NO traces of original clothing. No text or annotations.
 
 variables:
   - instruction

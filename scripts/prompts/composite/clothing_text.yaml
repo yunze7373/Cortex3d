@@ -1,14 +1,22 @@
 name: clothing_text
-version: "1.0"
-description: "单图+文字换装模板 - 基于文字描述生成衣服并合成"
+version: "1.1"
+description: "单图+文字换装模板 - 基于文字描述生成衣服并合成 + 完全替换旧衣服"
 
 template: |
   You are given ONE image:
   - **IMAGE 1**: A photo of a PERSON. This is the SUBJECT whose face, body, pose, and background must be preserved EXACTLY.
 
   ## YOUR TASK
-  Generate and place clothing onto the person in IMAGE 1 based on this description:
+  **COMPLETELY REPLACE** the person's current clothing with new clothing generated based on this description:
   **CLOTHING DESCRIPTION:** {instruction}
+
+  ## ⚠️ CRITICAL: COMPLETE CLOTHING REMOVAL REQUIREMENT
+  **You MUST completely remove ALL traces of the original clothing from the image:**
+  - Remove ALL visible parts of the original garment (sleeves, collars, hems, straps, buttons, zippers, pockets, etc.)
+  - Remove ANY accessories attached to the original clothing
+  - Remove ANY undergarments or layered clothing that shouldn't be visible with the new outfit
+  - **NO REMNANTS**: There should be ZERO pixels from the original clothing visible in the final image
+  - Pay special attention to **edges, seams, shoulders, neckline, waistline, and cuffs**
 
   ## CRITICAL PRESERVATION REQUIREMENTS
   The following features of the PERSON in IMAGE 1 must remain **100% IDENTICAL**:
@@ -18,18 +26,25 @@ template: |
   - **Body proportions**: Height, build, shape - must be identical  
   - **Pose**: Body position, hand placement, leg stance, head angle - must be identical
   - **Background**: Environment, lighting direction, shadows - must be unchanged
+  - **Hands and accessories** (rings, watches, phones in hand): Must remain as in original
 
   ## CLOTHING GENERATION REQUIREMENTS
-  The clothing based on the description should:
+  The NEW clothing based on the description should:
+  - **Completely cover** all areas where the original clothing was
   - Fit naturally on the person's body shape from IMAGE 1
   - Show realistic fabric draping and wrinkles matching the pose
   - Reflect the same lighting conditions as IMAGE 1
   - Create consistent shadows
   - Match the style described in the instruction
 
+  ## QUALITY CHECK BEFORE OUTPUT
+  ✓ Is ANY part of old clothing still visible? Remove it.
+  ✓ Are there strange color patches that don't belong? Remove them.
+  ✓ Do clothing edges look clean and natural? Refine if needed.
+
   {style_instructions}
 
-  Generate a single {output_format} composite image showing the person from IMAGE 1 wearing the described clothing. No text or annotations.
+  Generate a single {output_format} composite image showing the person from IMAGE 1 wearing ONLY the described new clothing, with NO traces of original clothing. No text or annotations.
 
 variables:
   - instruction
