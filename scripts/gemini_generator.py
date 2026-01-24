@@ -1394,7 +1394,7 @@ def _preserve_edit_via_direct(
                 image = part.as_image()
                 image.save(str(output_path))
                 
-                print(f"✅ 高保真编辑完成: {output_path}")
+                print(f"✅ 编辑完成: {output_path}")
                 return str(output_path)
             elif hasattr(part, 'text') and part.text:
                 print(f"[Gemini 响应] {part.text[:200]}...")
@@ -1469,14 +1469,8 @@ def _preserve_edit_via_direct(
             
             # 保存编辑后的图像
             Path(output_dir).mkdir(parents=True, exist_ok=True)
-            
-            if output_name:
-                filename = output_name if output_name.endswith('.png') else f"{output_name}.png"
-            else:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"preserve_edit_{timestamp}.png"
-            
-            output_path = Path(output_dir) / filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = Path(output_dir) / f"{edit_type}_edited_{timestamp}.png"
             
             if isinstance(image_data, str):
                 image_bytes = base64.b64decode(image_data)
@@ -1486,9 +1480,9 @@ def _preserve_edit_via_direct(
             with open(output_path, 'wb') as f:
                 f.write(image_bytes)
             
-            print(f"✅ 高保真编辑完成: {output_path}")
+            print(f"✅ 编辑完成: {output_path}")
             return str(output_path)
-            
+        
         except Exception as e:
             print(f"[ERROR] 编辑失败: {e}")
             import traceback
@@ -1506,80 +1500,6 @@ def _preserve_edit_via_direct(
 # P0 功能: 高级合成 (Multi-Image Composite)
 # =============================================================================
 
-def _build_composite_prompt(instruction: str, num_images: int, composite_type: str = "auto") -> str:
-    """
-    构建高质量的合成提示词，确保主体保持不变
-    
-    Args:
-        instruction: 用户的原始指令
-        num_images: 图片数量
-        composite_type: 合成类型 ("clothing", "accessory", "general", "auto")
-    
-    Returns:
-        增强后的提示词
-    """
-    # 自动检测合成类型
-    if composite_type == "auto":
-        lower_inst = instruction.lower()
-        clothing_keywords = ["穿", "衣服", "裙", "裤", "shirt", "dress", "wear", "clothing", "outfit", "换装"]
-        accessory_keywords = ["帽", "包", "眼镜", "配饰", "hat", "bag", "glasses", "accessory", "戴"]
-        
-        if any(kw in lower_inst for kw in clothing_keywords):
-            composite_type = "clothing"
-        elif any(kw in lower_inst for kw in accessory_keywords):
-            composite_type = "accessory"
-        else:
-            composite_type = "general"
-    
-    # 根据类型构建提示词
-    if composite_type == "clothing":
-        prompt = f"""You are a professional virtual try-on and image editing AI.
-
-**TASK**: Apply the clothing from Image 2 onto the person in Image 1.
-
-**CRITICAL REQUIREMENTS - MUST FOLLOW**:
-1. **PRESERVE THE PERSON EXACTLY**: The person's face, facial features, expression, hairstyle, skin tone, body shape, pose, and posture must remain COMPLETELY UNCHANGED.
-2. **ONLY CHANGE THE CLOTHING**: Replace ONLY the clothing/outfit. Keep everything else identical.
-3. **NATURAL FIT**: The clothing should fit naturally on the person's body, following their pose and body shape.
-4. **MAINTAIN LIGHTING**: Keep the original lighting, shadows, and color temperature from Image 1.
-5. **HIGH FIDELITY**: Output a photorealistic, high-quality image.
-
-**User instruction**: {instruction}
-
-Generate the result image now. Output only the final image, no text."""
-
-    elif composite_type == "accessory":
-        prompt = f"""You are a professional image editing AI specialized in adding accessories.
-
-**TASK**: Add the accessory from Image 2 onto the person in Image 1.
-
-**CRITICAL REQUIREMENTS - MUST FOLLOW**:
-1. **PRESERVE THE PERSON EXACTLY**: The person's face, facial features, expression, hairstyle, body, clothing, and pose must remain COMPLETELY UNCHANGED.
-2. **ONLY ADD THE ACCESSORY**: Add the item naturally without modifying anything else.
-3. **NATURAL PLACEMENT**: Position the accessory correctly (e.g., hat on head, bag in hand).
-4. **MAINTAIN LIGHTING**: Keep the original lighting and shadows from Image 1.
-
-**User instruction**: {instruction}
-
-Generate the result image now. Output only the final image, no text."""
-
-    else:  # general
-        prompt = f"""You are a professional image compositing AI.
-
-**TASK**: Combine the provided {num_images} images according to the user's instruction.
-
-**CRITICAL REQUIREMENTS**:
-1. **PRESERVE SUBJECTS**: Keep the main subjects (especially people's faces and features) from Image 1 as unchanged as possible.
-2. **NATURAL BLEND**: Ensure seamless blending of elements.
-3. **CONSISTENT STYLE**: Maintain consistent lighting, perspective, and style.
-
-**User instruction**: {instruction}
-
-Generate the result image now. Output only the final image, no text."""
-
-    return prompt
-
-
 def composite_images(
     image_paths: list,
     instruction: str,
@@ -1589,7 +1509,8 @@ def composite_images(
     output_name: str = None,
     mode: str = "proxy",
     proxy_base_url: str = None,
-    composite_type: str = "auto"
+    composite_type: str = "auto",
+    composite_prompt_template: str = None,
 ) -> Optional[str]:
     """
     组合多张图片创建新场景
@@ -1607,6 +1528,7 @@ def composite_images(
         mode: API 调用模式 ("proxy" 或 "direct")
         proxy_base_url: 代理服务地址 (仅 proxy 模式)
         composite_type: 合成类型 ("clothing", "accessory", "general", "auto")
+        composite_prompt_template: 自定义合成提示词模板 (可选)
     
     Returns:
         合成后图像的路径
@@ -1635,8 +1557,23 @@ def composite_images(
         print("[ERROR] 合成需要至少2张图片")
         return None
     
-    # 构建增强的提示词
-    enhanced_instruction = _build_composite_prompt(instruction, len(image_paths), composite_type)
+    # 优先使用用户自定义模板
+    if composite_prompt_template:
+        # 支持 {instruction}、{num_images}、{image_list}
+        image_list = "\n".join([f"Image {i+1}: {Path(p).name}" for i, p in enumerate(image_paths)])
+        enhanced_instruction = composite_prompt_template.format(
+            instruction=instruction,
+            num_images=len(image_paths),
+            image_list=image_list
+        )
+    else:
+        # 使用 config.py 中的严格模板系统（与多视角生成同级别精度）
+        from config import build_composite_prompt
+        enhanced_instruction = build_composite_prompt(
+            instruction=instruction,
+            composite_type=composite_type,
+            num_images=len(image_paths)
+        )
     
     print(f"\n[高级合成]")
     print(f"  输入图片: {len(image_paths)} 张")

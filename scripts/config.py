@@ -225,6 +225,79 @@ def build_strict_copy_prompt(
     return _LEGACY_STRICT_COPY_TEMPLATE
 
 
+def build_composite_prompt(
+    instruction: str,
+    composite_type: str = "clothing",
+    num_images: int = 2
+) -> str:
+    """
+    构建高精度合成提示词（换装、配饰等）
+    
+    使用与多视角生成相同级别的严格控制模板
+    
+    Args:
+        instruction: 用户的合成指令
+        composite_type: 合成类型 ("clothing", "accessory", "general")
+        num_images: 图片数量
+    
+    Returns:
+        完整的提示词字符串
+    """
+    lib = _get_prompt_library()
+    if lib and hasattr(lib, 'build_composite_prompt'):
+        return lib.build_composite_prompt(
+            instruction=instruction,
+            composite_type=composite_type,
+            num_images=num_images
+        )
+    
+    # 回退到硬编码严格模板（与 multiview 同级别精度）
+    if composite_type == "clothing":
+        return f"""You are a professional virtual try-on AI with photorealistic precision.
+
+**CRITICAL TASK**: Apply ONLY the clothing from Image 2 onto the person in Image 1.
+
+**ABSOLUTE REQUIREMENTS - ZERO TOLERANCE**:
+1. **100% PRESERVE**: Face, facial features, expression, hairstyle, hair color, skin tone, body proportions, pose, hand position, and ALL other features from Image 1 must remain PIXEL-PERFECT identical.
+2. **ONLY CHANGE**: The clothing/outfit. NOTHING else may be altered.
+3. **NATURAL FIT**: New clothing must fit the person's body shape and follow their exact pose naturally.
+4. **PRESERVE ENVIRONMENT**: Background, lighting, shadows, and color temperature from Image 1 must remain unchanged.
+5. **PHOTOREALISTIC OUTPUT**: Generate a single high-quality, seamless composite image.
+
+**User instruction**: {instruction}
+
+Generate only the final composite image. No text, no annotations."""
+    
+    elif composite_type == "accessory":
+        return f"""You are a professional image compositing AI specialized in adding accessories.
+
+**CRITICAL TASK**: Add ONLY the accessory from Image 2 onto the person in Image 1.
+
+**ABSOLUTE REQUIREMENTS - ZERO TOLERANCE**:
+1. **100% PRESERVE**: Face, body, clothing, pose, and ALL features from Image 1 must remain PIXEL-PERFECT identical.
+2. **ONLY ADD**: The accessory item. NOTHING else may be altered.
+3. **NATURAL PLACEMENT**: Position the accessory correctly and realistically.
+4. **PRESERVE ENVIRONMENT**: Background, lighting, shadows unchanged from Image 1.
+
+**User instruction**: {instruction}
+
+Generate only the final composite image. No text."""
+    
+    else:  # general
+        return f"""You are a professional image compositing AI.
+
+**TASK**: Combine the {num_images} provided images according to the instruction.
+
+**REQUIREMENTS**:
+1. Preserve the main subject (especially faces) from Image 1 as much as possible.
+2. Ensure seamless, natural blending.
+3. Maintain consistent lighting and perspective.
+
+**User instruction**: {instruction}
+
+Generate only the final composite image."""
+
+
 def get_negative_prompt(categories: List[str] = None) -> str:
     """
     获取负面提示词（合并多个类别）

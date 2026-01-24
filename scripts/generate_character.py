@@ -737,6 +737,14 @@ def main():
         help="合成输出文件名 (可选，默认自动生成)"
     )
     
+    parser.add_argument(
+        "--composite-prompt-template",
+        type=str,
+        dest="composite_prompt_template",
+        default=None,
+        help="自定义合成提示词模板（支持 {instruction}、{num_images}、{image_list} 占位符）"
+    )
+    
     # =========================================================================
     # P0 功能: 高保真细节保留 (Detail Preserve Edit)
     # =========================================================================
@@ -1123,7 +1131,8 @@ def main():
                 output_dir=args.output,
                 output_name=args.composite_output_name,
                 mode=args.mode,
-                composite_type=args.composite_type
+                composite_type=args.composite_type,
+                composite_prompt_template=args.composite_prompt_template,
             )
             
             if output_path:
@@ -1177,7 +1186,7 @@ def main():
             print("        或: --from-image person.png --mode-preserve ...")
             sys.exit(1)
         
-        if not args.preserve_instruction:
+        if not args.preserve_instructions:
             print("[ERROR] --mode-preserve 需要 --preserve-instruction 参数（修改指令）")
             print("        示例: --preserve-instruction '将 logo 添加到 T 恤上'")
             sys.exit(1)
