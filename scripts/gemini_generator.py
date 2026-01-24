@@ -1666,16 +1666,17 @@ Clothing description: [brief description of the clothing]"""
         # 步骤2b: AI提取衣服
         print(f"  🎨 步骤2b: AI提取衣服...")
         
-        extraction_prompt = """Extract ONLY the clothing/garment from this image of a person wearing it.
+        # 使用更直接的提示词，要求生成图像而不是返回HTML/文本
+        extraction_prompt = """Based on this image of a person wearing clothing, generate a new image showing ONLY the clothing items (coat, shirt, pants, hat, etc.) displayed flat as if laid out on a white background.
 
 Requirements:
-- Remove the person completely
-- Keep only the clothing item itself
-- Maintain the clothing's original shape, color, and details
-- Show the clothing as if it's displayed on its own (like in a product photo)
-- Keep transparent background
+- Show the clothing items arranged neatly on a plain white background
+- Display them as if photographed for a product catalog
+- Include all visible garments: coat, shirt, pants, hat, accessories
+- Make them clearly visible and well-lit
+- NO person in the output, just the clothing items themselves
 
-Generate an image showing only the extracted clothing item."""
+Generate a product-style photo of the extracted clothing."""
 
         try:
             # 对于图像生成（提取衣服），必须使用图像生成模型
