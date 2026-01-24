@@ -800,6 +800,14 @@ def main():
         help="自定义合成提示词模板（支持 {instruction}、{num_images}、{image_list} 占位符）"
     )
     
+    parser.add_argument(
+        "--composite-no-smart-extract",
+        action="store_false",
+        dest="composite_smart_extract",
+        default=True,
+        help="禁用智能提取，直接使用原图进行合成（默认启用智能提取）"
+    )
+    
     # =========================================================================
     # P0 功能: 高保真细节保留 (Detail Preserve Edit)
     # =========================================================================
@@ -1455,6 +1463,51 @@ def main():
                 sys.exit(1)
             
             image_paths.append(str(p))
+        
+        # =====================================================================
+        # 🧠 智能衣服提取预处理
+        # 如果有多张图片且启用了智能提取，对衣服图片进行AI分析和处理
+        # =====================================================================
+        if args.composite_smart_extract and len(image_paths) >= 2:
+            print(f"\n🧠 智能衣服提取预处理")
+            print(f"  检测到 {len(image_paths)} 张图片，开始分析...")
+            
+            # 导入智能提取函数
+            from gemini_generator import smart_extract_clothing
+            
+            # 处理所有非第一张的图片（第一张通常是主体人物）
+            processed_paths = [image_paths[0]]  # 保留主体图片
+            
+            for i, clothing_img in enumerate(image_paths[1:], 2):
+                print(f"\n  [图片 {i}] 分析: {Path(clothing_img).name}")
+                
+                try:
+                    # 调用智能提取
+                    extracted_path = smart_extract_clothing(
+                        image_path=clothing_img,
+                        api_key=args.token,
+                        model_name=args.model if args.model else "gemini-2.5-flash-image",
+                        output_dir=args.output,
+                        mode=args.mode,
+                    )
+                    
+                    if extracted_path:
+                        print(f"  ✅ 提取完成: {Path(extracted_path).name}")
+                        processed_paths.append(extracted_path)
+                    else:
+                        print(f"  ⚠️  提取失败，使用原图")
+                        processed_paths.append(clothing_img)
+                        
+                except Exception as e:
+                    print(f"  ⚠️  智能提取出错: {e}")
+                    print(f"     使用原图继续")
+                    processed_paths.append(clothing_img)
+            
+            # 用处理后的路径替换原路径
+            image_paths = processed_paths
+            print(f"\n  ✅ 预处理完成，准备进行合成...\n")
+        elif not args.composite_smart_extract:
+            print(f"\n  ⏭️  跳过智能提取 (--composite-no-smart-extract)\n")
         
         print(f"\n  └─ 输入图片 ({len(image_paths)} 张):")
         for i, img in enumerate(image_paths, 1):

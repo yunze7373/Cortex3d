@@ -1497,6 +1497,360 @@ def _preserve_edit_via_direct(
 
 
 # =============================================================================
+# 智能衣服提取 (Smart Clothing Extraction)
+# =============================================================================
+
+def smart_extract_clothing(
+    image_path: str,
+    api_key: str,
+    model_name: str = "gemini-2.5-flash-image",
+    output_dir: str = "test_images",
+    mode: str = "proxy",
+    proxy_base_url: str = None,
+) -> Optional[str]:
+    """
+    智能分析图片并提取衣服
+    
+    工作流程：
+    1. AI分析图片：判断是纯衣服、有背景的衣服，还是穿着衣服的人
+    2. 去除背景（如果有）
+    3. 提取衣服（如果是穿着衣服的人）
+    4. 返回处理后的图片路径
+    
+    Args:
+        image_path: 衣服图片路径
+        api_key: API密钥
+        model_name: 使用的模型
+        output_dir: 输出目录
+        mode: 调用模式 (proxy/direct)
+        proxy_base_url: 代理地址
+    
+    Returns:
+        处理后的图片路径，失败返回None
+    """
+    from pathlib import Path
+    import requests
+    import base64
+    
+    _ensure_imports()
+    
+    print(f"  🔍 步骤1: AI分析图片内容...")
+    
+    # =========================================================================
+    # 步骤1: 用AI分析图片内容
+    # =========================================================================
+    analysis_prompt = """Analyze this image and determine its content type:
+
+1. **Pure clothing item**: Only clothing/garment visible, no person wearing it (may have background)
+2. **Person wearing clothing**: A person is wearing the clothing
+3. **Ambiguous**: Cannot clearly determine
+
+Also check if there is a background:
+- Has background: Yes/No
+- Background type: (white/solid color/complex scene/transparent)
+
+Please respond in this exact format:
+Content: [Pure clothing item / Person wearing clothing / Ambiguous]
+Has background: [Yes / No]
+Background type: [description]
+Clothing description: [brief description of the clothing]"""
+
+    try:
+        # 根据模式调用AI分析
+        if mode == "proxy":
+            analysis_result = _analyze_image_via_proxy(
+                image_path=image_path,
+                prompt=analysis_prompt,
+                api_key=api_key,
+                model_name=model_name,
+                proxy_base_url=proxy_base_url
+            )
+        else:
+            analysis_result = _analyze_image_via_direct(
+                image_path=image_path,
+                prompt=analysis_prompt,
+                api_key=api_key,
+                model_name=model_name
+            )
+        
+        if not analysis_result:
+            print(f"     ⚠️ AI分析失败，跳过智能处理")
+            return None
+        
+        print(f"     📋 分析结果:\n{analysis_result}")
+        
+        # 解析分析结果
+        content_type = "unknown"
+        has_background = False
+        
+        result_lower = analysis_result.lower()
+        if "pure clothing" in result_lower or "only clothing" in result_lower:
+            content_type = "pure_clothing"
+        elif "person wearing" in result_lower or "wearing clothing" in result_lower:
+            content_type = "person_wearing"
+        
+        if "has background: yes" in result_lower:
+            has_background = True
+        
+        print(f"     ✅ 检测结果: 内容={content_type}, 背景={has_background}")
+        
+    except Exception as e:
+        print(f"     ⚠️ AI分析出错: {e}")
+        print(f"     使用默认处理流程")
+        content_type = "unknown"
+        has_background = True
+    
+    # =========================================================================
+    # 步骤2: 根据分析结果进行处理
+    # =========================================================================
+    output_path_obj = Path(output_dir)
+    output_path_obj.mkdir(parents=True, exist_ok=True)
+    
+    img_name = Path(image_path).stem
+    
+    # 情况1: 纯衣服，无背景 → 直接使用
+    if content_type == "pure_clothing" and not has_background:
+        print(f"  ✅ 检测到纯衣服且无背景，直接使用")
+        return image_path
+    
+    # 情况2: 纯衣服，有背景 → 仅去除背景
+    if content_type == "pure_clothing" and has_background:
+        print(f"  🔪 步骤2: 去除背景...")
+        try:
+            from image_processor import remove_background
+            import cv2
+            
+            img = cv2.imread(image_path)
+            if img is None:
+                print(f"     ⚠️ 无法读取图片")
+                return None
+            
+            processed = remove_background(img, model_name="birefnet-general")
+            processed_path = output_path_obj / f"_extracted_nobg_{img_name}.png"
+            cv2.imwrite(str(processed_path), processed)
+            
+            print(f"     ✅ 背景已去除: {processed_path.name}")
+            return str(processed_path)
+            
+        except Exception as e:
+            print(f"     ⚠️ 去除背景失败: {e}")
+            return image_path
+    
+    # 情况3: 穿着衣服的人 → 去背景 + AI提取衣服
+    if content_type == "person_wearing":
+        print(f"  👤 检测到穿着衣服的人")
+        
+        # 步骤2a: 先去除背景
+        intermediate_path = image_path
+        if has_background:
+            print(f"  🔪 步骤2a: 去除背景...")
+            try:
+                from image_processor import remove_background
+                import cv2
+                
+                img = cv2.imread(image_path)
+                if img is not None:
+                    processed = remove_background(img, model_name="birefnet-general")
+                    intermediate_path = output_path_obj / f"_temp_nobg_{img_name}.png"
+                    cv2.imwrite(str(intermediate_path), processed)
+                    print(f"     ✅ 背景已去除")
+                else:
+                    print(f"     ⚠️ 无法读取图片，使用原图")
+            except Exception as e:
+                print(f"     ⚠️ 去除背景失败: {e}，使用原图")
+        
+        # 步骤2b: AI提取衣服
+        print(f"  🎨 步骤2b: AI提取衣服...")
+        
+        extraction_prompt = """Extract ONLY the clothing/garment from this image of a person wearing it.
+
+Requirements:
+- Remove the person completely
+- Keep only the clothing item itself
+- Maintain the clothing's original shape, color, and details
+- Show the clothing as if it's displayed on its own (like in a product photo)
+- Keep transparent background
+
+Generate an image showing only the extracted clothing item."""
+
+        try:
+            # 调用AI生成提取后的衣服图片
+            if mode == "proxy":
+                extracted_path = _extract_clothing_via_proxy(
+                    image_path=str(intermediate_path),
+                    prompt=extraction_prompt,
+                    api_key=api_key,
+                    model_name=model_name,
+                    output_dir=str(output_path_obj),
+                    output_name=f"_extracted_clothing_{img_name}.png",
+                    proxy_base_url=proxy_base_url
+                )
+            else:
+                extracted_path = _extract_clothing_via_direct(
+                    image_path=str(intermediate_path),
+                    prompt=extraction_prompt,
+                    api_key=api_key,
+                    model_name=model_name,
+                    output_dir=str(output_path_obj),
+                    output_name=f"_extracted_clothing_{img_name}.png"
+                )
+            
+            if extracted_path:
+                print(f"     ✅ 衣服提取完成: {Path(extracted_path).name}")
+                return extracted_path
+            else:
+                print(f"     ⚠️ 衣服提取失败，使用去背景后的图片")
+                return str(intermediate_path)
+                
+        except Exception as e:
+            print(f"     ⚠️ AI提取出错: {e}")
+            return str(intermediate_path)
+    
+    # 默认: 仅去除背景
+    print(f"  🔪 步骤2: 默认处理 - 去除背景...")
+    try:
+        from image_processor import remove_background
+        import cv2
+        
+        img = cv2.imread(image_path)
+        if img is not None:
+            processed = remove_background(img, model_name="birefnet-general")
+            processed_path = output_path_obj / f"_extracted_default_{img_name}.png"
+            cv2.imwrite(str(processed_path), processed)
+            print(f"     ✅ 处理完成: {processed_path.name}")
+            return str(processed_path)
+    except Exception as e:
+        print(f"     ⚠️ 处理失败: {e}")
+    
+    return image_path
+
+
+def _analyze_image_via_proxy(image_path, prompt, api_key, model_name, proxy_base_url=None):
+    """通过代理分析图片"""
+    import requests
+    import base64
+    
+    proxy_base_url = proxy_base_url or os.environ.get("AIPROXY_BASE_URL", "https://bot.bigjj.click/aiproxy")
+    
+    with open(image_path, 'rb') as f:
+        image_bytes = f.read()
+    
+    suffix = Path(image_path).suffix.lower()
+    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+    mime_type = mime_map.get(suffix, "image/jpeg")
+    b64_image = base64.b64encode(image_bytes).decode("utf-8")
+    
+    endpoint = f"{proxy_base_url.rstrip('/')}/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    
+    payload = {
+        "model": model_name,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_image}"}}
+                ]
+            }
+        ]
+    }
+    
+    response = requests.post(endpoint, headers=headers, json=payload, timeout=60)
+    if response.status_code == 200:
+        return response.json()["choices"][0]["message"]["content"]
+    return None
+
+
+def _analyze_image_via_direct(image_path, prompt, api_key, model_name):
+    """直接调用Gemini分析图片"""
+    _ensure_imports()
+    
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(model_name)
+    
+    image = PIL_Image.open(image_path)
+    response = model.generate_content([prompt, image])
+    
+    return response.text if response else None
+
+
+def _extract_clothing_via_proxy(image_path, prompt, api_key, model_name, output_dir, output_name, proxy_base_url=None):
+    """通过代理提取衣服（图像生成）"""
+    import requests
+    import base64
+    from pathlib import Path
+    
+    proxy_base_url = proxy_base_url or os.environ.get("AIPROXY_BASE_URL", "https://bot.bigjj.click/aiproxy")
+    
+    with open(image_path, 'rb') as f:
+        image_bytes = f.read()
+    
+    suffix = Path(image_path).suffix.lower()
+    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+    mime_type = mime_map.get(suffix, "image/jpeg")
+    b64_image = base64.b64encode(image_bytes).decode("utf-8")
+    
+    endpoint = f"{proxy_base_url.rstrip('/')}/generate"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    
+    payload = {
+        "prompt": prompt,
+        "model": model_name,
+        "image": f"data:{mime_type};base64,{b64_image}",
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
+        ]
+    }
+    
+    response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+    
+    if response.status_code == 200:
+        result = response.json()
+        if "image" in result:
+            # 保存图片
+            import base64
+            output_path = Path(output_dir) / output_name
+            
+            image_data = result["image"]
+            if image_data.startswith("data:"):
+                image_data = image_data.split(",", 1)[1]
+            
+            with open(output_path, "wb") as f:
+                f.write(base64.b64decode(image_data))
+            
+            return str(output_path)
+    
+    return None
+
+
+def _extract_clothing_via_direct(image_path, prompt, api_key, model_name, output_dir, output_name):
+    """直接调用Gemini提取衣服"""
+    _ensure_imports()
+    
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(model_name)
+    
+    image = PIL_Image.open(image_path)
+    response = model.generate_content([prompt, image])
+    
+    # Gemini可能返回生成的图片或描述
+    # 这里需要根据实际API响应调整
+    if response and hasattr(response, 'candidates'):
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, 'inline_data'):
+                output_path = Path(output_dir) / output_name
+                with open(output_path, 'wb') as f:
+                    f.write(part.inline_data.data)
+                return str(output_path)
+    
+    return None
+
+
+# =============================================================================
 # P0 功能: 高级合成 (Multi-Image Composite)
 # =============================================================================
 
