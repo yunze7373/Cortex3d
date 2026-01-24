@@ -1556,13 +1556,17 @@ Background type: [description]
 Clothing description: [brief description of the clothing]"""
 
     try:
+        # 对于AI分析，使用视觉-文本模型（gemini-2.0-flash），而不是图像生成模型
+        # 图像生成模型（如 gemini-2.5-flash-image）只能生成图像，不能分析图像
+        analysis_model = "gemini-2.0-flash"  # 文本/视觉模型，用于分析
+        
         # 根据模式调用AI分析
         if mode == "proxy":
             analysis_result = _analyze_image_via_proxy(
                 image_path=image_path,
                 prompt=analysis_prompt,
                 api_key=api_key,
-                model_name=model_name,
+                model_name=analysis_model,  # 使用分析专用模型
                 proxy_base_url=proxy_base_url
             )
         else:
@@ -1570,7 +1574,7 @@ Clothing description: [brief description of the clothing]"""
                 image_path=image_path,
                 prompt=analysis_prompt,
                 api_key=api_key,
-                model_name=model_name
+                model_name=analysis_model  # 使用分析专用模型
             )
         
         if not analysis_result:
