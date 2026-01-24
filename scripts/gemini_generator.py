@@ -34,15 +34,15 @@ def _ensure_imports():
     
     if genai is None:
         try:
-            import google.generativeai as _genai
+            import google.genai as _genai
             from PIL import Image as _Image
-            from google.generativeai.types import HarmCategory, HarmBlockThreshold
+            from google.genai.types import HarmCategory, HarmBlockThreshold
             genai = _genai
             PIL_Image = _Image
         except ImportError as e:
             raise ImportError(
                 f"缺少必要依赖: {e}\n"
-                "请运行: pip install google-generativeai pillow"
+                "请运行: pip install google-genai pillow"
             )
     
     # 可选的 OpenCV 导入（用于图像处理）
@@ -188,7 +188,7 @@ def generate_character_views(
     
     try:
         # 准备 API 调用参数（和代理模式完全对齐）
-        from google.generativeai.types import HarmCategory, HarmBlockThreshold
+        from google.genai.types import HarmCategory, HarmBlockThreshold
         
         # 分辨率映射
         resolution_map = {

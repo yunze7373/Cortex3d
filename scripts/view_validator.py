@@ -36,7 +36,7 @@ except ImportError:
     PIL_AVAILABLE = False
 
 try:
-    import google.generativeai as genai
+    import google.genai as genai
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
