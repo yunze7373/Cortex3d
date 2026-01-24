@@ -2,7 +2,7 @@
 # Z-Image-Turbo 本地推理服务
 # 阿里巴巴通义团队开发的高效图像生成模型 (6B参数)
 
-FROM nvidia/cuda:12.1-devel-ubuntu22.04
+FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
