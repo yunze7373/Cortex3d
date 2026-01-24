@@ -956,6 +956,23 @@ def main():
     # 换装完成后自动继续多视图生成流程
     # =========================================================================
     if args.wear_image or args.accessory_images:
+        # ⚠️ Local 模式不支持换装操作（Z-Image 是纯文生图模型，不支持多图输入）
+        if args.mode == "local":
+            print("\n" + "=" * 60)
+            print("⚠️  Local 模式不支持换装操作")
+            print("=" * 60)
+            print("\n  Z-Image-Turbo 是纯文生图模型，不支持多图合成。")
+            print("\n  💡 解决方案：分两步操作")
+            print("    # 步骤1: 使用云端API换装")
+            print("    python scripts/generate_character.py --mode proxy \\")
+            print("      --from-image 人物.png --wear 衣服.png --token YOUR_TOKEN")
+            print("")
+            print("    # 步骤2: 使用本地模型生成多视角")
+            print("    python scripts/generate_character.py --mode local \\")
+            print("      --from-image test_images/composite_xxx.png")
+            print("=" * 60 + "\n")
+            sys.exit(1)
+        
         print("\n" + "═"*60)
         print("👗 换装预处理 (Wardrobe Preprocessing)")
         print("═"*60)
@@ -1428,6 +1445,30 @@ def main():
     preprocessed_image = None  # 用于存储预处理后的图片路径
     
     if args.mode_composite:
+        # ⚠️ Local 模式不支持合成操作（Z-Image 是纯文生图模型，不支持多图输入）
+        if args.mode == "local":
+            print("\n" + "=" * 60)
+            print("⚠️  Local 模式不支持合成操作")
+            print("=" * 60)
+            print("\n  Z-Image-Turbo 是纯文生图模型，不支持：")
+            print("    • 多图合成 (--mode-composite)")
+            print("    • 换装 (--wear)")
+            print("    • 图片分析")
+            print("\n  💡 解决方案：")
+            print("    1. 使用 --mode proxy 或 --mode direct 进行合成")
+            print("    2. 合成完成后，再用 --mode local --from-image 进行多视角生成")
+            print("\n  示例分步操作：")
+            print("    # 步骤1: 使用云端API合成")
+            print("    python scripts/generate_character.py --mode proxy \\")
+            print("      --mode-composite --composite-images 人物.png 衣服.png \\")
+            print("      --composite-instruction '换装' --token YOUR_TOKEN")
+            print("")
+            print("    # 步骤2: 使用本地模型生成多视角")
+            print("    python scripts/generate_character.py --mode local \\")
+            print("      --from-image test_images/composite_xxx.png")
+            print("=" * 60 + "\n")
+            sys.exit(1)
+        
         print("[高级合成模式]")
         print("  用途: 换衣服、换配饰、创意拼贴、产品模型等")
         
