@@ -2157,7 +2157,7 @@ def _composite_via_local(
     client = ZImageClient(base_url=local_url)
     
     # 检查服务
-    if not client.check_health():
+    if not client.health_check():
         print("[ERROR] Z-Image 服务不可用")
         print("       请确保服务已启动: docker compose up -d zimage")
         return None
