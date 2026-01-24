@@ -77,108 +77,98 @@ def load_model():
         
         if USE_QUANTIZATION:
             # ============================================================
-            # 量化模式：分别加载并量化各组件，然后直接放 GPU
-            # 重要: 量化模型不能使用 enable_sequential_cpu_offload()！
+            # 混合量化模式：Transformer 量化放 GPU，Text_Encoder 放 CPU
+            # 这是 16GB 显卡的唯一可行方案！
+            # 20B 模型即使全部 4-bit 量化也需要 ~12GB，加上推理激活值会 OOM
             # ============================================================
-            print("\n   📦 使用组件级量化...")
+            print("\n   📦 使用混合量化模式...")
+            print("      (Transformer-GPU量化 + TextEncoder-CPU)")
             
             try:
                 from diffusers import BitsAndBytesConfig as DiffusersBitsAndBytesConfig
                 from diffusers import AutoModel
-                from transformers import BitsAndBytesConfig as TransformersBitsAndBytesConfig
                 # 使用正确的 text_encoder 类型
                 from transformers import Qwen2_5_VLForConditionalGeneration
                 
                 use_4bit = QUANTIZATION_BITS == "4"
                 
                 if use_4bit:
-                    print("   🔧 使用 4-bit NF4 量化 (约需 10-12GB 显存)...")
+                    print("   🔧 Transformer: 4-bit NF4 量化")
                     diffusers_quant_config = DiffusersBitsAndBytesConfig(
                         load_in_4bit=True,
                         bnb_4bit_quant_type="nf4",
                         bnb_4bit_compute_dtype=torch.bfloat16,
                         bnb_4bit_use_double_quant=True,
                     )
-                    transformers_quant_config = TransformersBitsAndBytesConfig(
-                        load_in_4bit=True,
-                        bnb_4bit_quant_type="nf4",
-                        bnb_4bit_compute_dtype=torch.bfloat16,
-                        bnb_4bit_use_double_quant=True,
-                    )
-                    quantization_mode = "4bit"
+                    quantization_mode = "4bit-hybrid"
                 else:
-                    print("   🔧 使用 8-bit LLM.int8() 量化 (约需 12-14GB 显存)...")
+                    print("   🔧 Transformer: 8-bit 量化")
                     diffusers_quant_config = DiffusersBitsAndBytesConfig(
                         load_in_8bit=True,
                     )
-                    transformers_quant_config = TransformersBitsAndBytesConfig(
-                        load_in_8bit=True,
-                    )
-                    quantization_mode = "8bit"
+                    quantization_mode = "8bit-hybrid"
                 
-                # 1. 量化加载 transformer
-                print("   📦 加载 transformer (量化)...")
+                # 1. 量化加载 transformer → GPU
+                print("   📦 [1/3] 加载 transformer (量化 → GPU)...")
                 transformer_quantized = AutoModel.from_pretrained(
                     model_id,
                     subfolder="transformer",
                     quantization_config=diffusers_quant_config,
                     torch_dtype=torch.bfloat16,
                 )
-                print(f"      ✅ Transformer 已加载 ({quantization_mode})")
+                print(f"      ✅ Transformer 已加载 (GPU, {quantization_mode})")
                 
-                # 2. 量化加载 text_encoder - 使用正确的类 Qwen2_5_VLForConditionalGeneration
-                print("   📦 加载 text_encoder (量化)...")
-                text_encoder_quantized = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                # 清理显存
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    import gc
+                    gc.collect()
+                
+                # 2. text_encoder 放 CPU (不量化)
+                # 16GB 显卡无法同时在 GPU 放 transformer + text_encoder
+                print("   📦 [2/3] 加载 text_encoder (CPU, bfloat16)...")
+                text_encoder_cpu = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                     model_id,
                     subfolder="text_encoder",
-                    quantization_config=transformers_quant_config,
                     torch_dtype=torch.bfloat16,
+                    device_map="cpu",
+                    low_cpu_mem_usage=True,
                 )
-                print(f"      ✅ Text Encoder 已加载 ({quantization_mode})")
+                print(f"      ✅ Text Encoder 已加载 (CPU)")
                 
                 # 3. 组装 Pipeline
-                # 量化模型会自动放在 GPU 上，不需要额外 .to("cuda")
-                # 不能使用 enable_sequential_cpu_offload (会报 meta tensor 错误)
-                print("   📦 组装 Pipeline (量化模型直接放 GPU)...")
+                print("   📦 [3/3] 组装 Pipeline...")
                 pipe = QwenImageEditPipeline.from_pretrained(
                     model_id,
                     transformer=transformer_quantized,
-                    text_encoder=text_encoder_quantized,
+                    text_encoder=text_encoder_cpu,
                     torch_dtype=torch.bfloat16,
                     low_cpu_mem_usage=True,
                 )
                 
-                # 将非量化组件 (VAE, scheduler 等) 移到 GPU
-                # 量化组件已经在 GPU 上了
+                # VAE 移到 GPU (较小，约 300MB)
                 if hasattr(pipe, 'vae') and pipe.vae is not None:
-                    # VAE 使用 fp16 可节省显存且精度足够
                     pipe.vae = pipe.vae.to(dtype=torch.float16, device="cuda")
                 
                 # 启用显存优化
                 try:
-                    # xFormers 高效注意力 (如果可用)
                     pipe.enable_xformers_memory_efficient_attention()
-                    print("   ✅ xFormers 内存高效注意力已启用")
+                    print("   ✅ xFormers 已启用")
                 except Exception:
                     pass
                 
-                # 启用 VAE slicing 和 tiling (减少 VAE 显存使用)
                 try:
                     if hasattr(pipe, 'enable_vae_slicing'):
                         pipe.enable_vae_slicing()
-                        print("   ✅ VAE slicing 已启用")
-                except Exception:
-                    pass
-                
-                try:
                     if hasattr(pipe, 'enable_vae_tiling'):
                         pipe.enable_vae_tiling()
-                        print("   ✅ VAE tiling 已启用")
                 except Exception:
                     pass
                 
-                print(f"   ✅ {quantization_mode} 量化模式已启用")
-                print(f"   📝 注意: 16GB显存+4bit建议 max_size ≤768，24GB可用 1024")
+                print(f"\n   ✅ 混合模式就绪!")
+                print(f"      Transformer: GPU (量化)")
+                print(f"      TextEncoder: CPU (推理时会较慢)")
+                print(f"      VAE: GPU (fp16)")
                 
             except Exception as e:
                 print(f"   ⚠️ 量化加载失败: {e}")
@@ -246,16 +236,19 @@ def health():
 def info():
     """模型信息"""
     quant_desc = {
-        "8bit": "8-bit (LLM.int8())",
-        "4bit": "4-bit (NF4 + Double Quant)",
-        "none": "bfloat16 (无量化)"
-    }.get(quantization_mode, "unknown")
+        "8bit-hybrid": "8-bit 混合 (Transformer-GPU + TextEncoder-CPU)",
+        "4bit-hybrid": "4-bit 混合 (Transformer-GPU + TextEncoder-CPU)",
+        "8bit": "8-bit 全量化 (需24GB+显存)",
+        "4bit": "4-bit 全量化 (需20GB+显存)",
+        "none": "bfloat16 + CPU Offload"
+    }.get(quantization_mode, quantization_mode)
     
     return jsonify({
         "model": "Qwen-Image-Edit",
         "developer": "Alibaba Qwen (阿里巴巴通义)",
         "parameters": "20B",
         "quantization": quant_desc,
+        "quantization_mode": quantization_mode,
         "features": [
             "语义编辑 (对象旋转、风格转换)",
             "外观编辑 (添加/删除/修改元素)",
@@ -275,11 +268,15 @@ def info():
             "default_max_size": 768,
             "default_steps": 28,
             "recommended": {
-                "16GB_VRAM_4bit": {"max_size": 768, "steps": 28},
-                "16GB_VRAM_8bit": {"max_size": 512, "steps": 28},
-                "24GB_VRAM_4bit": {"max_size": 1024, "steps": 50},
-                "48GB_VRAM": {"max_size": 1536, "steps": 50},
-                "note": "量化模式不支持CPU Offload，需足够显存。建议先从小尺寸测试。"
+                "16GB_hybrid": {"max_size": 768, "steps": 28, "note": "Transformer-GPU + TextEncoder-CPU"},
+                "24GB_4bit": {"max_size": 1024, "steps": 50},
+                "48GB": {"max_size": 1536, "steps": 50},
+            },
+            "memory_breakdown": {
+                "transformer_4bit": "~8GB",
+                "text_encoder_cpu": "~10GB RAM",
+                "vae_fp16": "~0.3GB",
+                "inference_activation": "~4-6GB (视分辨率)"
             }
         }
     })
