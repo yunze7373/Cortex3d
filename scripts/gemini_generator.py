@@ -1702,33 +1702,40 @@ Clothing description: [brief description of the main clothing items visible]"""
         # 步骤2b: AI提取衣服
         print(f"  🎨 步骤2b: AI提取衣服...")
         
-        # 强调保持原样，不要添加或修改任何东西
-        extraction_prompt = """Extract ONLY the clothing from this image of a person wearing clothes.
+        # 强调只提取可见部分，不要脑补不存在的部分
+        extraction_prompt = """Extract ONLY the clothing that is ACTUALLY VISIBLE in this image.
 
 CRITICAL REQUIREMENTS:
-1. **PRESERVE EXACT APPEARANCE**: The extracted clothing must look EXACTLY like in the original image
+
+1. **EXTRACT ONLY WHAT IS VISIBLE**:
+   - If only the upper body is shown (half-body photo), extract ONLY the top/shirt/jacket
+   - If pants are only partially visible or cut off, do NOT include them
+   - If something is hidden or outside the frame, do NOT imagine or create it
+   - NEVER add clothing items that are not clearly visible in the original image
+
+2. **PRESERVE EXACT APPEARANCE**:
+   - The extracted clothing must look EXACTLY like in the original image
    - Same size, proportions, colors, textures, patterns
    - Same style, cut, and design details
    - NO modifications, NO enhancements, NO changes
 
-2. **EXTRACT ONLY WHAT EXISTS**: 
-   - Only extract clothing items that are ACTUALLY VISIBLE in the original image
-   - Do NOT add any items that don't exist (no extra hats, accessories, jewelry)
-   - Do NOT invent or imagine clothing parts that are hidden or not shown
-
-3. **OUTPUT FORMAT**:
-   - Display the extracted clothing items on a clean white background
-   - Arrange them neatly as if for a product catalog (flat lay style)
-   - Maintain the ORIGINAL SIZE and proportions of each item
-   - Keep realistic, natural appearance - no exaggeration
-
-4. **FORBIDDEN**:
+3. **FORBIDDEN - DO NOT**:
+   - Do NOT "complete" or "imagine" hidden parts of clothing
+   - Do NOT add pants/bottoms if only upper body is shown
+   - Do NOT add accessories, jewelry, hats that aren't clearly visible
    - Do NOT shrink or enlarge the clothing
-   - Do NOT add accessories, jewelry, or items not in the original
    - Do NOT change colors, patterns, or textures
    - Do NOT include any person or body parts
 
-Generate an image showing ONLY the extracted clothing items exactly as they appear in the original, arranged on white background."""
+4. **OUTPUT FORMAT**:
+   - Display ONLY the actually visible clothing on a clean white background
+   - Arrange neatly as flat lay style
+   - Maintain ORIGINAL SIZE and proportions
+   - Keep realistic, natural appearance
+
+Example: If the photo shows a person from waist up wearing a coat and you can only see part of their pants at the very edge, extract ONLY the coat. Do NOT create full pants.
+
+Generate an image showing ONLY the clothing items that are CLEARLY AND FULLY VISIBLE in the original image."""
 
         try:
             # 对于图像生成（提取衣服），必须使用图像生成模型
