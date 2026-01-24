@@ -34,7 +34,7 @@ RUN pip install \
 # 工作目录
 WORKDIR /workspace
 
-# 复制服务脚本
+# 复制服务脚本 (作为备份，实际运行时会被 volume 挂载覆盖)
 COPY scripts/qwen_image_edit_server.py /workspace/
 
 # 环境变量
@@ -46,5 +46,5 @@ ENV QUANTIZATION_BITS=8
 # 暴露端口
 EXPOSE 8200
 
-# 启动命令
-CMD ["python", "qwen_image_edit_server.py"]
+# 启动命令 - 使用挂载目录的脚本 (便于开发调试)
+CMD ["python", "scripts/qwen_image_edit_server.py"]
