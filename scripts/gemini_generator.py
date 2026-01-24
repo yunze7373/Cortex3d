@@ -2100,7 +2100,14 @@ def composite_images(
         print(f"{'='*60}\n")
     
     # 根据模式选择调用方式
-    if mode == "proxy":
+    if mode == "local":
+        return _composite_via_local(
+            image_paths=image_paths,
+            instruction=instruction,  # 使用原始指令，让 img2img 处理
+            output_dir=output_dir,
+            output_name=output_name
+        )
+    elif mode == "proxy":
         return _composite_via_proxy(
             image_paths=image_paths,
             instruction=enhanced_instruction,
@@ -2119,6 +2126,86 @@ def composite_images(
             output_dir=output_dir,
             output_name=output_name
         )
+
+
+def _composite_via_local(
+    image_paths: list,
+    instruction: str,
+    output_dir: str,
+    output_name: str = None,
+    local_url: str = None
+) -> Optional[str]:
+    """
+    通过本地 Z-Image 服务进行图像合成
+    
+    由于 Z-Image 是文生图模型，不支持原生多图合成。
+    采用的策略是：
+    1. 先用 PIL 将多张图片简单拼合
+    2. 然后使用 img2img 根据提示词进行风格化处理
+    """
+    from pathlib import Path
+    from PIL import Image
+    import os
+    
+    try:
+        from zimage_client import ZImageClient
+    except ImportError:
+        print("[ERROR] 无法导入 zimage_client")
+        return None
+    
+    local_url = local_url or os.environ.get("ZIMAGE_URL", "http://localhost:8199")
+    client = ZImageClient(base_url=local_url)
+    
+    # 检查服务
+    if not client.check_health():
+        print("[ERROR] Z-Image 服务不可用")
+        print("       请确保服务已启动: docker compose up -d zimage")
+        return None
+    
+    print(f"\n[Z-Image Local] 本地图像合成")
+    print(f"  服务地址: {local_url}")
+    print(f"  图片数量: {len(image_paths)}")
+    
+    # 策略: 使用第一张图作为基础，通过 img2img 进行修改
+    # 对于换装场景，我们将人物图作为基础，用指令描述换装需求
+    base_image = image_paths[0]
+    
+    # 构建合成提示词
+    if len(image_paths) == 2:
+        # 双图场景 (通常是人物 + 衣服)
+        prompt = f"{instruction}. Based on the person in the image, apply the changes described. Maintain the original pose, lighting, and style."
+    else:
+        # 多图场景
+        prompt = f"{instruction}. Combine and transform the input image according to the description. Maintain consistency and realism."
+    
+    print(f"  基础图: {Path(base_image).name}")
+    print(f"  合成提示: {prompt[:80]}...")
+    
+    # 生成输出路径
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    if output_name:
+        filename = output_name if output_name.endswith('.png') else f"{output_name}.png"
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"composite_local_{timestamp}.png"
+    
+    output_path = str(Path(output_dir) / filename)
+    
+    # 使用 img2img 进行合成
+    # strength 设置为较高值，允许更大程度的修改
+    result = client.img2img(
+        prompt=prompt,
+        image_path=base_image,
+        strength=0.7,  # 较高的变换强度
+        output_path=output_path
+    )
+    
+    if result:
+        print(f"✅ 本地合成完成: {result}")
+        return result
+    else:
+        print("[ERROR] 本地合成失败")
+        return None
 
 
 def _composite_via_proxy(

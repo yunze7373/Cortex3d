@@ -10,8 +10,10 @@ Z-Image-Turbo 本地推理服务
 - 16GB VRAM 即可运行
 
 API 端点:
-- GET  /health  - 健康检查
-- POST /generate - 生成图像
+- GET  /health   - 健康检查
+- POST /generate - 文生图 (Text-to-Image)
+- POST /img2img  - 图生图 (Image-to-Image)
+- GET  /info     - 模型信息
 """
 
 import os
@@ -229,12 +231,186 @@ def info():
             "优秀的文字渲染",
             "照片级真实感",
             "8步快速推理",
+            "图生图 (img2img)",
+        ],
+        "endpoints": [
+            {"method": "GET", "path": "/health", "description": "健康检查"},
+            {"method": "POST", "path": "/generate", "description": "文生图"},
+            {"method": "POST", "path": "/img2img", "description": "图生图"},
         ],
         "gpu": {
             "name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
             "vram_gb": round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1) if torch.cuda.is_available() else None,
         }
     })
+
+
+@app.route("/img2img", methods=["POST"])
+def img2img():
+    """
+    图生图 (Image-to-Image)
+    
+    使用 SDEdit 方式：对输入图像添加噪声然后去噪，实现风格变换或内容修改。
+    
+    POST JSON:
+    {
+        "prompt": "描述文本 (支持中英文)",
+        "image": "base64编码的输入图像",
+        "strength": 0.75,   // 0.0-1.0, 越高变化越大
+        "width": 1024,      // 可选，默认使用原图尺寸
+        "height": 1024,     // 可选，默认使用原图尺寸
+        "steps": 9,         // 默认 9
+        "seed": 42          // 可选，随机种子
+    }
+    
+    返回:
+    {
+        "image": "base64编码的PNG图像",
+        "width": 1024,
+        "height": 1024,
+        "seed": 42,
+        "strength": 0.75,
+        "time": 1.23
+    }
+    """
+    if not model_loaded:
+        return jsonify({"error": "模型正在加载中，请稍后重试"}), 503
+    
+    try:
+        from PIL import Image
+        import numpy as np
+        
+        data = request.json or {}
+        
+        prompt = data.get("prompt", "")
+        image_b64 = data.get("image", "")
+        strength = float(data.get("strength", 0.75))
+        steps = data.get("steps", 9)
+        seed = data.get("seed", None)
+        
+        if not prompt:
+            return jsonify({"error": "prompt 参数是必需的"}), 400
+        
+        if not image_b64:
+            return jsonify({"error": "image 参数是必需的 (base64编码)"}), 400
+        
+        # 验证 strength
+        if strength < 0.0 or strength > 1.0:
+            return jsonify({"error": "strength 范围: 0.0-1.0"}), 400
+        
+        # 解码输入图像
+        try:
+            # 处理可能的 data:image/png;base64, 前缀
+            if "base64," in image_b64:
+                image_b64 = image_b64.split("base64,")[1]
+            image_data = base64.b64decode(image_b64)
+            init_image = Image.open(BytesIO(image_data)).convert("RGB")
+        except Exception as e:
+            return jsonify({"error": f"图像解码失败: {e}"}), 400
+        
+        # 获取/设置尺寸
+        width = data.get("width", init_image.width)
+        height = data.get("height", init_image.height)
+        
+        # 验证尺寸
+        if width < 256 or width > 2048 or height < 256 or height > 2048:
+            return jsonify({"error": "尺寸范围: 256-2048"}), 400
+        
+        # 调整输入图像尺寸
+        if init_image.width != width or init_image.height != height:
+            init_image = init_image.resize((width, height), Image.Resampling.LANCZOS)
+        
+        # 生成器 (种子)
+        if seed is None:
+            seed = torch.randint(0, 2**32 - 1, (1,)).item()
+        generator = torch.Generator("cuda").manual_seed(seed)
+        
+        print(f"\n🖼️ [{datetime.now().strftime('%H:%M:%S')}] 图生图请求")
+        print(f"   Prompt: {prompt[:80]}{'...' if len(prompt) > 80 else ''}")
+        print(f"   尺寸: {width}x{height}, 强度: {strength}, 步数: {steps}, 种子: {seed}")
+        
+        start_time = time.time()
+        
+        # SDEdit: 计算实际步数
+        # strength=0.75 意味着跳过 25% 的去噪步骤
+        actual_steps = int(steps * strength)
+        if actual_steps < 1:
+            actual_steps = 1
+        
+        # 使用 VAE 编码输入图像到潜空间
+        init_image_tensor = pipe.image_processor.preprocess(init_image)
+        init_image_tensor = init_image_tensor.to(device=pipe.device, dtype=pipe.dtype)
+        
+        # 编码到潜空间
+        latents = pipe.vae.encode(init_image_tensor).latent_dist.sample(generator)
+        latents = latents * pipe.vae.config.scaling_factor
+        
+        # 设置调度器
+        pipe.scheduler.set_timesteps(steps)
+        
+        # 计算开始的时间步
+        start_step = int(steps * (1 - strength))
+        timesteps = pipe.scheduler.timesteps[start_step:]
+        
+        # 添加噪声
+        noise = torch.randn(latents.shape, generator=generator, device=pipe.device, dtype=pipe.dtype)
+        latents = pipe.scheduler.add_noise(latents, noise, timesteps[:1])
+        
+        # 编码提示词
+        prompt_embeds, pooled_prompt_embeds = pipe.encode_prompt(
+            prompt=prompt,
+            device=pipe.device,
+            num_images_per_prompt=1,
+            do_classifier_free_guidance=False,
+        )
+        
+        # 去噪循环
+        for i, t in enumerate(timesteps):
+            # 预测噪声
+            noise_pred = pipe.transformer(
+                hidden_states=latents,
+                timestep=t.unsqueeze(0),
+                encoder_hidden_states=prompt_embeds,
+                pooled_projections=pooled_prompt_embeds,
+                return_dict=False,
+            )[0]
+            
+            # 更新潜变量
+            latents = pipe.scheduler.step(noise_pred, t, latents, return_dict=False)[0]
+        
+        # 解码图像
+        latents = latents / pipe.vae.config.scaling_factor
+        image = pipe.vae.decode(latents, return_dict=False)[0]
+        image = pipe.image_processor.postprocess(image, output_type="pil")[0]
+        
+        gen_time = time.time() - start_time
+        
+        # 转 base64
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        img_b64 = base64.b64encode(buffer.getvalue()).decode()
+        
+        print(f"   ✅ 完成! 耗时: {gen_time:.2f}秒")
+        
+        return jsonify({
+            "image": img_b64,
+            "width": width,
+            "height": height,
+            "seed": seed,
+            "strength": strength,
+            "time": round(gen_time, 2),
+        })
+        
+    except torch.cuda.OutOfMemoryError:
+        print("   ❌ CUDA 内存不足!")
+        torch.cuda.empty_cache()
+        return jsonify({"error": "GPU 内存不足，请尝试较小的尺寸"}), 507
+        
+    except Exception as e:
+        print(f"   ❌ 图生图失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

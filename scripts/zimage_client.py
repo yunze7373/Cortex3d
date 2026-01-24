@@ -168,6 +168,114 @@ class ZImageClient:
             print(f"[ERROR] Z-Image 生成失败: {e}")
             return None
     
+    def img2img(
+        self,
+        prompt: str,
+        image_path: str,
+        strength: float = 0.75,
+        width: int = None,
+        height: int = None,
+        steps: int = 9,
+        seed: int = None,
+        output_path: str = None,
+    ) -> Optional[str]:
+        """
+        图生图 (Image-to-Image)
+        
+        使用 SDEdit 方式：对输入图像添加噪声然后去噪。
+        strength 越高，生成图像与原图差异越大。
+        
+        Args:
+            prompt: 提示词 (描述期望输出)
+            image_path: 输入图像路径
+            strength: 变换强度 0.0-1.0 (默认0.75)
+            width: 输出宽度 (默认使用原图尺寸)
+            height: 输出高度 (默认使用原图尺寸)
+            steps: 推理步数 (默认9)
+            seed: 随机种子 (可选)
+            output_path: 输出路径 (可选)
+        
+        Returns:
+            保存的图像路径，失败返回 None
+        """
+        try:
+            # 读取并编码输入图像
+            image_path = Path(image_path)
+            if not image_path.exists():
+                print(f"[ERROR] 输入图像不存在: {image_path}")
+                return None
+            
+            with open(image_path, "rb") as f:
+                image_bytes = f.read()
+            image_b64 = base64.b64encode(image_bytes).decode()
+            
+            # 构建请求
+            payload = {
+                "prompt": prompt,
+                "image": image_b64,
+                "strength": strength,
+                "steps": steps,
+            }
+            if width is not None:
+                payload["width"] = width
+            if height is not None:
+                payload["height"] = height
+            if seed is not None:
+                payload["seed"] = seed
+            
+            print(f"[Z-Image] 图生图请求: strength={strength}, steps={steps}")
+            
+            response = requests.post(
+                f"{self.base_url}/img2img",
+                json=payload,
+                timeout=self.timeout
+            )
+            
+            if response.status_code != 200:
+                error = response.json().get("error", "未知错误")
+                print(f"[ERROR] Z-Image 图生图失败: {error}")
+                return None
+            
+            data = response.json()
+            img_b64 = data.get("image")
+            
+            if not img_b64:
+                print("[ERROR] 服务未返回图像")
+                return None
+            
+            # 解码图像
+            img_data = base64.b64decode(img_b64)
+            img = Image.open(BytesIO(img_data))
+            
+            # 生成输出路径
+            if output_path is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = f"outputs/zimage_img2img_{timestamp}.png"
+            
+            # 确保目录存在
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            
+            # 保存图像
+            img.save(output_path)
+            
+            print(f"[Z-Image] 图生图完成: {output_path}")
+            return output_path
+            
+        except requests.exceptions.ConnectionError:
+            print("[ERROR] 无法连接到 Z-Image 服务")
+            print("       请确保 Docker 容器已启动: docker compose up -d zimage")
+            return None
+            
+        except requests.exceptions.Timeout:
+            print("[ERROR] Z-Image 服务响应超时")
+            return None
+            
+        except Exception as e:
+            print(f"[ERROR] Z-Image 图生图失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
     def generate_multiview(
         self,
         character_description: str,
