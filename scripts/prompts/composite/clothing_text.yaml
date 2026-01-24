@@ -1,0 +1,41 @@
+name: clothing_text
+version: "1.0"
+description: "单图+文字换装模板 - 基于文字描述生成衣服并合成"
+
+template: |
+  You are given ONE image:
+  - **IMAGE 1**: A photo of a PERSON. This is the SUBJECT whose face, body, pose, and background must be preserved EXACTLY.
+
+  ## YOUR TASK
+  Generate and place clothing onto the person in IMAGE 1 based on this description:
+  **CLOTHING DESCRIPTION:** {instruction}
+
+  ## CRITICAL PRESERVATION REQUIREMENTS
+  The following features of the PERSON in IMAGE 1 must remain **100% IDENTICAL**:
+  - **Face**: Every facial feature, expression, gaze direction, makeup - NO changes allowed
+  - **Hair**: Exact style, length, color, texture - must be identical
+  - **Skin tone**: Must remain exactly the same
+  - **Body proportions**: Height, build, shape - must be identical  
+  - **Pose**: Body position, hand placement, leg stance, head angle - must be identical
+  - **Background**: Environment, lighting direction, shadows - must be unchanged
+
+  ## CLOTHING GENERATION REQUIREMENTS
+  The clothing based on the description should:
+  - Fit naturally on the person's body shape from IMAGE 1
+  - Show realistic fabric draping and wrinkles matching the pose
+  - Reflect the same lighting conditions as IMAGE 1
+  - Create consistent shadows
+  - Match the style described in the instruction
+
+  {style_instructions}
+
+  Generate a single {output_format} composite image showing the person from IMAGE 1 wearing the described clothing. No text or annotations.
+
+variables:
+  - instruction
+  - style_instructions
+  - output_format
+
+defaults:
+  output_format: "photorealistic"
+  style_instructions: ""

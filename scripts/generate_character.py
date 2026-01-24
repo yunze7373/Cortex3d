@@ -1414,6 +1414,7 @@ def main():
             print("[ERROR] --mode-composite 需要 --composite-images 参数（至少1张图片）")
             print("        示例: --composite-images model.png dress.png")
             print("        或配合 --from-image: --from-image model.png --composite-images dress.png")
+            print("        或单图模式: --composite-images model.png --composite-instruction '让这个人穿上JNBY的衣服'")
             sys.exit(1)
         
         if not args.composite_instruction:
@@ -1426,11 +1427,16 @@ def main():
             all_images = [args.from_image] + args.composite_images
         else:
             all_images = args.composite_images
-            if len(all_images) < 2:
-                print("[ERROR] --mode-composite 需要至少2张图片")
-                print("        示例: --composite-images model.png dress.png")
-                print("        或: --from-image model.png --composite-images dress.png")
-                sys.exit(1)
+        
+        # 判断是单图模式还是多图模式
+        single_image_mode = len(all_images) == 1
+        
+        if single_image_mode:
+            print("\n[单图智能合成模式]")
+            print("  检测到只有1张图片，将使用文字描述直接生成并合成衣服...")
+            print(f"  主体图片: {Path(all_images[0]).name}")
+            print(f"  衣服描述: {args.composite_instruction}")
+            print("")
         
         # 验证所有图片存在
         image_paths = []
@@ -1454,13 +1460,21 @@ def main():
         for i, img in enumerate(image_paths, 1):
             print(f"      [{i}] {Path(img).name}")
         print(f"  └─ 合成指令: {args.composite_instruction}")
-        print(f"  └─ 合成类型: {args.composite_type}")
         print(f"  └─ 输出目录: {args.output}")
         print(f"  └─ 调用模式: {args.mode.upper()}")
         print("")
         
         # 导入合成函数
         from gemini_generator import composite_images
+        
+        # 根据图片数量选择合成类型
+        composite_type_to_use = args.composite_type
+        if single_image_mode:
+            # 单图模式使用文字描述模板
+            composite_type_to_use = "clothing_text"
+            print(f"  └─ 使用单图模式模板: {composite_type_to_use}")
+        else:
+            print(f"  └─ 合成类型: {composite_type_to_use}")
         
         # 执行合成 (遵守 proxy/direct 设置)
         try:
@@ -1472,7 +1486,7 @@ def main():
                 output_dir=args.output,
                 output_name=args.composite_output_name,
                 mode=args.mode,
-                composite_type=args.composite_type,
+                composite_type=composite_type_to_use,
                 composite_prompt_template=args.composite_prompt_template,
                 export_prompt=args.export_prompt,
             )

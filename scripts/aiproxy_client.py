@@ -154,6 +154,11 @@ def generate_image_via_proxy(
             
             else:
                 print(f"[ERROR] AiProxy 返回错误: {response.status_code}")
+                try:
+                    error_data = response.json()
+                    print(f"[ERROR] 错误详情: {error_data}")
+                except:
+                    print(f"[ERROR] 响应内容: {response.text[:500]}")
                 # 继续下面检查是否需要 fallback
         
         except requests.exceptions.Timeout:

@@ -1556,9 +1556,12 @@ def composite_images(
     if not model_name:
         model_name = "gemini-2.5-flash-image"
     
+    # 单图模式检查 (只有clothing_text类型支持单图)
     if len(image_paths) < 2:
-        print("[ERROR] 合成需要至少2张图片")
-        return None
+        if composite_type != "clothing_text":
+            print("[ERROR] 合成需要至少2张图片 (除非使用 clothing_text 模式)")
+            return None
+        # 单图模式 - 允许继续
     
     # 确定最终提示词
     if instruction_is_final:
