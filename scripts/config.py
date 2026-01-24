@@ -234,6 +234,7 @@ def build_composite_prompt(
     构建高精度合成提示词（换装、配饰等）
     
     使用与多视角生成相同级别的严格控制模板
+    优先使用 prompts.wardrobe 模块的工业级模板
     
     Args:
         instruction: 用户的合成指令
@@ -243,6 +244,32 @@ def build_composite_prompt(
     Returns:
         完整的提示词字符串
     """
+    # 优先尝试使用 wardrobe 模块（工业级模板）
+    try:
+        from prompts.wardrobe import build_wardrobe_prompt, detect_wardrobe_task
+        
+        # 自动检测任务类型
+        if composite_type == "auto":
+            composite_type = detect_wardrobe_task(instruction)
+        
+        # 映射到 wardrobe 任务类型
+        task_type_map = {
+            "clothing": "clothing",
+            "accessory": "accessory",
+            "general": "full_outfit"  # general 使用 full_outfit
+        }
+        task_type = task_type_map.get(composite_type, "clothing")
+        
+        return build_wardrobe_prompt(
+            task_type=task_type,
+            instruction=instruction,
+            num_images=num_images,
+            strict_mode=True
+        )
+    except ImportError:
+        pass  # wardrobe 模块不存在，使用回退逻辑
+    
+    # 尝试使用 PromptLibrary
     lib = _get_prompt_library()
     if lib and hasattr(lib, 'build_composite_prompt'):
         return lib.build_composite_prompt(
@@ -266,35 +293,101 @@ def build_composite_prompt(
     
     # 回退到硬编码严格模板（与 multiview 同级别精度）
     if composite_type == "clothing":
-        return f"""You are a professional virtual try-on AI with photorealistic precision.
+        return f"""You are an expert virtual try-on AI with PIXEL-PERFECT precision.
 
-**CRITICAL TASK**: Apply ONLY the clothing from Image 2 onto the person in Image 1.
+==================================================
+## TASK TYPE: CLOTHING REPLACEMENT (STRICT MODE)
+==================================================
 
-**ABSOLUTE REQUIREMENTS - ZERO TOLERANCE**:
-1. **100% PRESERVE**: Face, facial features, expression, hairstyle, hair color, skin tone, body proportions, pose, hand position, and ALL other features from Image 1 must remain PIXEL-PERFECT identical.
-2. **ONLY CHANGE**: The clothing/outfit. NOTHING else may be altered.
-3. **NATURAL FIT**: New clothing must fit the person's body shape and follow their exact pose naturally.
-4. **PRESERVE ENVIRONMENT**: Background, lighting, shadows, and color temperature from Image 1 must remain unchanged.
-5. **PHOTOREALISTIC OUTPUT**: Generate a single high-quality, seamless composite image.
+**PRIMARY OBJECTIVE**: 
+Replace ONLY the clothing on the person in Image 1 with the garment from Image 2.
 
-**User instruction**: {instruction}
+==================================================
+## ABSOLUTE REQUIREMENTS - ZERO TOLERANCE FOR DEVIATION
+==================================================
 
-Generate only the final composite image. No text, no annotations."""
+**🔒 IDENTITY LOCK (100% PRESERVATION):**
+The following elements from Image 1 MUST remain PIXEL-PERFECT identical:
+- Face: ALL facial features, expression, gaze direction, makeup
+- Hair: Style, length, color, texture, any accessories in hair
+- Skin: Tone, texture, any visible tattoos/marks
+- Body: Proportions, build, height impression, weight impression
+- Pose: Exact body position, hand placement, leg stance, head angle
+- Background: Environment, lighting direction, shadows, ambiance
+
+**ONLY CHANGE**: The clothing/outfit. NOTHING ELSE.
+
+==================================================
+## CLOTHING TRANSFER RULES
+==================================================
+
+1. **Garment Extraction**: Extract the style, cut, color, pattern, and design from Image 2's garment
+2. **Natural Fit**: The new clothing MUST naturally conform to the person's exact body shape and pose
+3. **Fabric Physics**: Realistic draping, folds, and wrinkles matching the pose
+4. **Lighting Match**: Fabric reflects the same lighting conditions as Image 1
+5. **Shadow Consistency**: Cast shadows and ambient occlusion remain consistent
+
+==================================================
+## USER INSTRUCTION
+==================================================
+{instruction}
+
+==================================================
+## OUTPUT REQUIREMENTS
+==================================================
+- Generate a SINGLE high-quality composite image
+- Photorealistic quality matching Image 1's style
+- NO text, annotations, labels, or watermarks
+- Seamless integration - no visible seams or artifacts
+
+❗ CRITICAL: Any change to face, hair, body shape, pose, or background is UNACCEPTABLE."""
     
     elif composite_type == "accessory":
-        return f"""You are a professional image compositing AI specialized in adding accessories.
+        return f"""You are an expert image compositing AI with PIXEL-PERFECT precision.
 
-**CRITICAL TASK**: Add ONLY the accessory from Image 2 onto the person in Image 1.
+==================================================
+## TASK TYPE: ACCESSORY ADDITION (STRICT MODE)
+==================================================
 
-**ABSOLUTE REQUIREMENTS - ZERO TOLERANCE**:
-1. **100% PRESERVE**: Face, body, clothing, pose, and ALL features from Image 1 must remain PIXEL-PERFECT identical.
-2. **ONLY ADD**: The accessory item. NOTHING else may be altered.
-3. **NATURAL PLACEMENT**: Position the accessory correctly and realistically.
-4. **PRESERVE ENVIRONMENT**: Background, lighting, shadows unchanged from Image 1.
+**PRIMARY OBJECTIVE**: 
+Add ONLY the accessory/item from Image 2 onto the person in Image 1.
 
-**User instruction**: {instruction}
+==================================================
+## ABSOLUTE REQUIREMENTS - ZERO TOLERANCE FOR DEVIATION
+==================================================
 
-Generate only the final composite image. No text."""
+**🔒 IDENTITY LOCK (100% PRESERVATION):**
+The following elements from Image 1 MUST remain PIXEL-PERFECT identical:
+- Face: ALL facial features, expression, gaze direction, makeup
+- Hair: Style, length, color, texture (unless accessory is hair-related)
+- Clothing: ENTIRE outfit, all garments, all details
+- Body: Proportions, build, pose, hand position
+- Background: Environment, lighting, shadows
+
+**ONLY ADD**: The accessory item. NOTHING ELSE changes.
+
+==================================================
+## ACCESSORY PLACEMENT RULES
+==================================================
+
+1. **Natural Position**: Place accessory in anatomically correct position
+2. **Scale Match**: Size accessory appropriately for the person
+3. **Lighting Integration**: Accessory receives same lighting as subject
+4. **Shadow Addition**: Add appropriate shadows cast by the accessory
+
+==================================================
+## USER INSTRUCTION
+==================================================
+{instruction}
+
+==================================================
+## OUTPUT REQUIREMENTS
+==================================================
+- Generate a SINGLE high-quality composite image
+- Photorealistic quality matching Image 1's style
+- NO text, annotations, labels, or watermarks
+
+❗ CRITICAL: Any change to face, body, clothing, or background is UNACCEPTABLE."""
     
     else:  # general
         return f"""You are a professional image compositing AI.

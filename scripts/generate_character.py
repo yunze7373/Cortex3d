@@ -500,6 +500,44 @@ def main():
         help="List all available style presets and exit"
     )
     
+    # =========================================================================
+    # 换装预处理 - 类似 --anime 的简便参数
+    # 用法: --wear dress.png 或 --wear "red dress.png" "让她穿上这件衣服"
+    # =========================================================================
+    parser.add_argument(
+        "--wear", "--outfit", "--clothing",
+        dest="wear_image",
+        type=str,
+        nargs="+",
+        metavar="IMAGE",
+        help="换装模式: 让主体穿上指定衣服。用法: --wear dress.png 或 --wear dress.png '换上这件红色裙子'"
+    )
+    
+    parser.add_argument(
+        "--accessory", "--add-item",
+        dest="accessory_images",
+        type=str,
+        nargs="+",
+        metavar="IMAGE",
+        help="配饰模式: 给主体添加配饰。用法: --accessory hat.png bag.png"
+    )
+    
+    parser.add_argument(
+        "--wear-strict",
+        dest="wear_strict",
+        action="store_true",
+        default=True,
+        help="换装严格模式: 100%%保留主体面部/身材/姿势 (默认开启)"
+    )
+    
+    parser.add_argument(
+        "--wear-instruction",
+        dest="wear_instruction",
+        type=str,
+        default=None,
+        help="自定义换装指令 (可选，默认自动生成)"
+    )
+    
     parser.add_argument(
         "--from-id",
         dest="from_id",
@@ -872,6 +910,146 @@ def main():
         print("   python scripts/generate_character.py --from-image img.png --ghibli --custom-views front left")
         print("")
         sys.exit(0)
+    
+    # =========================================================================
+    # 👗 换装预处理 (--wear / --accessory)
+    # 类似 --anime 一样简单使用，作为预处理步骤
+    # 换装完成后自动继续多视图生成流程
+    # =========================================================================
+    if args.wear_image or args.accessory_images:
+        print("\n" + "═"*60)
+        print("👗 换装预处理 (Wardrobe Preprocessing)")
+        print("═"*60)
+        
+        # 导入换装模块
+        try:
+            from prompts.wardrobe import build_wardrobe_prompt, detect_wardrobe_task, get_wardrobe_help
+        except ImportError:
+            print("[ERROR] 无法加载换装模块，请确保 prompts/wardrobe.py 存在")
+            sys.exit(1)
+        
+        # 确定主体图片
+        if not args.from_image:
+            print("[ERROR] 换装需要 --from-image 参数（主体图片路径）")
+            print("        示例: --from-image model.png --wear dress.png")
+            sys.exit(1)
+        
+        # 检查主体图片是否存在
+        main_image = Path(args.from_image)
+        if not main_image.exists():
+            for search_dir in [Path("."), Path("test_images"), Path("reference_images"), Path(args.output)]:
+                candidate = search_dir / args.from_image
+                if candidate.exists():
+                    main_image = candidate
+                    break
+        
+        if not main_image.exists():
+            print(f"[ERROR] 主体图片不存在: {args.from_image}")
+            sys.exit(1)
+        
+        # 确定任务类型和图片
+        if args.wear_image:
+            task_type = "clothing"
+            # 解析 --wear 参数：可以是 "dress.png" 或 "dress.png '自定义指令'"
+            wear_args = args.wear_image
+            clothing_path = wear_args[0]
+            custom_instruction = wear_args[1] if len(wear_args) > 1 else None
+            target_images = [clothing_path]
+            print(f"  ✨ 任务类型: 换装 (Clothing Change)")
+        else:
+            task_type = "accessory"
+            target_images = args.accessory_images
+            custom_instruction = None
+            print(f"  ✨ 任务类型: 配饰 (Accessory Addition)")
+        
+        # 验证目标图片
+        resolved_targets = []
+        for img_path in target_images:
+            p = Path(img_path)
+            if not p.exists():
+                for search_dir in [Path("."), Path("test_images"), Path("reference_images"), Path(args.output)]:
+                    candidate = search_dir / img_path
+                    if candidate.exists():
+                        p = candidate
+                        break
+            
+            if not p.exists():
+                print(f"[ERROR] 图片不存在: {img_path}")
+                sys.exit(1)
+            resolved_targets.append(str(p))
+        
+        # 构建指令
+        if args.wear_instruction:
+            instruction = args.wear_instruction
+        elif custom_instruction:
+            instruction = custom_instruction
+        else:
+            if task_type == "clothing":
+                instruction = "让图1中的人穿上图2中的衣服/服装，保持人物的面部、发型、姿势完全不变"
+            else:
+                instruction = "给图1中的人添加图2中的配饰，保持人物外观完全不变"
+        
+        print(f"  📷 主体图片: {main_image.name}")
+        for i, t in enumerate(resolved_targets, 1):
+            print(f"  👗 目标图片 [{i}]: {Path(t).name}")
+        print(f"  📝 指令: {instruction[:60]}{'...' if len(instruction) > 60 else ''}")
+        print(f"  🔒 严格模式: {'开启' if args.wear_strict else '关闭'}")
+        print(f"  🔄 调用模式: {args.mode.upper()}")
+        print("")
+        
+        # 构建提示词（使用与多视图相同级别的严格模板）
+        final_prompt = build_wardrobe_prompt(
+            task_type=task_type,
+            instruction=instruction,
+            num_images=1 + len(resolved_targets),
+            strict_mode=args.wear_strict
+        )
+        
+        # 打印最终提示词（如果启用导出）
+        if args.export_prompt:
+            print("\n[最终换装提示词]")
+            print("-" * 60)
+            print(final_prompt)
+            print("-" * 60 + "\n")
+        
+        # 组合所有图片路径
+        all_images = [str(main_image)] + resolved_targets
+        
+        # 调用合成 API
+        from gemini_generator import composite_images
+        
+        try:
+            output_path = composite_images(
+                image_paths=all_images,
+                instruction=final_prompt,  # 使用构建好的严格提示词
+                api_key=args.token,
+                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                output_dir=args.output,
+                output_name=None,
+                mode=args.mode,
+                composite_type=task_type,  # clothing 或 accessory
+                composite_prompt_template=final_prompt,  # 直接传递完整模板
+                export_prompt=False,  # 已在上面打印
+            )
+            
+            if output_path:
+                print(f"\n✅ 换装预处理完成！")
+                print(f"   输出: {output_path}")
+                
+                # 将换装结果设置为后续处理的输入
+                args.from_image = output_path
+                print(f"\n🔄 继续后续多视图生成流程...")
+                print(f"   使用换装结果作为输入: {Path(output_path).name}")
+                print("")
+            else:
+                print(f"\n❌ 换装失败，请检查日志")
+                sys.exit(1)
+                
+        except Exception as e:
+            print(f"[ERROR] 换装过程出错: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
     
     # =========================================================================
     # 图像编辑模式：使用 Gemini 对角色图像进行编辑
