@@ -539,6 +539,15 @@ def main():
     )
     
     parser.add_argument(
+        "--wear-model", "--hifi",
+        dest="wear_model",
+        type=str,
+        choices=["flash", "pro"],
+        default="flash",
+        help="换装模型: flash(快速,默认) 或 pro(高保真,gemini-3-pro-image-preview)"
+    )
+    
+    parser.add_argument(
         "--from-id",
         dest="from_id",
         default=None,
@@ -994,6 +1003,15 @@ def main():
             print(f"  👗 目标图片 [{i}]: {Path(t).name}")
         print(f"  📝 指令: {instruction[:60]}{'...' if len(instruction) > 60 else ''}")
         print(f"  🔒 严格模式: {'开启' if args.wear_strict else '关闭'}")
+        
+        # 确定使用的模型
+        if getattr(args, 'wear_model', 'flash') == 'pro':
+            wear_model_name = "gemini-3-pro-image-preview"
+            print(f"  🎯 模型: Gemini 3 Pro (高保真)")
+        else:
+            wear_model_name = args.model if args.model else "gemini-2.5-flash-image"
+            print(f"  🎯 模型: {wear_model_name}")
+        
         print(f"  🔄 调用模式: {args.mode.upper()}")
         print("")
         
@@ -1023,7 +1041,7 @@ def main():
                 image_paths=all_images,
                 instruction=final_prompt,  # 使用构建好的严格提示词
                 api_key=args.token,
-                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                model_name=wear_model_name,  # 使用选定的模型
                 output_dir=args.output,
                 output_name=None,
                 mode=args.mode,

@@ -291,117 +291,58 @@ def build_composite_prompt(
         else:
             composite_type = "general"
     
-    # 回退到硬编码严格模板（与 multiview 同级别精度）
+    # 回退到 Google 官方推荐的高保真细节保留格式
+    # 参考: https://ai.google.dev/gemini-api/docs/image-generation#5_high_fidelity_detail_preservation
     if composite_type == "clothing":
-        return f"""You are an expert virtual try-on AI with PIXEL-PERFECT precision.
+        return f"""Using the provided images, place the clothing/garment from Image 2 onto the person in Image 1.
 
-==================================================
-## TASK TYPE: CLOTHING REPLACEMENT (STRICT MODE)
-==================================================
+Ensure that the following features of the person in Image 1 remain COMPLETELY UNCHANGED:
+- Face: all facial features, expression, gaze direction, makeup
+- Hair: exact style, length, color, texture
+- Skin tone and any visible marks
+- Body proportions and build
+- Pose: exact body position, hand placement, leg stance, head angle
+- Background: environment, lighting, shadows
 
-**PRIMARY OBJECTIVE**: 
-Replace ONLY the clothing on the person in Image 1 with the garment from Image 2.
+The new clothing should:
+- Fit naturally on the person's body shape and pose
+- Have realistic fabric draping, folds, and wrinkles matching the pose
+- Reflect the same lighting conditions as Image 1
+- Create consistent shadows
 
-==================================================
-## ABSOLUTE REQUIREMENTS - ZERO TOLERANCE FOR DEVIATION
-==================================================
+User instruction: {instruction}
 
-**🔒 IDENTITY LOCK (100% PRESERVATION):**
-The following elements from Image 1 MUST remain PIXEL-PERFECT identical:
-- Face: ALL facial features, expression, gaze direction, makeup
-- Hair: Style, length, color, texture, any accessories in hair
-- Skin: Tone, texture, any visible tattoos/marks
-- Body: Proportions, build, height impression, weight impression
-- Pose: Exact body position, hand placement, leg stance, head angle
-- Background: Environment, lighting direction, shadows, ambiance
-
-**ONLY CHANGE**: The clothing/outfit. NOTHING ELSE.
-
-==================================================
-## CLOTHING TRANSFER RULES
-==================================================
-
-1. **Garment Extraction**: Extract the style, cut, color, pattern, and design from Image 2's garment
-2. **Natural Fit**: The new clothing MUST naturally conform to the person's exact body shape and pose
-3. **Fabric Physics**: Realistic draping, folds, and wrinkles matching the pose
-4. **Lighting Match**: Fabric reflects the same lighting conditions as Image 1
-5. **Shadow Consistency**: Cast shadows and ambient occlusion remain consistent
-
-==================================================
-## USER INSTRUCTION
-==================================================
-{instruction}
-
-==================================================
-## OUTPUT REQUIREMENTS
-==================================================
-- Generate a SINGLE high-quality composite image
-- Photorealistic quality matching Image 1's style
-- NO text, annotations, labels, or watermarks
-- Seamless integration - no visible seams or artifacts
-
-❗ CRITICAL: Any change to face, hair, body shape, pose, or background is UNACCEPTABLE."""
+Generate a single photorealistic composite image. No text or annotations."""
     
     elif composite_type == "accessory":
-        return f"""You are an expert image compositing AI with PIXEL-PERFECT precision.
+        return f"""Using the provided images, place the accessory from Image 2 onto the person in Image 1.
 
-==================================================
-## TASK TYPE: ACCESSORY ADDITION (STRICT MODE)
-==================================================
+Ensure that the following features of the person in Image 1 remain COMPLETELY UNCHANGED:
+- Face: all facial features, expression, gaze direction
+- Hair: style, length, color (unless the accessory is hair-related)
+- Clothing: entire outfit, all garments, all details
+- Body: proportions, build, pose, hand position
+- Background: environment, lighting, shadows
 
-**PRIMARY OBJECTIVE**: 
-Add ONLY the accessory/item from Image 2 onto the person in Image 1.
+The accessory should:
+- Be positioned naturally and anatomically correct
+- Be sized appropriately for the person
+- Receive the same lighting as the subject
+- Cast appropriate shadows
 
-==================================================
-## ABSOLUTE REQUIREMENTS - ZERO TOLERANCE FOR DEVIATION
-==================================================
+User instruction: {instruction}
 
-**🔒 IDENTITY LOCK (100% PRESERVATION):**
-The following elements from Image 1 MUST remain PIXEL-PERFECT identical:
-- Face: ALL facial features, expression, gaze direction, makeup
-- Hair: Style, length, color, texture (unless accessory is hair-related)
-- Clothing: ENTIRE outfit, all garments, all details
-- Body: Proportions, build, pose, hand position
-- Background: Environment, lighting, shadows
-
-**ONLY ADD**: The accessory item. NOTHING ELSE changes.
-
-==================================================
-## ACCESSORY PLACEMENT RULES
-==================================================
-
-1. **Natural Position**: Place accessory in anatomically correct position
-2. **Scale Match**: Size accessory appropriately for the person
-3. **Lighting Integration**: Accessory receives same lighting as subject
-4. **Shadow Addition**: Add appropriate shadows cast by the accessory
-
-==================================================
-## USER INSTRUCTION
-==================================================
-{instruction}
-
-==================================================
-## OUTPUT REQUIREMENTS
-==================================================
-- Generate a SINGLE high-quality composite image
-- Photorealistic quality matching Image 1's style
-- NO text, annotations, labels, or watermarks
-
-❗ CRITICAL: Any change to face, body, clothing, or background is UNACCEPTABLE."""
+Generate a single photorealistic composite image. No text or annotations."""
     
     else:  # general
-        return f"""You are a professional image compositing AI.
+        return f"""Using the provided images, combine elements according to the instruction.
 
-**TASK**: Combine the {num_images} provided images according to the instruction.
+Preserve the main subject (especially face and body) from Image 1 as much as possible.
+Ensure seamless, natural blending with consistent lighting and perspective.
 
-**REQUIREMENTS**:
-1. Preserve the main subject (especially faces) from Image 1 as much as possible.
-2. Ensure seamless, natural blending.
-3. Maintain consistent lighting and perspective.
+User instruction: {instruction}
 
-**User instruction**: {instruction}
-
-Generate only the final composite image."""
+Generate a single composite image. No text or annotations."""
 
 
 def get_negative_prompt(categories: List[str] = None) -> str:

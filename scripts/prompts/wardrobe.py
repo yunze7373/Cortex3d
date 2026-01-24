@@ -36,157 +36,69 @@ class WardrobeTask:
     
     
 # =============================================================================
-# 核心换装提示词模板 - 复用多视图的 SPATIAL LOCK 机制
+# 核心换装提示词模板 - 使用 Google 官方推荐的高保真细节保留格式
+# 参考: https://ai.google.dev/gemini-api/docs/image-generation#5_high_fidelity_detail_preservation
 # =============================================================================
 
-WARDROBE_CLOTHING_TEMPLATE = """You are an expert virtual try-on AI with PIXEL-PERFECT precision.
+WARDROBE_CLOTHING_TEMPLATE = """Using the provided images, place the clothing/garment from Image 2 onto the person in Image 1.
 
-==================================================
-## TASK TYPE: CLOTHING REPLACEMENT (STRICT MODE)
-==================================================
+Ensure that the following features of the person in Image 1 remain COMPLETELY UNCHANGED:
+- Face: all facial features, expression, gaze direction, makeup
+- Hair: exact style, length, color, texture
+- Skin tone and any visible marks
+- Body proportions and build
+- Pose: exact body position, hand placement, leg stance, head angle
+- Background: environment, lighting, shadows
 
-**PRIMARY OBJECTIVE**: 
-Replace ONLY the clothing on the person in Image 1 with the garment from Image 2.
+The new clothing should:
+- Fit naturally on the person's body shape and pose
+- Have realistic fabric draping, folds, and wrinkles matching the pose
+- Reflect the same lighting conditions as Image 1
+- Create consistent shadows
 
-==================================================
-## ABSOLUTE REQUIREMENTS - ZERO TOLERANCE FOR DEVIATION
-==================================================
+User instruction: {instruction}
 
-**🔒 IDENTITY LOCK (100% PRESERVATION):**
-The following elements from Image 1 MUST remain PIXEL-PERFECT identical:
-- Face: ALL facial features, expression, gaze direction, makeup
-- Hair: Style, length, color, texture, any accessories in hair
-- Skin: Tone, texture, any visible tattoos/marks
-- Body: Proportions, build, height impression, weight impression
-- Pose: Exact body position, hand placement, leg stance, head angle
-- Background: Environment, lighting direction, shadows, ambiance
-
-**ONLY CHANGE**: The clothing/outfit. NOTHING ELSE.
-
-==================================================
-## CLOTHING TRANSFER RULES
-==================================================
-
-1. **Garment Extraction**: Extract the style, cut, color, pattern, and design from Image 2's garment
-2. **Natural Fit**: The new clothing MUST naturally conform to the person's exact body shape and pose
-3. **Fabric Physics**: Realistic draping, folds, and wrinkles matching the pose
-4. **Lighting Match**: Fabric reflects the same lighting conditions as Image 1
-5. **Shadow Consistency**: Cast shadows and ambient occlusion remain consistent
-
-==================================================
-## USER INSTRUCTION
-==================================================
-{instruction}
-
-==================================================
-## OUTPUT REQUIREMENTS
-==================================================
-- Generate a SINGLE high-quality composite image
-- Photorealistic quality matching Image 1's style
-- NO text, annotations, labels, or watermarks
-- Seamless integration - no visible seams or artifacts
-
-❗ CRITICAL: Any change to face, hair, body shape, pose, or background is UNACCEPTABLE.
-"""
+Generate a single photorealistic composite image. No text or annotations."""
 
 
-WARDROBE_ACCESSORY_TEMPLATE = """You are an expert image compositing AI with PIXEL-PERFECT precision.
+WARDROBE_ACCESSORY_TEMPLATE = """Using the provided images, place the accessory from Image 2 onto the person in Image 1.
 
-==================================================
-## TASK TYPE: ACCESSORY ADDITION (STRICT MODE)
-==================================================
+Ensure that the following features of the person in Image 1 remain COMPLETELY UNCHANGED:
+- Face: all facial features, expression, gaze direction
+- Hair: style, length, color (unless the accessory is hair-related)
+- Clothing: entire outfit, all garments, all details
+- Body: proportions, build, pose, hand position
+- Background: environment, lighting, shadows
 
-**PRIMARY OBJECTIVE**: 
-Add ONLY the accessory/item from Image 2 onto the person in Image 1.
+The accessory should:
+- Be positioned naturally and anatomically correct
+- Be sized appropriately for the person
+- Receive the same lighting as the subject
+- Cast appropriate shadows
 
-==================================================
-## ABSOLUTE REQUIREMENTS - ZERO TOLERANCE FOR DEVIATION
-==================================================
+User instruction: {instruction}
 
-**🔒 IDENTITY LOCK (100% PRESERVATION):**
-The following elements from Image 1 MUST remain PIXEL-PERFECT identical:
-- Face: ALL facial features, expression, gaze direction, makeup
-- Hair: Style, length, color, texture (unless accessory is hair-related)
-- Clothing: ENTIRE outfit, all garments, all details
-- Body: Proportions, build, pose, hand position
-- Background: Environment, lighting, shadows
-
-**ONLY ADD**: The accessory item. NOTHING ELSE changes.
-
-==================================================
-## ACCESSORY PLACEMENT RULES
-==================================================
-
-1. **Natural Position**: Place accessory in anatomically correct position
-2. **Scale Match**: Size accessory appropriately for the person
-3. **Lighting Integration**: Accessory receives same lighting as subject
-4. **Shadow Addition**: Add appropriate shadows cast by the accessory
-5. **Occlusion Handling**: Properly handle what the accessory hides/reveals
-
-==================================================
-## USER INSTRUCTION
-==================================================
-{instruction}
-
-==================================================
-## OUTPUT REQUIREMENTS
-==================================================
-- Generate a SINGLE high-quality composite image
-- Photorealistic quality matching Image 1's style
-- NO text, annotations, labels, or watermarks
-- Seamless integration of accessory
-
-❗ CRITICAL: Any change to face, body, clothing, or background is UNACCEPTABLE.
-"""
+Generate a single photorealistic composite image. No text or annotations."""
 
 
-WARDROBE_FULL_OUTFIT_TEMPLATE = """You are an expert styling AI with PIXEL-PERFECT precision.
+WARDROBE_FULL_OUTFIT_TEMPLATE = """Using the provided images, apply the complete outfit from Image 2 onto the person in Image 1.
 
-==================================================
-## TASK TYPE: COMPLETE OUTFIT CHANGE (STRICT MODE)
-==================================================
+Ensure that the following features of the person in Image 1 remain COMPLETELY UNCHANGED:
+- Face: ALL facial features, expression, gaze - must be identical
+- Hair: style, length, color, texture - must be identical
+- Skin tone: must remain exactly the same
+- Body proportions: height, build, shape - must be identical
+- Pose: body position, gesture, stance - must be identical
+- Background: environment, lighting direction - must be unchanged
 
-**PRIMARY OBJECTIVE**: 
-Apply the complete outfit (clothing + accessories) from Image 2 onto the person in Image 1.
+The outfit should:
+- Be extracted completely from Image 2 (all clothing and accessories)
+- Fit naturally on Image 1's body shape and pose
+- Maintain the overall aesthetic style
 
-==================================================
-## ABSOLUTE REQUIREMENTS - ZERO TOLERANCE FOR DEVIATION
-==================================================
+User instruction: {instruction}
 
-**🔒 IDENTITY LOCK (100% PRESERVATION):**
-The following elements from Image 1 MUST remain PIXEL-PERFECT identical:
-- Face: ALL facial features, expression, gaze, makeup - UNCHANGED
-- Hair: Style, length, color, texture - UNCHANGED
-- Skin tone: Must remain exactly the same
-- Body proportions: Height, build, shape - UNCHANGED
-- Pose: Body position, gesture, stance - UNCHANGED
-- Background: Environment, lighting direction - UNCHANGED
-
-**CHANGES ALLOWED**: Clothing and accessories ONLY.
-
-==================================================
-## OUTFIT TRANSFER RULES
-==================================================
-
-1. **Complete Extraction**: Extract all visible clothing and accessories from Image 2
-2. **Layering Logic**: Apply outfit layers correctly (undergarments -> main clothing -> outer layers -> accessories)
-3. **Body Adaptation**: Outfit MUST conform to Image 1's body shape and pose
-4. **Style Coherence**: Maintain the overall aesthetic of the outfit
-
-==================================================
-## USER INSTRUCTION
-==================================================
-{instruction}
-
-==================================================
-## OUTPUT REQUIREMENTS
-==================================================
-- Generate a SINGLE high-quality composite image
-- Photorealistic, fashion-photography quality
-- NO text, annotations, labels, or watermarks
-
-❗ CRITICAL: The person's IDENTITY (face, body, pose) must be 100% preserved.
-"""
+Generate a single photorealistic composite image. No text or annotations."""
 
 
 # =============================================================================
