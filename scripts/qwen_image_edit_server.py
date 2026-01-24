@@ -68,12 +68,19 @@ def load_model():
         
         model_id = "Qwen/Qwen-Image-Edit"
         
+        # ====================================================================
+        # 加载策略说明:
+        # - 量化模式: 4-bit/8-bit 量化，直接放 GPU，不使用 CPU offload
+        #   (量化模型与 CPU offload 不兼容，会报 meta tensor 错误)
+        # - 非量化模式: 使用 CPU offload 节省显存，但推理较慢
+        # ====================================================================
+        
         if USE_QUANTIZATION:
             # ============================================================
-            # 正确的量化方式：分别加载并量化各组件
-            # diffusers 的 BitsAndBytesConfig 只能用于单个模型，不能用于 Pipeline
+            # 量化模式：分别加载并量化各组件，然后直接放 GPU
+            # 重要: 量化模型不能使用 enable_sequential_cpu_offload()！
             # ============================================================
-            print("\n   📦 使用组件级量化 (推荐方式)...")
+            print("\n   📦 使用组件级量化...")
             
             try:
                 from diffusers import BitsAndBytesConfig as DiffusersBitsAndBytesConfig
@@ -84,13 +91,12 @@ def load_model():
                 use_4bit = QUANTIZATION_BITS == "4"
                 
                 if use_4bit:
-                    print("   🔧 使用 4-bit NF4 量化...")
-                    # 4-bit 量化配置 (更省显存)
+                    print("   🔧 使用 4-bit NF4 量化 (约需 10-12GB 显存)...")
                     diffusers_quant_config = DiffusersBitsAndBytesConfig(
                         load_in_4bit=True,
                         bnb_4bit_quant_type="nf4",
                         bnb_4bit_compute_dtype=torch.bfloat16,
-                        bnb_4bit_use_double_quant=True,  # 嵌套量化，额外节省 0.4 bits/param
+                        bnb_4bit_use_double_quant=True,
                     )
                     transformers_quant_config = TransformersBitsAndBytesConfig(
                         load_in_4bit=True,
@@ -100,8 +106,7 @@ def load_model():
                     )
                     quantization_mode = "4bit"
                 else:
-                    print("   🔧 使用 8-bit LLM.int8() 量化...")
-                    # 8-bit 量化配置
+                    print("   🔧 使用 8-bit LLM.int8() 量化 (约需 12-14GB 显存)...")
                     diffusers_quant_config = DiffusersBitsAndBytesConfig(
                         load_in_8bit=True,
                     )
@@ -110,7 +115,7 @@ def load_model():
                     )
                     quantization_mode = "8bit"
                 
-                # 1. 量化加载 transformer (diffusers 组件)
+                # 1. 量化加载 transformer
                 print("   📦 加载 transformer (量化)...")
                 transformer_quantized = AutoModel.from_pretrained(
                     model_id,
@@ -120,7 +125,7 @@ def load_model():
                 )
                 print(f"      ✅ Transformer 已加载 ({quantization_mode})")
                 
-                # 2. 量化加载 text_encoder (transformers 组件)
+                # 2. 量化加载 text_encoder
                 print("   📦 加载 text_encoder (量化)...")
                 text_encoder_quantized = TFAutoModel.from_pretrained(
                     model_id,
@@ -130,9 +135,10 @@ def load_model():
                 )
                 print(f"      ✅ Text Encoder 已加载 ({quantization_mode})")
                 
-                # 3. 组装 Pipeline，传入量化后的组件
-                # 不使用 device_map，让我们手动控制 offload
-                print("   📦 组装 Pipeline...")
+                # 3. 组装 Pipeline
+                # 量化模型会自动放在 GPU 上，不需要额外 .to("cuda")
+                # 不能使用 enable_sequential_cpu_offload (会报 meta tensor 错误)
+                print("   📦 组装 Pipeline (量化模型直接放 GPU)...")
                 pipe = QwenImageEditPipeline.from_pretrained(
                     model_id,
                     transformer=transformer_quantized,
@@ -141,38 +147,35 @@ def load_model():
                     low_cpu_mem_usage=True,
                 )
                 
-                # 即使量化后，16GB 显存仍然紧张，启用 CPU offload
-                if total_vram < 24:
-                    print(f"   ⚠️ 显存 ({total_vram:.1f}GB) 紧张，启用 Sequential CPU Offload...")
-                    pipe.enable_sequential_cpu_offload()
-                else:
-                    pipe.to("cuda")
+                # 将非量化组件 (VAE, scheduler 等) 移到 GPU
+                # 量化组件已经在 GPU 上了
+                if hasattr(pipe, 'vae') and pipe.vae is not None:
+                    pipe.vae = pipe.vae.to("cuda")
                 
                 print(f"   ✅ {quantization_mode} 量化模式已启用")
+                print(f"   📝 注意: 量化模式下推荐图像尺寸 ≤1024px (16GB显存)")
                 
             except Exception as e:
-                print(f"   ⚠️ 组件级量化失败: {e}")
+                print(f"   ⚠️ 量化加载失败: {e}")
                 import traceback
                 traceback.print_exc()
-                print("   🔄 回退到标准模式 + CPU Offload...")
+                
+                # 回退到非量化 + CPU Offload 模式
+                print("   🔄 回退到非量化 + CPU Offload 模式...")
                 quantization_mode = "none"
                 
-                # 回退方案：不使用量化，但用 CPU offload 节省显存
                 pipe = QwenImageEditPipeline.from_pretrained(
                     model_id,
                     torch_dtype=torch.bfloat16,
                     low_cpu_mem_usage=True,
                 )
-                # 根据显存大小选择 offload 策略
-                if total_vram < 24:
-                    print(f"   ⚠️ GPU 显存 ({total_vram:.1f}GB) 不足运行 20B 模型")
-                    print("   🔄 启用 Sequential CPU Offload...")
-                    pipe.enable_sequential_cpu_offload()
-                else:
-                    pipe.to("cuda")
+                print("   🔄 启用 Sequential CPU Offload (慢但稳定)...")
+                pipe.enable_sequential_cpu_offload()
         else:
-            # 非量化模式
-            print("   📦 标准模式加载...")
+            # ============================================================
+            # 非量化模式: 使用 CPU Offload 节省显存
+            # ============================================================
+            print("   📦 非量化模式加载...")
             pipe = QwenImageEditPipeline.from_pretrained(
                 model_id,
                 torch_dtype=torch.bfloat16,
@@ -180,14 +183,9 @@ def load_model():
             )
             
             if total_vram < 40:
-                # 20B 模型非量化约需 40GB VRAM
-                print(f"   ⚠️ GPU 显存 ({total_vram:.1f}GB) 可能不足")
-                if total_vram < 24:
-                    print("   🔄 启用 Sequential CPU Offload (最省显存但最慢)...")
-                    pipe.enable_sequential_cpu_offload()
-                else:
-                    print("   🔄 启用 Model CPU Offload...")
-                    pipe.enable_model_cpu_offload()
+                print(f"   ⚠️ GPU 显存 ({total_vram:.1f}GB) 不足完全加载 20B 模型")
+                print("   🔄 启用 Sequential CPU Offload...")
+                pipe.enable_sequential_cpu_offload()
             else:
                 pipe.to("cuda")
         
@@ -249,12 +247,13 @@ def info():
             "vram_gb": round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1) if torch.cuda.is_available() else None,
         },
         "limits": {
-            "default_max_size": 512,
+            "default_max_size": 1024,
             "default_steps": 28,
             "recommended": {
-                "16GB_VRAM": {"max_size": 512, "steps": 28},
-                "24GB_VRAM": {"max_size": 768, "steps": 50},
-                "40GB_VRAM": {"max_size": 1024, "steps": 50},
+                "16GB_VRAM_4bit": {"max_size": 1024, "steps": 28},
+                "16GB_VRAM_8bit": {"max_size": 768, "steps": 28},
+                "24GB_VRAM": {"max_size": 1536, "steps": 50},
+                "note": "量化模式不支持CPU Offload，需足够显存"
             }
         }
     })
@@ -270,16 +269,16 @@ def edit():
         "prompt": "编辑指令 (支持中英文)",
         "image": "base64编码的输入图像",
         "cfg_scale": 4.0,        // 可选，默认 4.0
-        "steps": 50,             // 可选，默认 50
+        "steps": 28,             // 可选，默认 28 (官方推荐 28-50)
         "seed": 42,              // 可选，随机种子
-        "max_size": 512          // 可选，最大图像尺寸 (防止OOM，16GB显存建议512)
+        "max_size": 1024         // 可选，最大图像尺寸 (默认1024，16GB+4bit可用)
     }
     
     返回:
     {
         "image": "base64编码的PNG图像",
-        "width": 512,
-        "height": 512,
+        "width": 1024,
+        "height": 1024,
         "seed": 42,
         "time": 5.23
     }
@@ -299,8 +298,8 @@ def edit():
         steps = int(data.get("steps", 28))
         seed = data.get("seed", None)
         negative_prompt = data.get("negative_prompt", " ")
-        # 最大图像尺寸 (16GB 显存 + 4-bit 量化建议 512，24GB+ 可用 768-1024)
-        max_size = int(data.get("max_size", 512))
+        # 最大图像尺寸 (16GB显存+4-bit量化可用1024，8GB用512)
+        max_size = int(data.get("max_size", 1024))
         
         if not prompt:
             return jsonify({"error": "prompt 参数是必需的"}), 400
