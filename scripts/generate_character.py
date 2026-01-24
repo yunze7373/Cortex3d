@@ -1814,7 +1814,8 @@ def main():
     # =========================================================================
     
     # 导出模式不需要token验证（不会实际调用API）
-    if not args.export_prompt:
+    # local 模式也不需要token验证（使用本地 Z-Image 服务）
+    if not args.export_prompt and args.mode != "local":
         # 检查认证
         if args.mode == "proxy":
             if not args.token:
@@ -1831,6 +1832,7 @@ def main():
                 
                 proxy_cmd_with_token = " ".join(base_cmd_parts + ["--mode proxy --token 'your-aiproxy-token'"])
                 direct_cmd = " ".join(base_cmd_parts + ["--mode direct --token 'your-gemini-api-key'"])
+                local_cmd = " ".join(base_cmd_parts + ["--mode local"])
                 export_cmd = " ".join(base_cmd_parts + ["--export-prompt"])
                 
                 print("💡 解决方案:")
@@ -1838,13 +1840,15 @@ def main():
                 print(f"   {proxy_cmd_with_token}")
                 print(f"\n   选项 2: 使用直连模式")
                 print(f"   {direct_cmd}")
-                print(f"\n   选项 3: 导出提示词 (不消耗API配额)")
+                print(f"\n   选项 3: 使用本地 Z-Image 模式 (无需 Token)")
+                print(f"   {local_cmd}")
+                print(f"\n   选项 4: 导出提示词 (不消耗API配额)")
                 print(f"   {export_cmd}")
-                print(f"\n   选项 4: 设置环境变量")
+                print(f"\n   选项 5: 设置环境变量")
                 print(f"   $env:AIPROXY_TOKEN='your-token'  # PowerShell")
                 print(f"   {' '.join(base_cmd_parts + ['--mode proxy'])}\n")
                 sys.exit(1)
-        else:
+        elif args.mode == "direct":
             if not args.token:
                 print("\n⚠️  未设置 Gemini API Key\n")
                 
@@ -1859,6 +1863,7 @@ def main():
                 
                 direct_cmd_with_key = " ".join(base_cmd_parts + ["--mode direct --token 'your-gemini-api-key'"])
                 proxy_cmd = " ".join(base_cmd_parts + ["--mode proxy --token 'your-aiproxy-token'"])
+                local_cmd = " ".join(base_cmd_parts + ["--mode local"])
                 export_cmd = " ".join(base_cmd_parts + ["--export-prompt"])
                 
                 print("💡 解决方案:")
@@ -1866,9 +1871,11 @@ def main():
                 print(f"   {direct_cmd_with_key}")
                 print(f"\n   选项 2: 使用代理模式")
                 print(f"   {proxy_cmd}")
-                print(f"\n   选项 3: 导出提示词 (不消耗API配额)")
+                print(f"\n   选项 3: 使用本地 Z-Image 模式 (无需 Token)")
+                print(f"   {local_cmd}")
+                print(f"\n   选项 4: 导出提示词 (不消耗API配额)")
                 print(f"   {export_cmd}")
-                print(f"\n   选项 4: 设置环境变量")
+                print(f"\n   选项 5: 设置环境变量")
                 print(f"   $env:GEMINI_API_KEY='your-api-key'  # PowerShell")
                 print(f"   {' '.join(base_cmd_parts + ['--mode direct'])}\n")
                 sys.exit(1)
@@ -1880,9 +1887,14 @@ def main():
     if not args.export_prompt:
         if args.mode == "proxy":
             print(f"[模式] AiProxy (bot.bigjj.click/aiproxy)")
+            print(f"[模型] {model}")
+        elif args.mode == "local":
+            local_url = getattr(args, 'local_url', None) or os.environ.get("ZIMAGE_URL", "http://localhost:8199")
+            print(f"[模式] 本地 Z-Image-Turbo")
+            print(f"[服务] {local_url}")
         else:
             print(f"[模式] 直连 Gemini API")
-        print(f"[模型] {model}")
+            print(f"[模型] {model}")
     else:
         print(f"[导出模式] 准备提示词参数...")
     
