@@ -329,6 +329,52 @@ wsl-compact:
 	@echo "  3. 重启 Docker Desktop"
 	@echo ""
 
+# === Z-Image-Turbo 本地图像生成 ===
+
+# 构建 Z-Image Docker 镜像
+.PHONY: build-zimage
+build-zimage:
+	@echo "🔨 构建 Z-Image-Turbo 容器..."
+	docker compose build zimage
+
+# 启动 Z-Image 服务
+.PHONY: up-zimage
+up-zimage:
+	@echo "🚀 启动 Z-Image-Turbo 服务..."
+	@echo "   API 地址: http://localhost:8199"
+	docker compose up -d zimage
+
+# 停止 Z-Image 服务
+.PHONY: down-zimage
+down-zimage:
+	@echo "⏹️  停止 Z-Image-Turbo 服务..."
+	docker compose stop zimage
+
+# 查看 Z-Image 日志
+.PHONY: logs-zimage
+logs-zimage:
+	docker compose logs -f zimage
+
+# 测试 Z-Image 服务
+.PHONY: test-zimage
+test-zimage:
+	@echo "🧪 测试 Z-Image-Turbo 服务..."
+	@curl -s http://localhost:8199/health | python3 -m json.tool || echo "❌ 服务未启动"
+
+# 使用 Z-Image 本地生成角色
+# 用法: make generate-local PROMPT="赛博朋克风格的女战士"
+.PHONY: generate-local
+generate-local:
+	@echo "🎨 使用 Z-Image 本地生成角色..."
+	python scripts/generate_character.py "$(PROMPT)" --mode local
+
+# 使用 Z-Image 生成多视角
+# 用法: make generate-local-mv PROMPT="Q版卡通小猫"
+.PHONY: generate-local-mv
+generate-local-mv:
+	@echo "🎨 使用 Z-Image 本地生成多视角..."
+	python scripts/generate_character.py "$(PROMPT)" --mode local --multi-view
+
 # 帮助
 help:
 	@echo "用法:"
@@ -339,6 +385,14 @@ help:
 	@echo "  make build   - 重新构建镜像"
 	@echo "  make up      - 启动容器"
 	@echo "  make down    - 停止容器"
+	@echo ""
+	@echo "Z-Image-Turbo (本地图像生成):"
+	@echo "  make build-zimage      - 构建 Z-Image 镜像"
+	@echo "  make up-zimage         - 启动 Z-Image 服务"
+	@echo "  make down-zimage       - 停止 Z-Image 服务"
+	@echo "  make logs-zimage       - 查看 Z-Image 日志"
+	@echo "  make test-zimage       - 测试 Z-Image 服务"
+	@echo "  make generate-local PROMPT='描述' - 本地生成角色"
 	@echo ""
 	@echo "TRELLIS (官方):"
 	@echo "  make build-trellis2    - 构建 TRELLIS 镜像"

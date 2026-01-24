@@ -289,14 +289,27 @@ def main():
     )
     parser.add_argument(
         "--mode",
-        choices=["proxy", "direct"],
+        choices=["proxy", "direct", "local"],
         default="proxy",
-        help="生成模式: proxy=AiProxy服务, direct=直连Gemini API"
+        help="生成模式: proxy=AiProxy服务, direct=直连Gemini API, local=本地Z-Image"
     )
     parser.add_argument(
         "--token",
         default=None,  # 将根据 mode 自动选择环境变量
-        help="认证 Token: proxy模式使用 AIPROXY_TOKEN, direct模式使用 GEMINI_API_KEY"
+        help="认证 Token: proxy模式使用 AIPROXY_TOKEN, direct模式使用 GEMINI_API_KEY, local模式不需要"
+    )
+    parser.add_argument(
+        "--local-url",
+        dest="local_url",
+        default=None,
+        help="本地 Z-Image 服务地址 (默认: http://localhost:8199)"
+    )
+    parser.add_argument(
+        "--local-steps",
+        dest="local_steps",
+        type=int,
+        default=9,
+        help="本地模型推理步数 (Z-Image推荐9)"
     )
     parser.add_argument(
         "--model",
@@ -890,8 +903,9 @@ def main():
     if args.token is None:
         if args.mode == "proxy":
             args.token = os.environ.get("AIPROXY_TOKEN")
-        else:  # direct mode
+        elif args.mode == "direct":
             args.token = os.environ.get("GEMINI_API_KEY")
+        # local 模式不需要 token
     
     # Banner
     try:
@@ -2034,8 +2048,62 @@ def main():
         
         args.from_image = str(image_path)  # 更新为实际路径（可能已被预处理）
     
-    # 调用生成器
-    if args.mode == "proxy":
+    # =========================================================================
+    # 本地 Z-Image 模式
+    # =========================================================================
+    if args.mode == "local":
+        from zimage_client import ZImageClient, generate_character_local
+        
+        print("\n" + "=" * 60)
+        print("🖥️  本地 Z-Image-Turbo 模式")
+        print("=" * 60)
+        
+        local_url = args.local_url or os.environ.get("ZIMAGE_URL", "http://localhost:8199")
+        print(f"   服务地址: {local_url}")
+        
+        # 检查服务是否可用
+        client = ZImageClient(base_url=local_url)
+        if not client.health_check():
+            print("\n❌ Z-Image 服务不可用!")
+            print("   请先启动服务:")
+            print("   ")
+            print("   docker compose up -d zimage")
+            print("   ")
+            print("   查看日志:")
+            print("   docker compose logs -f zimage")
+            print("")
+            sys.exit(1)
+        
+        print("   ✅ 服务已就绪")
+        
+        # 确定视角模式
+        view_mode = f"{args.views}-view"
+        multi_view = args.views != "1"  # 除了单视角都是多视角
+        
+        print(f"   角色: {description[:50]}{'...' if len(description) > 50 else ''}")
+        print(f"   风格: {style}")
+        print(f"   多视角: {'是 (' + view_mode + ')' if multi_view else '否'}")
+        print("")
+        
+        # 调用本地生成
+        result = generate_character_local(
+            character_description=description,
+            style=style,
+            output_dir=args.output,
+            multi_view=multi_view,
+            view_mode=view_mode,
+            seed=None,  # 可以添加 --seed 参数
+            auto_cut=not args.no_cut,
+        )
+        
+        if result:
+            print(f"\n✅ 本地生成成功: {result}")
+        else:
+            print("\n❌ 本地生成失败")
+            sys.exit(1)
+    
+    # 调用生成器 (proxy/direct 模式)
+    elif args.mode == "proxy":
         from aiproxy_client import generate_character_multiview, analyze_image_for_character as analyze_via_proxy
         
         # 处理图像参考模式（代理模式）
@@ -2113,7 +2181,7 @@ def main():
             with_props=args.with_props,
             export_prompt=args.export_prompt
         )
-    else:
+    elif args.mode == "direct":
         # Gemini 直连模式 - 完整支持所有参数
         from gemini_generator import generate_character_views, analyze_image_for_character
         

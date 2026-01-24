@@ -1,0 +1,54 @@
+# Dockerfile.zimage
+# Z-Image-Turbo 本地推理服务
+# 阿里巴巴通义团队开发的高效图像生成模型 (6B参数)
+
+FROM nvidia/cuda:12.1-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV HF_HOME=/root/.cache/huggingface
+
+# 系统依赖
+RUN apt-get update && apt-get install -y \
+    python3.10 python3.10-venv python3-pip \
+    git wget curl \
+    libgl1-mesa-glx libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 设置 Python
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python
+RUN pip install --upgrade pip
+
+# PyTorch + CUDA 12.1
+RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# 安装 diffusers (从源码，包含 Z-Image 支持)
+RUN pip install git+https://github.com/huggingface/diffusers
+
+# 其他依赖
+RUN pip install \
+    transformers \
+    accelerate \
+    safetensors \
+    sentencepiece \
+    flask \
+    pillow \
+    requests
+
+# 可选: Flash Attention (加速推理)
+RUN pip install flash-attn --no-build-isolation || echo "Flash Attention 安装失败，将使用 SDPA"
+
+WORKDIR /workspace
+
+# 复制服务脚本
+COPY scripts/zimage_server.py /workspace/
+
+# 暴露端口
+EXPOSE 8199
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+    CMD curl -f http://localhost:8199/health || exit 1
+
+# 启动服务
+CMD ["python", "zimage_server.py"]

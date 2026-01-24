@@ -27,7 +27,7 @@ except ImportError:
 # 模型配置 - 统一管理，代理和直连使用相同名称
 # =============================================================================
 
-# 图像生成模型 (NanoBanana Pro)
+# 图像生成模型 (NanoBanana Pro) - 用于 proxy/direct 模式
 IMAGE_MODEL = "models/nano-banana-pro-preview"
 
 # 文本模型
@@ -35,6 +35,23 @@ TEXT_MODEL = "gemini-2.0-flash"
 
 # AiProxy 服务地址
 AIPROXY_BASE_URL = os.environ.get("AIPROXY_URL", "https://bot.bigjj.click/aiproxy")
+
+# =============================================================================
+# 本地模型配置 (Z-Image-Turbo)
+# =============================================================================
+
+# Z-Image 本地服务地址
+ZIMAGE_LOCAL_URL = os.environ.get("ZIMAGE_URL", "http://localhost:8199")
+
+# Z-Image 模型名称
+ZIMAGE_MODEL = "Tongyi-MAI/Z-Image-Turbo"
+
+# 支持的生成后端
+GENERATION_BACKENDS = ["proxy", "direct", "local"]
+
+# 本地默认使用 Z-Image
+DEFAULT_LOCAL_BACKEND = "zimage"
+
 
 
 # =============================================================================
