@@ -60,20 +60,45 @@ def load_model():
             torch_dtype=torch.bfloat16,
             low_cpu_mem_usage=True,
         )
-        pipe.to("cuda")
+        
+        # 尝试直接加载到 GPU
+        use_cpu_offload = False
+        try:
+            # 先清理显存
+            torch.cuda.empty_cache()
+            pipe.to("cuda")
+            print("   ✅ 模型已加载到 GPU")
+        except (RuntimeError, torch.cuda.OutOfMemoryError) as oom_e:
+            print(f"   ⚠️  GPU 显存不足: {oom_e}")
+            print("   🔄 启用 Sequential CPU Offload 模式...")
+            torch.cuda.empty_cache()
+            # 重新加载并使用 CPU offload
+            del pipe
+            torch.cuda.empty_cache()
+            pipe = ZImagePipeline.from_pretrained(
+                "Tongyi-MAI/Z-Image-Turbo",
+                torch_dtype=torch.bfloat16,
+                low_cpu_mem_usage=True,
+            )
+            pipe.enable_sequential_cpu_offload()
+            use_cpu_offload = True
+            print("   ✅ CPU Offload 模式已启用 (推理速度会略慢)")
         
         # 尝试启用 Flash Attention
-        try:
-            pipe.transformer.set_attention_backend("flash")
-            print("   ✅ Flash Attention 2 已启用")
-        except Exception as e:
-            print(f"   ⚠️  Flash Attention 不可用，使用 SDPA: {e}")
+        if not use_cpu_offload:
+            try:
+                pipe.transformer.set_attention_backend("flash")
+                print("   ✅ Flash Attention 2 已启用")
+            except Exception as e:
+                print(f"   ⚠️  Flash Attention 不可用，使用 SDPA: {e}")
         
         # 可选: 编译模型 (首次推理会慢，之后更快)
         # pipe.transformer.compile()
         
         load_time = time.time() - start_time
         print(f"\n✅ 模型加载完成! 耗时: {load_time:.1f}秒")
+        if use_cpu_offload:
+            print("   📌 运行模式: CPU Offload (节省显存)")
         print(f"🌐 服务地址: http://0.0.0.0:8199")
         print("=" * 60)
         
