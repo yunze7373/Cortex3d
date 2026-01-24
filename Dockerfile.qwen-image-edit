@@ -1,0 +1,44 @@
+# Qwen-Image-Edit 本地图像编辑服务
+FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
+
+# 基础依赖
+RUN apt-get update && apt-get install -y \
+    python3.10 python3.10-venv python3-pip \
+    git wget curl \
+    libgl1-mesa-glx libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python 别名
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python
+
+# 升级 pip
+RUN pip install --upgrade pip
+
+# PyTorch with CUDA
+RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Diffusers (最新版，包含 QwenImageEditPipeline)
+RUN pip install git+https://github.com/huggingface/diffusers
+
+# 其他依赖
+RUN pip install \
+    transformers \
+    accelerate \
+    safetensors \
+    sentencepiece \
+    flask \
+    pillow \
+    requests \
+    bitsandbytes
+
+# 工作目录
+WORKDIR /workspace
+
+# 复制服务脚本
+COPY scripts/qwen_image_edit_server.py /workspace/
+
+# 暴露端口
+EXPOSE 8200
+
+# 启动命令
+CMD ["python", "qwen_image_edit_server.py"]

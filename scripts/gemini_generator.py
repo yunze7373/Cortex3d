@@ -2135,51 +2135,55 @@ def _composite_via_local(
     output_name: str = None,
     local_url: str = None
 ) -> Optional[str]:
-    """
-    通过本地 Z-Image 服务进行图像合成
+    """通过本地 Qwen-Image-Edit 进行图像合成/编辑
     
-    由于 Z-Image 是文生图模型，不支持原生多图合成。
-    采用的策略是：
-    1. 先用 PIL 将多张图片简单拼合
-    2. 然后使用 img2img 根据提示词进行风格化处理
+    Qwen-Image-Edit 支持:
+    - 语义编辑 (风格转换、对象变换)
+    - 外观编辑 (换装、添加/删除元素)
+    - 精确文字编辑
     """
     from pathlib import Path
     from PIL import Image
     import os
     
     try:
-        from zimage_client import ZImageClient
+        from qwen_image_edit_client import QwenImageEditClient
     except ImportError:
-        print("[ERROR] 无法导入 zimage_client")
+        print("[ERROR] 无法导入 qwen_image_edit_client")
+        print("       请确保 scripts/qwen_image_edit_client.py 存在")
         return None
     
-    local_url = local_url or os.environ.get("ZIMAGE_URL", "http://localhost:8199")
-    client = ZImageClient(base_url=local_url)
+    local_url = local_url or os.environ.get("QWEN_IMAGE_EDIT_URL", "http://localhost:8200")
+    client = QwenImageEditClient(base_url=local_url)
     
     # 检查服务
     if not client.health_check():
-        print("[ERROR] Z-Image 服务不可用")
-        print("       请确保服务已启动: docker compose up -d zimage")
+        print("[ERROR] Qwen-Image-Edit 服务不可用")
+        print("       请确保服务已启动: docker compose up -d qwen-image-edit")
+        print("       首次启动需要下载模型，请耐心等待...")
         return None
     
-    print(f"\n[Z-Image Local] 本地图像合成")
+    print(f"\n[Qwen-Image-Edit] 本地图像编辑")
     print(f"  服务地址: {local_url}")
     print(f"  图片数量: {len(image_paths)}")
     
-    # 策略: 使用第一张图作为基础，通过 img2img 进行修改
+    # 策略: 使用第一张图作为基础，通过 Qwen-Image-Edit 进行编辑
     # 对于换装场景，我们将人物图作为基础，用指令描述换装需求
     base_image = image_paths[0]
     
-    # 构建合成提示词
+    # 构建编辑提示词
+    # Qwen-Image-Edit 对中文指令理解更好
     if len(image_paths) == 2:
         # 双图场景 (通常是人物 + 衣服)
-        prompt = f"{instruction}. Based on the person in the image, apply the changes described. Maintain the original pose, lighting, and style."
+        # 提取第二张图的描述作为参考
+        second_image_name = Path(image_paths[1]).stem
+        prompt = f"{instruction}。保持原图中人物的姿势、光照和整体风格。"
     else:
         # 多图场景
-        prompt = f"{instruction}. Combine and transform the input image according to the description. Maintain consistency and realism."
+        prompt = f"{instruction}。合成结果应保持自然真实感。"
     
     print(f"  基础图: {Path(base_image).name}")
-    print(f"  合成提示: {prompt[:80]}...")
+    print(f"  编辑指令: {prompt[:80]}{'...' if len(prompt) > 80 else ''}")
     
     # 生成输出路径
     Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -2191,20 +2195,20 @@ def _composite_via_local(
     
     output_path = str(Path(output_dir) / filename)
     
-    # 使用 img2img 进行合成
-    # strength 设置为较高值，允许更大程度的修改
-    result = client.img2img(
-        prompt=prompt,
+    # 使用 Qwen-Image-Edit 进行编辑
+    result = client.edit(
         image_path=base_image,
-        strength=0.7,  # 较高的变换强度
+        prompt=prompt,
+        cfg_scale=4.0,
+        steps=50,
         output_path=output_path
     )
     
     if result:
-        print(f"✅ 本地合成完成: {result}")
+        print(f"✅ 本地编辑完成: {result}")
         return result
     else:
-        print("[ERROR] 本地合成失败")
+        print("[ERROR] 本地编辑失败")
         return None
 
 

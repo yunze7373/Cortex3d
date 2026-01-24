@@ -206,6 +206,40 @@ services:
               count: 1
               capabilities: [gpu]
 
+  # ==========================================================================
+  # Qwen-Image-Edit (阿里巴巴通义 - 图像编辑模型)
+  # 20B参数，8-bit量化，支持语义编辑/外观编辑/文字编辑
+  # ==========================================================================
+  qwen-image-edit:
+    build:
+      context: .
+      dockerfile: Dockerfile.qwen-image-edit
+    image: cortex3d-qwen-image-edit:latest
+    container_name: cortex3d-qwen-image-edit
+    working_dir: /workspace
+    volumes:
+      - ./scripts:/workspace/scripts:ro
+      - ./outputs:/workspace/outputs
+      - hf-cache:/root/.cache/huggingface
+    shm_size: "16gb"
+    stdin_open: true
+    tty: true
+    ports:
+      - "8200:8200"
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      - USE_QUANTIZATION=true
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 volumes:
   hf-cache:
 
