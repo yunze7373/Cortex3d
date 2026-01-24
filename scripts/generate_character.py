@@ -1043,15 +1043,19 @@ def main():
     
     # =========================================================================
     # 高级合成模式：组合多张图片创建新场景
+    # 可作为预处理步骤，结果可继续用于后续生成流程
     # =========================================================================
+    preprocessed_image = None  # 用于存储预处理后的图片路径
+    
     if args.mode_composite:
         print("[高级合成模式]")
         print("  用途: 换衣服、换配饰、创意拼贴、产品模型等")
         
         # 验证必需参数
-        if not args.composite_images or len(args.composite_images) < 2:
-            print("[ERROR] --mode-composite 需要 --composite-images 参数（至少2张图片）")
+        if not args.composite_images or len(args.composite_images) < 1:
+            print("[ERROR] --mode-composite 需要 --composite-images 参数（至少1张图片）")
             print("        示例: --composite-images model.png dress.png")
+            print("        或配合 --from-image: --from-image model.png --composite-images dress.png")
             sys.exit(1)
         
         if not args.composite_instruction:
@@ -1059,9 +1063,20 @@ def main():
             print("        示例: --composite-instruction '让模特穿上这件裙子'")
             sys.exit(1)
         
+        # 如果有 --from-image，将其作为第一张图片
+        if args.from_image:
+            all_images = [args.from_image] + args.composite_images
+        else:
+            all_images = args.composite_images
+            if len(all_images) < 2:
+                print("[ERROR] --mode-composite 需要至少2张图片")
+                print("        示例: --composite-images model.png dress.png")
+                print("        或: --from-image model.png --composite-images dress.png")
+                sys.exit(1)
+        
         # 验证所有图片存在
         image_paths = []
-        for img_path in args.composite_images:
+        for img_path in all_images:
             p = Path(img_path)
             if not p.exists():
                 # 尝试在常见目录查找
@@ -1103,11 +1118,30 @@ def main():
             if output_path:
                 print(f"\n✅ 合成完成！")
                 print(f"   输出: {output_path}")
+                preprocessed_image = output_path
             else:
                 print(f"\n❌ 合成失败，请检查日志")
                 sys.exit(1)
             
-            sys.exit(0)
+            # 判断是否继续后续处理
+            # 如果有其他生成参数（如 custom_views, 风格等），则继续；否则退出
+            has_further_processing = (
+                args.custom_views or 
+                args.generate_3d or 
+                args.iterative_360 or
+                getattr(args, 'style_3d_toon', False) or
+                getattr(args, 'style_ghibli', False) or
+                getattr(args, 'style_chibi', False) or
+                getattr(args, 'style_real', False)
+            )
+            
+            if not has_further_processing:
+                sys.exit(0)
+            else:
+                # 将合成结果设置为后续处理的输入
+                args.from_image = output_path
+                print(f"\n🔄 继续后续处理流程，使用合成结果作为输入...")
+                print("")
         except Exception as e:
             print(f"[ERROR] 合成过程出错: {e}")
             import traceback
@@ -1116,6 +1150,7 @@ def main():
     
     # =========================================================================
     # 高保真细节保留模式检查 (--mode-preserve)
+    # 可作为预处理步骤，结果可继续用于后续生成流程
     # =========================================================================
     if args.mode_preserve:
         print("\n" + "═"*60)
@@ -1124,10 +1159,12 @@ def main():
         print("  用途: 在修改图像时保留关键细节 (面部、徽标、特定元素)")
         print("  示例: 给人物 T 恤添加 logo 但保持面部不变")
         
-        # 验证必需参数
-        if not args.preserve_image:
-            print("[ERROR] --mode-preserve 需要 --preserve-image 参数（主图片路径）")
+        # 验证必需参数 - 如果有 --from-image，可以用它作为主图片
+        preserve_source = args.preserve_image or args.from_image
+        if not preserve_source:
+            print("[ERROR] --mode-preserve 需要 --preserve-image 或 --from-image 参数（主图片路径）")
             print("        示例: --preserve-image person.png")
+            print("        或: --from-image person.png --mode-preserve ...")
             sys.exit(1)
         
         if not args.preserve_instruction:
@@ -1136,16 +1173,16 @@ def main():
             sys.exit(1)
         
         # 查找主图片
-        main_image = Path(args.preserve_image)
+        main_image = Path(preserve_source)
         if not main_image.exists():
             for search_dir in [Path("."), Path("test_images"), Path("reference_images"), Path(args.output)]:
-                candidate = search_dir / args.preserve_image
+                candidate = search_dir / preserve_source
                 if candidate.exists():
                     main_image = candidate
                     break
         
         if not main_image.exists():
-            print(f"[ERROR] 主图片不存在: {args.preserve_image}")
+            print(f"[ERROR] 主图片不存在: {preserve_source}")
             sys.exit(1)
         
         # 查找元素图片 (可选)
@@ -1194,11 +1231,29 @@ def main():
             if output_path:
                 print(f"\n✅ 高保真编辑完成！")
                 print(f"   输出: {output_path}")
+                preprocessed_image = output_path
             else:
                 print(f"\n❌ 编辑失败，请检查日志")
                 sys.exit(1)
             
-            sys.exit(0)
+            # 判断是否继续后续处理
+            has_further_processing = (
+                args.custom_views or 
+                args.generate_3d or 
+                args.iterative_360 or
+                getattr(args, 'style_3d_toon', False) or
+                getattr(args, 'style_ghibli', False) or
+                getattr(args, 'style_chibi', False) or
+                getattr(args, 'style_real', False)
+            )
+            
+            if not has_further_processing:
+                sys.exit(0)
+            else:
+                # 将编辑结果设置为后续处理的输入
+                args.from_image = output_path
+                print(f"\n🔄 继续后续处理流程，使用编辑结果作为输入...")
+                print("")
         except Exception as e:
             print(f"[ERROR] 高保真编辑出错: {e}")
             import traceback

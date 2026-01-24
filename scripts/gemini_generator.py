@@ -138,6 +138,8 @@ def generate_character_views(
                 mime = 'image/png'
             elif reference_image_path.lower().endswith(('.jpg', '.jpeg')):
                 mime = 'image/jpeg'
+            elif reference_image_path.lower().endswith('.webp'):
+                mime = 'image/webp'
             else:
                 mime = 'image/png'
             reference_image_b64 = f"data:{mime};base64,{reference_image_b64}"
@@ -797,7 +799,14 @@ def _edit_via_direct(
         print(f"[ERROR] 无法加载源图像: {source_image_path}")
         return None
     
-    mime_type = "image/png" if source_image_path.endswith('.png') else "image/jpeg"
+    # 获取正确的 MIME 类型
+    ext = source_image_path.lower()
+    if ext.endswith('.png'):
+        mime_type = "image/png"
+    elif ext.endswith('.webp'):
+        mime_type = "image/webp"
+    else:
+        mime_type = "image/jpeg"
     
     try:
         # 调用 Gemini API - 使用新的 google.genai 客户端
