@@ -721,6 +721,15 @@ def main():
     )
     
     parser.add_argument(
+        "--composite-type",
+        type=str,
+        dest="composite_type",
+        choices=["auto", "clothing", "accessory", "general"],
+        default="auto",
+        help="合成类型: auto(自动检测), clothing(换装-严格保持主体), accessory(配饰), general(通用)"
+    )
+    
+    parser.add_argument(
         "--composite-output-name",
         type=str,
         dest="composite_output_name",
@@ -1096,6 +1105,7 @@ def main():
         for i, img in enumerate(image_paths, 1):
             print(f"      [{i}] {Path(img).name}")
         print(f"  └─ 合成指令: {args.composite_instruction}")
+        print(f"  └─ 合成类型: {args.composite_type}")
         print(f"  └─ 输出目录: {args.output}")
         print(f"  └─ 调用模式: {args.mode.upper()}")
         print("")
@@ -1112,7 +1122,8 @@ def main():
                 model_name=args.model if args.model else "gemini-2.5-flash-image",
                 output_dir=args.output,
                 output_name=args.composite_output_name,
-                mode=args.mode
+                mode=args.mode,
+                composite_type=args.composite_type
             )
             
             if output_path:
