@@ -237,7 +237,7 @@ def build_composite_prompt(
     
     Args:
         instruction: 用户的合成指令
-        composite_type: 合成类型 ("clothing", "accessory", "general")
+        composite_type: 合成类型 ("clothing", "accessory", "general", "auto")
         num_images: 图片数量
     
     Returns:
@@ -250,6 +250,19 @@ def build_composite_prompt(
             composite_type=composite_type,
             num_images=num_images
         )
+    
+    # 自动检测合成类型
+    if composite_type == "auto":
+        lower_inst = instruction.lower()
+        clothing_keywords = ["穿", "衣服", "裙", "裤", "上衣", "外套", "shirt", "dress", "wear", "clothing", "outfit", "换装", "换衣"]
+        accessory_keywords = ["帽", "包", "眼镜", "配饰", "耳环", "项链", "手表", "hat", "bag", "glasses", "accessory", "戴", "jewelry"]
+        
+        if any(kw in lower_inst for kw in clothing_keywords):
+            composite_type = "clothing"
+        elif any(kw in lower_inst for kw in accessory_keywords):
+            composite_type = "accessory"
+        else:
+            composite_type = "general"
     
     # 回退到硬编码严格模板（与 multiview 同级别精度）
     if composite_type == "clothing":
