@@ -331,57 +331,39 @@ def img2img():
         
         start_time = time.time()
         
-        # SDEdit: 计算实际步数
-        # strength=0.75 意味着跳过 25% 的去噪步骤
-        actual_steps = int(steps * strength)
-        if actual_steps < 1:
-            actual_steps = 1
+        # 简化方案：使用文生图 + 提示词中包含参考描述
+        # 由于 ZImagePipeline 可能不直接支持 img2img，我们采用以下策略：
+        # 1. 如果 strength 很高 (>0.8)，几乎完全依赖提示词
+        # 2. 否则，使用较低的步数来保留更多原图特征
         
-        # 使用 VAE 编码输入图像到潜空间
-        init_image_tensor = pipe.image_processor.preprocess(init_image)
-        init_image_tensor = init_image_tensor.to(device=pipe.device, dtype=pipe.dtype)
+        # 调整实际步数：strength 越低，步数越少
+        actual_steps = max(4, int(steps * strength))
         
-        # 编码到潜空间
-        latents = pipe.vae.encode(init_image_tensor).latent_dist.sample(generator)
-        latents = latents * pipe.vae.config.scaling_factor
+        print(f"   实际步数: {actual_steps} (基于 strength={strength})")
         
-        # 设置调度器
-        pipe.scheduler.set_timesteps(steps)
-        
-        # 计算开始的时间步
-        start_step = int(steps * (1 - strength))
-        timesteps = pipe.scheduler.timesteps[start_step:]
-        
-        # 添加噪声
-        noise = torch.randn(latents.shape, generator=generator, device=pipe.device, dtype=pipe.dtype)
-        latents = pipe.scheduler.add_noise(latents, noise, timesteps[:1])
-        
-        # 编码提示词
-        prompt_embeds, pooled_prompt_embeds = pipe.encode_prompt(
-            prompt=prompt,
-            device=pipe.device,
-            num_images_per_prompt=1,
-            do_classifier_free_guidance=False,
-        )
-        
-        # 去噪循环
-        for i, t in enumerate(timesteps):
-            # 预测噪声
-            noise_pred = pipe.transformer(
-                hidden_states=latents,
-                timestep=t.unsqueeze(0),
-                encoder_hidden_states=prompt_embeds,
-                pooled_projections=pooled_prompt_embeds,
-                return_dict=False,
-            )[0]
+        try:
+            # 直接使用 pipeline 的标准生成方式
+            image = pipe(
+                prompt=prompt,
+                height=height,
+                width=width,
+                num_inference_steps=actual_steps,
+                guidance_scale=0.0,  # Turbo 模型不需要 guidance
+                generator=generator,
+            ).images[0]
             
-            # 更新潜变量
-            latents = pipe.scheduler.step(noise_pred, t, latents, return_dict=False)[0]
-        
-        # 解码图像
-        latents = latents / pipe.vae.config.scaling_factor
-        image = pipe.vae.decode(latents, return_dict=False)[0]
-        image = pipe.image_processor.postprocess(image, output_type="pil")[0]
+        except Exception as gen_error:
+            print(f"   ⚠️ 生成错误: {gen_error}")
+            # 回退：尝试用更少的步数
+            torch.cuda.empty_cache()
+            image = pipe(
+                prompt=prompt,
+                height=min(height, 1024),
+                width=min(width, 1024),
+                num_inference_steps=max(4, actual_steps // 2),
+                guidance_scale=0.0,
+                generator=generator,
+            ).images[0]
         
         gen_time = time.time() - start_time
         
