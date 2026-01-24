@@ -199,15 +199,39 @@ class ZImageClient:
             保存的图像路径，失败返回 None
         """
         try:
-            # 读取并编码输入图像
+            # 读取输入图像
             image_path = Path(image_path)
             if not image_path.exists():
                 print(f"[ERROR] 输入图像不存在: {image_path}")
                 return None
             
-            with open(image_path, "rb") as f:
-                image_bytes = f.read()
-            image_b64 = base64.b64encode(image_bytes).decode()
+            # 使用 PIL 读取图像以获取尺寸
+            img = Image.open(image_path)
+            orig_width, orig_height = img.size
+            
+            # 确定输出尺寸，限制在 256-2048 范围内
+            if width is None:
+                width = orig_width
+            if height is None:
+                height = orig_height
+            
+            # 限制尺寸范围
+            def clamp_size(size, min_val=256, max_val=2048):
+                return max(min_val, min(max_val, size))
+            
+            width = clamp_size(width)
+            height = clamp_size(height)
+            
+            # 如果需要调整尺寸，先调整图像
+            if orig_width != width or orig_height != height:
+                print(f"[Z-Image] 调整图像尺寸: {orig_width}x{orig_height} -> {width}x{height}")
+                img = img.resize((width, height), Image.Resampling.LANCZOS)
+            
+            # 转为 base64
+            from io import BytesIO as IOBytesIO
+            buffer = IOBytesIO()
+            img.save(buffer, format="PNG")
+            image_b64 = base64.b64encode(buffer.getvalue()).decode()
             
             # 构建请求
             payload = {
@@ -215,11 +239,9 @@ class ZImageClient:
                 "image": image_b64,
                 "strength": strength,
                 "steps": steps,
+                "width": width,
+                "height": height,
             }
-            if width is not None:
-                payload["width"] = width
-            if height is not None:
-                payload["height"] = height
             if seed is not None:
                 payload["seed"] = seed
             
