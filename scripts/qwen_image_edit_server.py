@@ -161,23 +161,7 @@ def load_model():
                     pipe.enable_model_cpu_offload()
         
         pipe.set_progress_bar_config(disable=True)
-        else:
-            # 标准加载
-            pipe = QwenImageEditPipeline.from_pretrained(
-                model_id,
-                torch_dtype=torch.bfloat16,
-            )
-            pipe.to("cuda")
-        
-        # 检查是否需要 CPU offload
-        if torch.cuda.is_available():
-            total_vram = torch.cuda.get_device_properties(0).total_memory / 1024**3
-            if total_vram < 20 and not USE_QUANTIZATION:
-                print(f"   ⚠️ GPU 显存可能不足: {total_vram:.1f}GB")
-                print("   🔄 启用 Sequential CPU Offload...")
-                pipe.enable_sequential_cpu_offload()
-        
-        pipe.set_progress_bar_config(disable=True)
+
         
         load_time = time.time() - start_time
         model_loaded = True
