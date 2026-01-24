@@ -1138,9 +1138,8 @@ def main():
             # 如果有其他生成参数（如 custom_views, 风格等），则继续；否则退出
             has_further_processing = (
                 args.custom_views or 
-                args.generate_3d or 
                 args.iterative_360 or
-                getattr(args, 'style_3d_toon', False) or
+                getattr(args, 'toon3d', False) or
                 getattr(args, 'style_ghibli', False) or
                 getattr(args, 'style_chibi', False) or
                 getattr(args, 'style_real', False)
@@ -1250,9 +1249,8 @@ def main():
             # 判断是否继续后续处理
             has_further_processing = (
                 args.custom_views or 
-                args.generate_3d or 
                 args.iterative_360 or
-                getattr(args, 'style_3d_toon', False) or
+                getattr(args, 'toon3d', False) or
                 getattr(args, 'style_ghibli', False) or
                 getattr(args, 'style_chibi', False) or
                 getattr(args, 'style_real', False)
