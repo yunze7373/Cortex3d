@@ -312,6 +312,13 @@ def main():
         help="本地模型推理步数 (Z-Image推荐9)"
     )
     parser.add_argument(
+        "--analysis-api",
+        dest="analysis_api",
+        choices=["auto", "proxy", "direct", "local"],
+        default="auto",
+        help="图像分析API: auto=跟随--mode, proxy=用AiProxy分析, direct=直连Gemini, local=跳过分析"
+    )
+    parser.add_argument(
         "--model",
         default=None,
         help="Model name. Default: models/nano-banana-pro-preview (same for both proxy and direct mode)"
@@ -1499,15 +1506,54 @@ def main():
         # =====================================================================
         # 🧠 智能衣服提取预处理
         # 如果有多张图片且启用了智能提取，对衣服图片进行AI分析和处理
-        # 注意：Local 模式跳过此步骤（需要 Gemini API）
+        # 支持混合模式: --mode local --analysis-api proxy 可以用AiProxy分析+本地生成
         # =====================================================================
+        
+        # 确定是否使用云端API进行图像分析
+        use_cloud_analysis = (
+            args.analysis_api in ["proxy", "direct"] or 
+            (args.analysis_api == "auto" and args.mode != "local")
+        )
+        
+        # 确定分析用的模式和 API key
+        if args.analysis_api in ["proxy", "direct"]:
+            # 显式指定了分析模式
+            analysis_mode = args.analysis_api
+        elif args.analysis_api == "auto":
+            # auto 模式跟随 --mode
+            analysis_mode = args.mode if args.mode != "local" else "proxy"
+        else:
+            analysis_mode = None
+        
+        # 获取分析用的 API key
+        analysis_api_key = args.token
+        if use_cloud_analysis and args.mode == "local":
+            # local 生成模式但需要云端分析，尝试获取对应 API key
+            if analysis_mode == "proxy":
+                analysis_api_key = os.environ.get("AIPROXY_TOKEN") or args.token
+            else:
+                analysis_api_key = os.environ.get("GEMINI_API_KEY") or args.token
+            
+            if not analysis_api_key:
+                print(f"\n⚠️  混合模式需要 API Key 用于图像分析")
+                if analysis_mode == "proxy":
+                    print(f"   请设置 AIPROXY_TOKEN 环境变量")
+                else:
+                    print(f"   请设置 GEMINI_API_KEY 环境变量")
+                print(f"   或改用: --analysis-api local 跳过智能分析")
+                use_cloud_analysis = False
+        
         if args.composite_smart_extract and len(image_paths) >= 2:
-            if args.mode == "local":
-                print(f"\n⏭️  Local 模式跳过智能衣服提取 (需要云端 API)")
+            if not use_cloud_analysis:
+                print(f"\n⏭️  跳过智能衣服提取 (未启用云端分析)")
+                print(f"   提示: 使用 --analysis-api proxy 或 --analysis-api direct 启用")
                 print(f"   将直接使用原图进行合成\n")
             else:
                 print(f"\n🧠 智能衣服提取预处理")
                 print(f"  检测到 {len(image_paths)} 张图片，开始分析...")
+                print(f"  分析模式: {analysis_mode.upper()}")
+                if args.mode == "local":
+                    print(f"  📌 混合模式: 使用云端API分析 + 本地模型生成")
                 
                 # 导入智能提取函数
                 from gemini_generator import smart_extract_clothing
@@ -1519,13 +1565,13 @@ def main():
                     print(f"\n  [图片 {i}] 分析: {Path(clothing_img).name}")
                     
                     try:
-                        # 调用智能提取
+                        # 调用智能提取 (始终使用云端API进行分析)
                         extracted_path = smart_extract_clothing(
                             image_path=clothing_img,
-                            api_key=args.token,
+                            api_key=analysis_api_key,
                             model_name=args.model if args.model else "gemini-2.5-flash-image",
                             output_dir=args.output,
-                            mode=args.mode,
+                            mode=analysis_mode,  # 分析始终用云端
                         )
                         
                         if extracted_path:
