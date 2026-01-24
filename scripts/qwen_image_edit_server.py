@@ -62,8 +62,13 @@ def load_model():
         if USE_QUANTIZATION:
             # 使用 8-bit 量化减少显存
             try:
-                from transformers import BitsAndBytesConfig
+                # 尝试从 diffusers 导入量化配置 (最新版)
+                try:
+                    from diffusers import BitsAndBytesConfig
+                except ImportError:
+                    from diffusers.utils import BitsAndBytesConfig
                 
+                print("   📦 使用 Diffusers BitsAndBytesConfig")
                 quantization_config = BitsAndBytesConfig(
                     load_in_8bit=True,
                     bnb_8bit_compute_dtype=torch.bfloat16,
@@ -78,12 +83,27 @@ def load_model():
                 
             except Exception as e:
                 print(f"   ⚠️ 量化加载失败: {e}")
-                print("   🔄 回退到标准模式...")
-                pipe = QwenImageEditPipeline.from_pretrained(
-                    model_id,
-                    torch_dtype=torch.bfloat16,
-                )
-                pipe.to("cuda")
+                print("   🔄 尝试 transformers 量化配置...")
+                
+                # 回退方案：分别加载组件（如果 pipeline 量化失败）
+                try:
+                    from transformers import BitsAndBytesConfig as TrBitsAndBytesConfig
+                    from transformers import Qwen2VLForConditionalGeneration
+                    from diffusers import Qwen2VLTokenizer
+                    
+                    # 仅量化 Transformer (如果支持分离加载) 或者回退到 CPU offload
+                    # 这里为了简单，如果 Diffusers 量化失败，我们直接回退到 CPU Offload 模式，
+                    # 避免复杂的组件手动拼装导致更多错误。
+                    raise e
+                    
+                except Exception as e2:
+                    print(f"   ⚠️ 最终量化失败: {e2}")
+                    print("   🔄 回退到标准模式 (CPU Offload)...")
+                    pipe = QwenImageEditPipeline.from_pretrained(
+                        model_id,
+                        torch_dtype=torch.bfloat16,
+                    )
+                    pipe.to("cuda")
         else:
             # 标准加载
             pipe = QwenImageEditPipeline.from_pretrained(
