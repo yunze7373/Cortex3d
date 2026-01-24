@@ -239,6 +239,10 @@ def info():
         "gpu": {
             "name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
             "vram_gb": round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1) if torch.cuda.is_available() else None,
+        },
+        "limits": {
+            "max_image_size": "1024 (可通过 max_size 参数调整)",
+            "recommended_size": "768-1024 (16GB 显存)",
         }
     })
 
@@ -254,7 +258,8 @@ def edit():
         "image": "base64编码的输入图像",
         "cfg_scale": 4.0,        // 可选，默认 4.0
         "steps": 50,             // 可选，默认 50
-        "seed": 42               // 可选，随机种子
+        "seed": 42,              // 可选，随机种子
+        "max_size": 1024         // 可选，最大图像尺寸 (防止OOM)
     }
     
     返回:
@@ -280,6 +285,8 @@ def edit():
         steps = int(data.get("steps", 50))
         seed = data.get("seed", None)
         negative_prompt = data.get("negative_prompt", " ")
+        # 最大图像尺寸 (16GB 显存建议不超过 1024，可通过参数调整)
+        max_size = int(data.get("max_size", 1024))
         
         if not prompt:
             return jsonify({"error": "prompt 参数是必需的"}), 400
@@ -296,6 +303,29 @@ def edit():
         except Exception as e:
             return jsonify({"error": f"图像解码失败: {e}"}), 400
         
+        # 记录原始尺寸
+        original_width, original_height = input_image.size
+        
+        # ============================================================
+        # 图像尺寸限制 - 防止显存溢出
+        # 16GB 显存 + 4-bit 量化：建议最大 1024x1024
+        # ============================================================
+        if max(original_width, original_height) > max_size:
+            # 按比例缩放，保持长边不超过 max_size
+            if original_width > original_height:
+                new_width = max_size
+                new_height = int(original_height * max_size / original_width)
+            else:
+                new_height = max_size
+                new_width = int(original_width * max_size / original_height)
+            
+            # 确保尺寸是 8 的倍数 (某些模型要求)
+            new_width = (new_width // 8) * 8
+            new_height = (new_height // 8) * 8
+            
+            input_image = input_image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            print(f"   📐 图像缩放: {original_width}x{original_height} → {new_width}x{new_height}")
+        
         # 生成器 (种子)
         if seed is None:
             seed = torch.randint(0, 2**32 - 1, (1,)).item()
@@ -305,7 +335,12 @@ def edit():
         
         print(f"\n🎨 [{datetime.now().strftime('%H:%M:%S')}] 图像编辑请求")
         print(f"   Prompt: {prompt[:80]}{'...' if len(prompt) > 80 else ''}")
-        print(f"   尺寸: {width}x{height}, CFG: {cfg_scale}, 步数: {steps}, 种子: {seed}")
+        print(f"   原始尺寸: {original_width}x{original_height}, 处理尺寸: {width}x{height}")
+        print(f"   CFG: {cfg_scale}, 步数: {steps}, 种子: {seed}")
+        
+        # 清理显存
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         
         start_time = time.time()
         
@@ -323,6 +358,10 @@ def edit():
         output_image = output.images[0]
         gen_time = time.time() - start_time
         
+        # 清理显存
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
         # 转 base64
         buffer = BytesIO()
         output_image.save(buffer, format="PNG")
@@ -334,17 +373,39 @@ def edit():
             "image": img_b64,
             "width": output_image.width,
             "height": output_image.height,
+            "original_width": original_width,
+            "original_height": original_height,
             "seed": seed,
             "time": round(gen_time, 2),
         })
         
     except torch.cuda.OutOfMemoryError:
         print("   ❌ CUDA 内存不足!")
-        torch.cuda.empty_cache()
-        return jsonify({"error": "GPU 内存不足，请尝试较小的图像"}), 507
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return jsonify({
+            "error": "GPU 内存不足，请尝试较小的图像或降低 max_size 参数 (默认 1024)",
+            "hint": "可以在请求中添加 'max_size': 768 或更小的值"
+        }), 507
+        
+    except RuntimeError as e:
+        error_msg = str(e)
+        print(f"   ❌ 运行时错误: {error_msg}")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        if "out of memory" in error_msg.lower():
+            return jsonify({
+                "error": "GPU 内存不足",
+                "hint": "请在请求中添加 'max_size': 768 或更小的值来限制图像尺寸"
+            }), 507
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": error_msg}), 500
         
     except Exception as e:
         print(f"   ❌ 编辑失败: {e}")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
