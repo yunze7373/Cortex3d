@@ -1813,6 +1813,7 @@ def _extract_clothing_via_proxy(image_path, prompt, api_key, model_name, output_
     """通过代理提取衣服（图像生成）"""
     import requests
     import base64
+    import re
     from pathlib import Path
     
     try:
@@ -1848,24 +1849,49 @@ def _extract_clothing_via_proxy(image_path, prompt, api_key, model_name, output_
         
         if response.status_code == 200:
             result = response.json()
+            
+            # AiProxy可能返回两种格式：
+            # 1. {"image": "data:image/...;base64,..."} - 直接图像
+            # 2. {"reply": "```html-image-hidden...<img src='data:...'>..."} - HTML包裹的图像
+            
+            image_data = None
+            
+            # 方式1: 检查直接的image字段
             if "image" in result:
+                image_data = result["image"]
+                print(f"     [DEBUG] 从image字段获取图像")
+            
+            # 方式2: 从reply字段的HTML中提取图像
+            elif "reply" in result:
+                reply = result["reply"]
+                # 匹配 data:image/xxx;base64,xxxxxx 格式
+                pattern = r'data:(image/[^;]+);base64,([A-Za-z0-9+/=]+)'
+                match = re.search(pattern, reply)
+                if match:
+                    mime_type_found = match.group(1)
+                    b64_data = match.group(2)
+                    image_data = f"data:{mime_type_found};base64,{b64_data}"
+                    print(f"     [DEBUG] 从reply的HTML中提取图像: {mime_type_found}")
+                else:
+                    print(f"     [DEBUG] reply中无图像数据，可能是纯文本响应")
+                    print(f"     [DEBUG] reply内容: {reply[:150]}...")
+                    return None
+            
+            if image_data:
                 # 保存图片
                 output_path = Path(output_dir) / output_name
                 
-                image_data = result["image"]
+                # 解析base64数据
                 if image_data.startswith("data:"):
                     image_data = image_data.split(",", 1)[1]
                 
                 with open(output_path, "wb") as f:
                     f.write(base64.b64decode(image_data))
                 
+                print(f"     [DEBUG] 图像已保存: {output_path}")
                 return str(output_path)
             else:
-                print(f"     [DEBUG] 响应中无image字段: {result.keys()}")
-                # 打印reply内容帮助诊断
-                if "reply" in result:
-                    print(f"     [DEBUG] 收到reply而非image，可能模型不对")
-                    print(f"     [DEBUG] reply内容: {result['reply'][:100]}...")
+                print(f"     [DEBUG] 未能获取图像数据")
                 return None
         else:
             print(f"     [DEBUG] 提取API调用失败: {response.status_code}")
