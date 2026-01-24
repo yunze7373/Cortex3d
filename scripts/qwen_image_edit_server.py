@@ -86,7 +86,8 @@ def load_model():
                 from diffusers import BitsAndBytesConfig as DiffusersBitsAndBytesConfig
                 from diffusers import AutoModel
                 from transformers import BitsAndBytesConfig as TransformersBitsAndBytesConfig
-                from transformers import AutoModel as TFAutoModel
+                # 使用正确的 text_encoder 类型
+                from transformers import Qwen2_5_VLForConditionalGeneration
                 
                 use_4bit = QUANTIZATION_BITS == "4"
                 
@@ -125,9 +126,9 @@ def load_model():
                 )
                 print(f"      ✅ Transformer 已加载 ({quantization_mode})")
                 
-                # 2. 量化加载 text_encoder
+                # 2. 量化加载 text_encoder - 使用正确的类 Qwen2_5_VLForConditionalGeneration
                 print("   📦 加载 text_encoder (量化)...")
-                text_encoder_quantized = TFAutoModel.from_pretrained(
+                text_encoder_quantized = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                     model_id,
                     subfolder="text_encoder",
                     quantization_config=transformers_quant_config,
@@ -150,10 +151,34 @@ def load_model():
                 # 将非量化组件 (VAE, scheduler 等) 移到 GPU
                 # 量化组件已经在 GPU 上了
                 if hasattr(pipe, 'vae') and pipe.vae is not None:
-                    pipe.vae = pipe.vae.to("cuda")
+                    # VAE 使用 fp16 可节省显存且精度足够
+                    pipe.vae = pipe.vae.to(dtype=torch.float16, device="cuda")
+                
+                # 启用显存优化
+                try:
+                    # xFormers 高效注意力 (如果可用)
+                    pipe.enable_xformers_memory_efficient_attention()
+                    print("   ✅ xFormers 内存高效注意力已启用")
+                except Exception:
+                    pass
+                
+                # 启用 VAE slicing 和 tiling (减少 VAE 显存使用)
+                try:
+                    if hasattr(pipe, 'enable_vae_slicing'):
+                        pipe.enable_vae_slicing()
+                        print("   ✅ VAE slicing 已启用")
+                except Exception:
+                    pass
+                
+                try:
+                    if hasattr(pipe, 'enable_vae_tiling'):
+                        pipe.enable_vae_tiling()
+                        print("   ✅ VAE tiling 已启用")
+                except Exception:
+                    pass
                 
                 print(f"   ✅ {quantization_mode} 量化模式已启用")
-                print(f"   📝 注意: 量化模式下推荐图像尺寸 ≤1024px (16GB显存)")
+                print(f"   📝 注意: 16GB显存+4bit建议 max_size ≤768，24GB可用 1024")
                 
             except Exception as e:
                 print(f"   ⚠️ 量化加载失败: {e}")
@@ -247,13 +272,14 @@ def info():
             "vram_gb": round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1) if torch.cuda.is_available() else None,
         },
         "limits": {
-            "default_max_size": 1024,
+            "default_max_size": 768,
             "default_steps": 28,
             "recommended": {
-                "16GB_VRAM_4bit": {"max_size": 1024, "steps": 28},
-                "16GB_VRAM_8bit": {"max_size": 768, "steps": 28},
-                "24GB_VRAM": {"max_size": 1536, "steps": 50},
-                "note": "量化模式不支持CPU Offload，需足够显存"
+                "16GB_VRAM_4bit": {"max_size": 768, "steps": 28},
+                "16GB_VRAM_8bit": {"max_size": 512, "steps": 28},
+                "24GB_VRAM_4bit": {"max_size": 1024, "steps": 50},
+                "48GB_VRAM": {"max_size": 1536, "steps": 50},
+                "note": "量化模式不支持CPU Offload，需足够显存。建议先从小尺寸测试。"
             }
         }
     })
@@ -298,8 +324,8 @@ def edit():
         steps = int(data.get("steps", 28))
         seed = data.get("seed", None)
         negative_prompt = data.get("negative_prompt", " ")
-        # 最大图像尺寸 (16GB显存+4-bit量化可用1024，8GB用512)
-        max_size = int(data.get("max_size", 1024))
+        # 最大图像尺寸 - 16GB显存+4bit建议768，24GB可用1024
+        max_size = int(data.get("max_size", 768))
         
         if not prompt:
             return jsonify({"error": "prompt 参数是必需的"}), 400
@@ -354,19 +380,23 @@ def edit():
         # 清理显存
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+            import gc
+            gc.collect()
         
         start_time = time.time()
         
         # 执行编辑
+        # 使用 torch.cuda.amp.autocast 进一步节省显存
         with torch.inference_mode():
-            output = pipe(
-                image=input_image,
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                generator=generator,
-                true_cfg_scale=cfg_scale,
-                num_inference_steps=steps,
-            )
+            with torch.cuda.amp.autocast(dtype=torch.bfloat16):
+                output = pipe(
+                    image=input_image,
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    generator=generator,
+                    true_cfg_scale=cfg_scale,
+                    num_inference_steps=steps,
+                )
         
         output_image = output.images[0]
         gen_time = time.time() - start_time
