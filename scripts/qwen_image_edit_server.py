@@ -12,6 +12,11 @@ API 端点:
 - GET  /health - 健康检查
 - POST /edit   - 图像编辑
 - GET  /info   - 模型信息
+
+量化说明:
+- diffusers 的 BitsAndBytesConfig 只能用于单个模型组件(如 transformer)
+- 不能直接对整个 Pipeline 使用量化配置
+- 正确做法：分别加载并量化 transformer 和 text_encoder，再组装 Pipeline
 """
 
 import os
@@ -29,12 +34,14 @@ app = Flask(__name__)
 # 全局变量
 pipe = None
 model_loaded = False
+quantization_mode = "none"  # "8bit", "4bit", "none"
 USE_QUANTIZATION = os.environ.get("USE_QUANTIZATION", "true").lower() == "true"
+QUANTIZATION_BITS = os.environ.get("QUANTIZATION_BITS", "8")  # "8" 或 "4"
 
 
 def load_model():
     """加载 Qwen-Image-Edit 模型"""
-    global pipe, model_loaded
+    global pipe, model_loaded, quantization_mode
     
     print("\n" + "=" * 60)
     print("🚀 Qwen-Image-Edit 本地推理服务")
@@ -42,123 +49,138 @@ def load_model():
     print(f"📅 启动时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"🔧 PyTorch: {torch.__version__}")
     print(f"🎮 CUDA: {torch.cuda.is_available()}")
+    
+    total_vram = 0
     if torch.cuda.is_available():
+        total_vram = torch.cuda.get_device_properties(0).total_memory / 1024**3
         print(f"   GPU: {torch.cuda.get_device_name(0)}")
-        print(f"   VRAM: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+        print(f"   VRAM: {total_vram:.1f} GB")
     
     print(f"\n📦 正在加载 Qwen-Image-Edit 模型...")
     print(f"   来源: Qwen/Qwen-Image-Edit (HuggingFace)")
     print(f"   参数: 20B")
-    print(f"   量化: {'8-bit (bitsandbytes)' if USE_QUANTIZATION else '原始精度'}")
+    print(f"   量化: {'启用 (' + QUANTIZATION_BITS + '-bit)' if USE_QUANTIZATION else '禁用'}")
     
     start_time = time.time()
     
     try:
         from diffusers import QwenImageEditPipeline
         
-        # 模型加载配置
         model_id = "Qwen/Qwen-Image-Edit"
         
         if USE_QUANTIZATION:
-            # 使用 8-bit 量化减少显存
+            # ============================================================
+            # 正确的量化方式：分别加载并量化各组件
+            # diffusers 的 BitsAndBytesConfig 只能用于单个模型，不能用于 Pipeline
+            # ============================================================
+            print("\n   📦 使用组件级量化 (推荐方式)...")
+            
             try:
-                # 尝试从 diffusers 不同路径导入量化配置
-                quantization_config_cls = None
-                try:
-                    from diffusers import BitsAndBytesConfig
-                    quantization_config_cls = BitsAndBytesConfig
-                except ImportError:
-                    try:
-                        from diffusers.utils import BitsAndBytesConfig
-                        quantization_config_cls = BitsAndBytesConfig
-                    except ImportError:
-                        try:
-                            from diffusers.quantizers import BitsAndBytesConfig
-                            quantization_config_cls = BitsAndBytesConfig
-                        except ImportError:
-                            pass
+                from diffusers import BitsAndBytesConfig as DiffusersBitsAndBytesConfig
+                from diffusers import AutoModel
+                from transformers import BitsAndBytesConfig as TransformersBitsAndBytesConfig
+                from transformers import AutoModel as TFAutoModel
                 
-                if quantization_config_cls:
-                    print(f"   📦 使用量化配置类: {quantization_config_cls.__module__}.{quantization_config_cls.__name__}")
-                    quantization_config = quantization_config_cls(
-                        load_in_8bit=True,
-                        bnb_8bit_compute_dtype=torch.bfloat16,
+                use_4bit = QUANTIZATION_BITS == "4"
+                
+                if use_4bit:
+                    print("   🔧 使用 4-bit NF4 量化...")
+                    # 4-bit 量化配置 (更省显存)
+                    diffusers_quant_config = DiffusersBitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_quant_type="nf4",
+                        bnb_4bit_compute_dtype=torch.bfloat16,
+                        bnb_4bit_use_double_quant=True,  # 嵌套量化，额外节省 0.4 bits/param
                     )
-                    
-                    pipe = QwenImageEditPipeline.from_pretrained(
-                        model_id,
-                        torch_dtype=torch.bfloat16,
-                        quantization_config=quantization_config,
-                        low_cpu_mem_usage=True,
+                    transformers_quant_config = TransformersBitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_quant_type="nf4",
+                        bnb_4bit_compute_dtype=torch.bfloat16,
+                        bnb_4bit_use_double_quant=True,
                     )
-                    print("   ✅ 8-bit 量化模式已启用")
+                    quantization_mode = "4bit"
                 else:
-                    raise ImportError("无法找到 diffusers.BitsAndBytesConfig")
+                    print("   🔧 使用 8-bit LLM.int8() 量化...")
+                    # 8-bit 量化配置
+                    diffusers_quant_config = DiffusersBitsAndBytesConfig(
+                        load_in_8bit=True,
+                    )
+                    transformers_quant_config = TransformersBitsAndBytesConfig(
+                        load_in_8bit=True,
+                    )
+                    quantization_mode = "8bit"
+                
+                # 1. 量化加载 transformer (diffusers 组件)
+                print("   📦 加载 transformer (量化)...")
+                transformer_quantized = AutoModel.from_pretrained(
+                    model_id,
+                    subfolder="transformer",
+                    quantization_config=diffusers_quant_config,
+                    torch_dtype=torch.bfloat16,
+                )
+                print(f"      ✅ Transformer 已加载 ({quantization_mode})")
+                
+                # 2. 量化加载 text_encoder (transformers 组件)
+                print("   📦 加载 text_encoder (量化)...")
+                text_encoder_quantized = TFAutoModel.from_pretrained(
+                    model_id,
+                    subfolder="text_encoder",
+                    quantization_config=transformers_quant_config,
+                    torch_dtype=torch.bfloat16,
+                )
+                print(f"      ✅ Text Encoder 已加载 ({quantization_mode})")
+                
+                # 3. 组装 Pipeline，传入量化后的组件
+                print("   📦 组装 Pipeline...")
+                pipe = QwenImageEditPipeline.from_pretrained(
+                    model_id,
+                    transformer=transformer_quantized,
+                    text_encoder=text_encoder_quantized,
+                    torch_dtype=torch.bfloat16,
+                    device_map="auto",  # 自动分配到 GPU/CPU
+                )
+                print(f"   ✅ {quantization_mode} 量化模式已启用")
                 
             except Exception as e:
-                print(f"   ⚠️ 量化加载失败: {e}")
-                print("   🔄 尝试 transformers 量化配置回退...")
+                print(f"   ⚠️ 组件级量化失败: {e}")
+                import traceback
+                traceback.print_exc()
+                print("   🔄 回退到标准模式 + CPU Offload...")
+                quantization_mode = "none"
                 
-                # 回退方案：分别加载组件
-                # Qwen-Image-Edit = Tokenizer + Text Encoder (Qwen2-VL) + VAE + Transformer + Scheduler
-                try:
-                    from transformers import BitsAndBytesConfig as TrBitsAndBytesConfig
-                    from transformers import Qwen2_5_VLForConditionalGeneration, AutoTokenizer
-                    from diffusers import AutoencoderKL, QwenImageEditPipeline
-                    
-                    print("   📦 手动加载并量化组件...")
-                    
-                    # 1. 量化 Text Encoder (这是显存大户)
-                    bnb_config = TrBitsAndBytesConfig(
-                        load_in_8bit=True,
-                        bnb_8bit_compute_dtype=torch.bfloat16
-                    )
-                    
-                    # 注意: Qwen-Image-Edit 可能使用特定的子文件夹
-                    # 我们尝试从 pipeline 配置中推断或者直接加载
-                    # 这里为了保险，还是尝试直接回退到标准模式但开启更激进的 offload
-                    # 因为手动拼装 pipeline 风险很大，且容易出错
-                    print("   ⚠️ 组件分离加载过于复杂，转为标准模式 + CPU Offload")
-                    raise e
-                    
-                except Exception as e2:
-                    print(f"   ⚠️ 最终量化失败: {e2}")
-                    print("   🔄 回退到标准模式 (Sequential CPU Offload)...")
-                    
-                    # 尝试加载 pipeline (不带量化)，但开启 low_cpu_mem_usage
-                    # 如果只有 16GB VRAM，全量加载可能会在 to("cuda") 时失败
-                    # 所以我们先加载到 CPU，然后 enable_sequential_cpu_offload
-                    pipe = QwenImageEditPipeline.from_pretrained(
-                        model_id,
-                        torch_dtype=torch.bfloat16,
-                        low_cpu_mem_usage=True,
-                        device_map="balanced" # 修正拼写: balanced
-                    )
-                    # 不要调用 pipe.to("cuda")，而是使用 offload
-                    pass
+                # 回退方案：不使用量化，但用 CPU offload 节省显存
+                pipe = QwenImageEditPipeline.from_pretrained(
+                    model_id,
+                    torch_dtype=torch.bfloat16,
+                    low_cpu_mem_usage=True,
+                )
+                # 根据显存大小选择 offload 策略
+                if total_vram < 24:
+                    print(f"   ⚠️ GPU 显存 ({total_vram:.1f}GB) 不足运行 20B 模型")
+                    print("   🔄 启用 Sequential CPU Offload...")
+                    pipe.enable_sequential_cpu_offload()
+                else:
+                    pipe.to("cuda")
         else:
-            # 标准加载
+            # 非量化模式
+            print("   📦 标准模式加载...")
             pipe = QwenImageEditPipeline.from_pretrained(
                 model_id,
                 torch_dtype=torch.bfloat16,
                 low_cpu_mem_usage=True,
             )
-            pipe.to("cuda")
-        
-        # 检查是否需要 CPU offload
-        if torch.cuda.is_available():
-            total_vram = torch.cuda.get_device_properties(0).total_memory / 1024**3
-            if total_vram < 20: # 20GB 以下都建议开启 offload，除非已经量化且很小
-                # 检查是否已量化
-                is_quantized = hasattr(pipe, "quantization_config") and pipe.quantization_config is not None
-                
-                if not is_quantized:
-                    print(f"   ⚠️ GPU 显存 ({total_vram:.1f}GB) 可能不足以运行 20B 模型(非量化)")
-                    print("   🔄 启用 Sequential CPU Offload (速度较慢但省显存)...")
+            
+            if total_vram < 40:
+                # 20B 模型非量化约需 40GB VRAM
+                print(f"   ⚠️ GPU 显存 ({total_vram:.1f}GB) 可能不足")
+                if total_vram < 24:
+                    print("   🔄 启用 Sequential CPU Offload (最省显存但最慢)...")
                     pipe.enable_sequential_cpu_offload()
-                elif total_vram < 10: # 即便是 8-bit，如果显存小于 10GB 也要小心
-                    print(f"   ⚠️ 显存紧张，启用 Model CPU Offload...")
+                else:
+                    print("   🔄 启用 Model CPU Offload...")
                     pipe.enable_model_cpu_offload()
+            else:
+                pipe.to("cuda")
         
         pipe.set_progress_bar_config(disable=True)
 
@@ -184,18 +206,24 @@ def health():
         "status": "ok" if model_loaded else "loading",
         "model": "Qwen-Image-Edit",
         "cuda": torch.cuda.is_available(),
-        "quantized": USE_QUANTIZATION,
+        "quantization": quantization_mode,
     })
 
 
 @app.route("/info", methods=["GET"])
 def info():
     """模型信息"""
+    quant_desc = {
+        "8bit": "8-bit (LLM.int8())",
+        "4bit": "4-bit (NF4 + Double Quant)",
+        "none": "bfloat16 (无量化)"
+    }.get(quantization_mode, "unknown")
+    
     return jsonify({
         "model": "Qwen-Image-Edit",
         "developer": "Alibaba Qwen (阿里巴巴通义)",
         "parameters": "20B",
-        "quantization": "8-bit" if USE_QUANTIZATION else "bfloat16",
+        "quantization": quant_desc,
         "features": [
             "语义编辑 (对象旋转、风格转换)",
             "外观编辑 (添加/删除/修改元素)",

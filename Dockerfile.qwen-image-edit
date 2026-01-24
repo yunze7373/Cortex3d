@@ -17,25 +17,31 @@ RUN pip install --upgrade pip
 # PyTorch with CUDA
 RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
-# Diffusers (最新版，包含 QwenImageEditPipeline)
+# Diffusers (最新版，包含 QwenImageEditPipeline 和 BitsAndBytesConfig)
 RUN pip install git+https://github.com/huggingface/diffusers
 
-# 其他依赖
+# 其他依赖 (transformers 需要最新版支持量化)
 RUN pip install \
-    transformers \
-    accelerate \
+    transformers>=4.38.0 \
+    accelerate>=0.26.0 \
     safetensors \
     sentencepiece \
     flask \
     pillow \
     requests \
-    bitsandbytes
+    bitsandbytes>=0.42.0
 
 # 工作目录
 WORKDIR /workspace
 
 # 复制服务脚本
 COPY scripts/qwen_image_edit_server.py /workspace/
+
+# 环境变量
+# USE_QUANTIZATION: "true" 启用量化, "false" 禁用
+# QUANTIZATION_BITS: "8" 使用 8-bit, "4" 使用 4-bit (更省显存)
+ENV USE_QUANTIZATION=true
+ENV QUANTIZATION_BITS=8
 
 # 暴露端口
 EXPOSE 8200

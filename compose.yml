@@ -208,7 +208,10 @@ services:
 
   # ==========================================================================
   # Qwen-Image-Edit (阿里巴巴通义 - 图像编辑模型)
-  # 20B参数，8-bit量化，支持语义编辑/外观编辑/文字编辑
+  # 20B参数，支持8-bit/4-bit量化，支持语义编辑/外观编辑/文字编辑
+  # 量化说明:
+  #   - 8-bit: 约需 12-14GB VRAM (推荐 16GB 及以上显卡)
+  #   - 4-bit: 约需 8-10GB VRAM (推荐 12GB 及以上显卡，更省但精度略降)
   # ==========================================================================
   qwen-image-edit:
     build:
@@ -231,6 +234,9 @@ services:
       - CUDA_VISIBLE_DEVICES=0
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
       - USE_QUANTIZATION=true
+      # 量化位数: "8" = 8-bit (LLM.int8), "4" = 4-bit (NF4, 更省显存)
+      # 对于 16GB 显卡建议用 8-bit，12GB 及以下建议用 4-bit
+      - QUANTIZATION_BITS=4
     restart: unless-stopped
     deploy:
       resources:
