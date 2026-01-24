@@ -1817,6 +1817,9 @@ def _extract_clothing_via_proxy(image_path, prompt, api_key, model_name, output_
     try:
         proxy_base_url = proxy_base_url or os.environ.get("AIPROXY_BASE_URL", "https://bot.bigjj.click/aiproxy")
         
+        # 调试：打印使用的模型
+        print(f"     [DEBUG] 提取衣服使用模型: {model_name}")
+        
         with open(image_path, 'rb') as f:
             image_bytes = f.read()
         
@@ -1858,6 +1861,10 @@ def _extract_clothing_via_proxy(image_path, prompt, api_key, model_name, output_
                 return str(output_path)
             else:
                 print(f"     [DEBUG] 响应中无image字段: {result.keys()}")
+                # 打印reply内容帮助诊断
+                if "reply" in result:
+                    print(f"     [DEBUG] 收到reply而非image，可能模型不对")
+                    print(f"     [DEBUG] reply内容: {result['reply'][:100]}...")
                 return None
         else:
             print(f"     [DEBUG] 提取API调用失败: {response.status_code}")
