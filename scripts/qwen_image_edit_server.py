@@ -132,7 +132,7 @@ def load_model():
                         model_id,
                         torch_dtype=torch.bfloat16,
                         low_cpu_mem_usage=True,
-                        device_map="balance" # 尝试让 accelerate 自动分配
+                        device_map="balanced" # 修正拼写: balanced
                     )
                     # 不要调用 pipe.to("cuda")，而是使用 offload
                     pass
