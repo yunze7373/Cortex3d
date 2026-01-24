@@ -1512,6 +1512,7 @@ def composite_images(
     composite_type: str = "auto",
     composite_prompt_template: str = None,
     export_prompt: bool = False,
+    instruction_is_final: bool = False,
 ) -> Optional[str]:
     """
     组合多张图片创建新场景
@@ -1530,6 +1531,7 @@ def composite_images(
         proxy_base_url: 代理服务地址 (仅 proxy 模式)
         composite_type: 合成类型 ("clothing", "accessory", "general", "auto")
         composite_prompt_template: 自定义合成提示词模板 (可选)
+        instruction_is_final: 如果为 True，instruction 已是完整提示词，不再处理
     
     Returns:
         合成后图像的路径
@@ -1558,9 +1560,12 @@ def composite_images(
         print("[ERROR] 合成需要至少2张图片")
         return None
     
-    # 优先使用用户自定义模板
-    if composite_prompt_template:
-        # 支持 {instruction}、{num_images}、{image_list}
+    # 确定最终提示词
+    if instruction_is_final:
+        # instruction 已经是完整的提示词，直接使用
+        enhanced_instruction = instruction
+    elif composite_prompt_template:
+        # 使用自定义模板
         image_list = "\n".join([f"Image {i+1}: {Path(p).name}" for i, p in enumerate(image_paths)])
         enhanced_instruction = composite_prompt_template.format(
             instruction=instruction,

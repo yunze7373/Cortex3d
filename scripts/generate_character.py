@@ -1037,17 +1037,20 @@ def main():
         from gemini_generator import composite_images
         
         try:
+            # 注意：final_prompt 已经是完整填充好的提示词（由 build_wardrobe_prompt 构建）
+            # 使用 instruction_is_final=True 跳过二次模板处理
             output_path = composite_images(
                 image_paths=all_images,
-                instruction=final_prompt,  # 使用构建好的严格提示词
+                instruction=final_prompt,  # 完整的换装提示词
                 api_key=args.token,
                 model_name=wear_model_name,  # 使用选定的模型
                 output_dir=args.output,
                 output_name=None,
                 mode=args.mode,
                 composite_type=task_type,  # clothing 或 accessory
-                composite_prompt_template=final_prompt,  # 直接传递完整模板
-                export_prompt=False,  # 已在上面打印
+                composite_prompt_template=None,  # 不使用额外模板
+                export_prompt=args.export_prompt,  # 允许在 composite_images 中打印
+                instruction_is_final=True,  # 重要：标记提示词已经是完整的
             )
             
             if output_path:
