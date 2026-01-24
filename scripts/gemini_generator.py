@@ -1804,73 +1804,91 @@ def _extract_clothing_via_proxy(image_path, prompt, api_key, model_name, output_
     import base64
     from pathlib import Path
     
-    proxy_base_url = proxy_base_url or os.environ.get("AIPROXY_BASE_URL", "https://bot.bigjj.click/aiproxy")
-    
-    with open(image_path, 'rb') as f:
-        image_bytes = f.read()
-    
-    suffix = Path(image_path).suffix.lower()
-    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
-    mime_type = mime_map.get(suffix, "image/jpeg")
-    b64_image = base64.b64encode(image_bytes).decode("utf-8")
-    
-    endpoint = f"{proxy_base_url.rstrip('/')}/generate"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    
-    payload = {
-        "prompt": prompt,
-        "model": model_name,
-        "image": f"data:{mime_type};base64,{b64_image}",
-        "safetySettings": [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
-        ]
-    }
-    
-    response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
-    
-    if response.status_code == 200:
-        result = response.json()
-        if "image" in result:
-            # 保存图片
-            import base64
-            output_path = Path(output_dir) / output_name
+    try:
+        proxy_base_url = proxy_base_url or os.environ.get("AIPROXY_BASE_URL", "https://bot.bigjj.click/aiproxy")
+        
+        with open(image_path, 'rb') as f:
+            image_bytes = f.read()
+        
+        suffix = Path(image_path).suffix.lower()
+        mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+        mime_type = mime_map.get(suffix, "image/jpeg")
+        b64_image = base64.b64encode(image_bytes).decode("utf-8")
+        
+        endpoint = f"{proxy_base_url.rstrip('/')}/generate"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        
+        payload = {
+            "prompt": prompt,
+            "model": model_name,
+            "image": f"data:{mime_type};base64,{b64_image}",
+            "safetySettings": [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
+            ]
+        }
+        
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if "image" in result:
+                # 保存图片
+                output_path = Path(output_dir) / output_name
+                
+                image_data = result["image"]
+                if image_data.startswith("data:"):
+                    image_data = image_data.split(",", 1)[1]
+                
+                with open(output_path, "wb") as f:
+                    f.write(base64.b64decode(image_data))
+                
+                return str(output_path)
+            else:
+                print(f"     [DEBUG] 响应中无image字段: {result.keys()}")
+                return None
+        else:
+            print(f"     [DEBUG] 提取API调用失败: {response.status_code}")
+            print(f"     [DEBUG] 响应: {response.text[:200]}")
+            return None
             
-            image_data = result["image"]
-            if image_data.startswith("data:"):
-                image_data = image_data.split(",", 1)[1]
-            
-            with open(output_path, "wb") as f:
-                f.write(base64.b64decode(image_data))
-            
-            return str(output_path)
-    
-    return None
+    except Exception as e:
+        print(f"     [DEBUG] 提取请求异常: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def _extract_clothing_via_direct(image_path, prompt, api_key, model_name, output_dir, output_name):
     """直接调用Gemini提取衣服"""
-    _ensure_imports()
-    
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(model_name)
-    
-    image = PIL_Image.open(image_path)
-    response = model.generate_content([prompt, image])
-    
-    # Gemini可能返回生成的图片或描述
-    # 这里需要根据实际API响应调整
-    if response and hasattr(response, 'candidates'):
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, 'inline_data'):
-                output_path = Path(output_dir) / output_name
-                with open(output_path, 'wb') as f:
-                    f.write(part.inline_data.data)
-                return str(output_path)
-    
-    return None
+    try:
+        _ensure_imports()
+        
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name)
+        
+        image = PIL_Image.open(image_path)
+        response = model.generate_content([prompt, image])
+        
+        # Gemini可能返回生成的图片或描述
+        # 这里需要根据实际API响应调整
+        if response and hasattr(response, 'candidates'):
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'inline_data'):
+                    output_path = Path(output_dir) / output_name
+                    with open(output_path, 'wb') as f:
+                        f.write(part.inline_data.data)
+                    return str(output_path)
+        
+        return None
+        
+    except Exception as e:
+        print(f"     [DEBUG] 直连提取异常: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 # =============================================================================
