@@ -131,15 +131,23 @@ def load_model():
                 print(f"      ✅ Text Encoder 已加载 ({quantization_mode})")
                 
                 # 3. 组装 Pipeline，传入量化后的组件
-                # 注意: QwenImageEditPipeline 只支持 device_map="balanced" 或 "cuda"
+                # 不使用 device_map，让我们手动控制 offload
                 print("   📦 组装 Pipeline...")
                 pipe = QwenImageEditPipeline.from_pretrained(
                     model_id,
                     transformer=transformer_quantized,
                     text_encoder=text_encoder_quantized,
                     torch_dtype=torch.bfloat16,
-                    device_map="balanced",  # 平衡分配到可用设备
+                    low_cpu_mem_usage=True,
                 )
+                
+                # 即使量化后，16GB 显存仍然紧张，启用 CPU offload
+                if total_vram < 24:
+                    print(f"   ⚠️ 显存 ({total_vram:.1f}GB) 紧张，启用 Sequential CPU Offload...")
+                    pipe.enable_sequential_cpu_offload()
+                else:
+                    pipe.to("cuda")
+                
                 print(f"   ✅ {quantization_mode} 量化模式已启用")
                 
             except Exception as e:
@@ -241,8 +249,13 @@ def info():
             "vram_gb": round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 1) if torch.cuda.is_available() else None,
         },
         "limits": {
-            "max_image_size": "1024 (可通过 max_size 参数调整)",
-            "recommended_size": "768-1024 (16GB 显存)",
+            "default_max_size": 512,
+            "default_steps": 28,
+            "recommended": {
+                "16GB_VRAM": {"max_size": 512, "steps": 28},
+                "24GB_VRAM": {"max_size": 768, "steps": 50},
+                "40GB_VRAM": {"max_size": 1024, "steps": 50},
+            }
         }
     })
 
@@ -259,14 +272,14 @@ def edit():
         "cfg_scale": 4.0,        // 可选，默认 4.0
         "steps": 50,             // 可选，默认 50
         "seed": 42,              // 可选，随机种子
-        "max_size": 1024         // 可选，最大图像尺寸 (防止OOM)
+        "max_size": 512          // 可选，最大图像尺寸 (防止OOM，16GB显存建议512)
     }
     
     返回:
     {
         "image": "base64编码的PNG图像",
-        "width": 1024,
-        "height": 1024,
+        "width": 512,
+        "height": 512,
         "seed": 42,
         "time": 5.23
     }
@@ -282,11 +295,12 @@ def edit():
         prompt = data.get("prompt", "")
         image_b64 = data.get("image", "")
         cfg_scale = float(data.get("cfg_scale", 4.0))
-        steps = int(data.get("steps", 50))
+        # 默认 28 步，Qwen-Image-Edit 官方推荐 28-50 步
+        steps = int(data.get("steps", 28))
         seed = data.get("seed", None)
         negative_prompt = data.get("negative_prompt", " ")
-        # 最大图像尺寸 (16GB 显存建议不超过 1024，可通过参数调整)
-        max_size = int(data.get("max_size", 1024))
+        # 最大图像尺寸 (16GB 显存 + 4-bit 量化建议 512，24GB+ 可用 768-1024)
+        max_size = int(data.get("max_size", 512))
         
         if not prompt:
             return jsonify({"error": "prompt 参数是必需的"}), 400
