@@ -756,9 +756,9 @@ def main():
     )
     
     parser.add_argument(
-        "--preserve-details",
+        "--preserve-detail-desc",
         type=str,
-        dest="preserve_details",
+        dest="preserve_detail_desc",
         help="要保留的关键细节描述。例: '保持女性的面部特征完全不变'"
     )
     
@@ -1168,8 +1168,8 @@ def main():
         print(f"\n  └─ 主图片: {main_image.name}")
         if element_image:
             print(f"  └─ 元素图片: {Path(element_image).name}")
-        if args.preserve_details:
-            print(f"  └─ 保留细节: {args.preserve_details[:60]}{'...' if len(args.preserve_details) > 60 else ''}")
+        if args.preserve_detail_desc:
+            print(f"  └─ 保留细节: {args.preserve_detail_desc[:60]}{'...' if len(args.preserve_detail_desc) > 60 else ''}")
         print(f"  └─ 修改指令: {args.preserve_instruction[:60]}{'...' if len(args.preserve_instruction) > 60 else ''}")
         print(f"  └─ 调用模式: {args.mode.upper()}")
         print("")
@@ -1182,7 +1182,7 @@ def main():
             output_path = preserve_detail_edit(
                 main_image_path=str(main_image),
                 instruction=args.preserve_instruction,
-                preserve_details=args.preserve_details,
+                preserve_details=args.preserve_detail_desc,
                 element_image_path=element_image,
                 api_key=args.token,
                 model_name=args.model if args.model else "gemini-2.5-flash-image",
