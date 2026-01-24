@@ -546,7 +546,15 @@ def main():
         default="flash",
         help="换装模型: flash(快速,默认) 或 pro(高保真,gemini-3-pro-image-preview)"
     )
-    
+
+    parser.add_argument(
+        "--wear-no-rembg",
+        dest="wear_no_rembg",
+        action="store_true",
+        default=False,
+        help="跳过衣服/配饰图片的智能切割预处理（默认会自动去除背景以凸显衣物）"
+    )
+
     parser.add_argument(
         "--from-id",
         dest="from_id",
@@ -987,16 +995,67 @@ def main():
                 sys.exit(1)
             resolved_targets.append(str(p))
         
-        # 构建指令
+        # =================================================================
+        # 🔪 智能切割预处理：对衣服/配饰图片去除背景，凸显主体
+        # 这样可以让 AI 更清晰地识别衣服/配饰本身
+        # =================================================================
+        if not getattr(args, 'wear_no_rembg', False):
+            print(f"\n  🔪 衣物图片预处理 (智能切割去背景)...")
+            try:
+                from image_processor import remove_background
+                import cv2
+                
+                processed_targets = []
+                for i, target_path in enumerate(resolved_targets, 1):
+                    target_name = Path(target_path).name
+                    print(f"     [{i}] 处理: {target_name}...")
+                    
+                    # 读取图片
+                    img = cv2.imread(target_path)
+                    if img is None:
+                        print(f"         [警告] 无法读取图片，跳过预处理")
+                        processed_targets.append(target_path)
+                        continue
+                    
+                    # 去除背景
+                    try:
+                        processed_img = remove_background(img, model_name="birefnet-general")
+                        
+                        # 保存处理后的图片到临时文件
+                        output_dir = Path(args.output)
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        processed_path = output_dir / f"_wear_preprocessed_{i}_{target_name}"
+                        
+                        # 转换为 PNG 以保留透明度
+                        if not str(processed_path).lower().endswith('.png'):
+                            processed_path = processed_path.with_suffix('.png')
+                        
+                        cv2.imwrite(str(processed_path), processed_img)
+                        processed_targets.append(str(processed_path))
+                        print(f"         ✅ 已去除背景 -> {processed_path.name}")
+                    except Exception as e:
+                        print(f"         [警告] 去背景失败: {e}，使用原图")
+                        processed_targets.append(target_path)
+                
+                # 用处理后的图片替换原目标列表
+                resolved_targets = processed_targets
+                print(f"")
+            except ImportError as e:
+                print(f"     [警告] 无法加载去背景模块: {e}")
+                print(f"     [警告] 跳过预处理，使用原图")
+        else:
+            print(f"\n  ⏭️  跳过衣物预处理 (--wear-no-rembg)")
+        
+        # 构建指令（全英文，以获得最佳效果）
         if args.wear_instruction:
             instruction = args.wear_instruction
         elif custom_instruction:
             instruction = custom_instruction
         else:
             if task_type == "clothing":
-                instruction = "让图1中的人穿上图2中的衣服/服装，保持人物的面部、发型、姿势完全不变"
+                instruction = "Put the clothing from Image 2 onto the person in Image 1. Keep the person's face, hair, pose, and background exactly the same."
             else:
-                instruction = "给图1中的人添加图2中的配饰，保持人物外观完全不变"
+                instruction = "Add the accessory from Image 2 to the person in Image 1. Keep the person's appearance exactly the same."
         
         print(f"  📷 主体图片: {main_image.name}")
         for i, t in enumerate(resolved_targets, 1):
@@ -1016,11 +1075,13 @@ def main():
         
         # =================================================================
         # 检测风格参数（与 --anime, --real 等共享同一系统）
+        # ⚠️ 警告：对于换装任务，风格参数可能会改变原图外观！
         # =================================================================
         from prompts.styles import get_style_preset, find_matching_style
         
         wear_style = None
         active_preset = None
+        style_warning_shown = False
         
         # 风格参数映射表
         style_flags = {
@@ -1050,6 +1111,14 @@ def main():
                 if active_preset:
                     wear_style = active_preset.prompt
                     print(f"  🎨 风格: {active_preset.name.upper()} ({active_preset.description})")
+                    # ⚠️ 重要警告：风格参数可能完全改变原图外观
+                    if active_preset.name.lower() in ['anime', 'ghibli', 'pixel', 'minecraft', 'clay', 'paper']:
+                        print(f"")
+                        print(f"  ⚠️  警告: 使用 --{active_preset.name} 风格会将写实照片转换为该风格！")
+                        print(f"  ⚠️  如果原图是写实照片，建议去掉 --{active_preset.name} 参数以保持原图外观。")
+                        print(f"  ⚠️  或使用 --real / --photorealistic 保持写实风格。")
+                        print(f"")
+                        style_warning_shown = True
                     break
         
         # 如果没有预设激活，尝试从 --style 参数匹配预设

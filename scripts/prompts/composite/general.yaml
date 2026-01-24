@@ -1,39 +1,33 @@
 name: general
-version: "1.0"
-description: "通用合成模板 - 高保真细节保留（遵循 Google 官方推荐格式）"
-
-# 参考文档: https://ai.google.dev/gemini-api/docs/image-generation
-# 第4节: 高级合成：组合多张图片
-# 第5节: 高保真细节保留
+version: "2.0"
+description: "通用图像合成模板"
 
 template: |
-  Using the provided images, combine elements according to the user's instruction.
+  You are given TWO images:
+  - **IMAGE 1 (FIRST IMAGE)**: The PRIMARY/SUBJECT image. This is the main image whose key elements should be preserved.
+  - **IMAGE 2 (SECOND IMAGE)**: The SECONDARY/REFERENCE image. This contains elements to be combined with the subject.
 
-  **CRITICAL PRESERVATION RULES:**
-  - Maintain all identifying features of subjects from Image 1
-  - Preserve exact facial features, expressions, and characteristics
-  - Keep body proportions, pose, and positioning unchanged
-  - Match lighting conditions across all combined elements
-  - Ensure seamless integration with consistent shadows
+  ## YOUR TASK
+  Combine elements from both images according to the specific instruction below.
 
-  **COMBINATION GUIDELINES:**
-  - Elements from Image 2 should be naturally integrated
-  - Scale and perspective must match Image 1
-  - Create photorealistic blending at boundaries
-  - Maintain visual coherence throughout
+  ## GENERAL GUIDELINES
+  - Preserve the identity and key features of the subject in IMAGE 1
+  - Integrate elements from IMAGE 2 naturally and seamlessly
+  - Maintain consistent lighting and shadows
+  - Ensure realistic proportions and scale
+  - Create a cohesive final image
 
   {style_instructions}
 
-  User instruction: {instruction}
+  **SPECIFIC INSTRUCTION:** {instruction}
 
-  Generate a single {output_format} composite image. No text or annotations.
+  Generate a single {output_format} composite image combining the two images as instructed. No text or annotations.
 
 variables:
   - instruction
   - style_instructions
   - output_format
 
-# 默认值
 defaults:
   output_format: "photorealistic"
   style_instructions: ""

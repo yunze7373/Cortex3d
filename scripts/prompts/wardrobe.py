@@ -78,16 +78,16 @@ def build_wardrobe_prompt(
     if task_type == "auto" and instruction:
         task_type = detect_wardrobe_task(instruction)
     
-    # 默认指令
+    # 默认指令（全英文）
     if not instruction:
         if task_type == "clothing":
-            instruction = "将图2中的服装穿到图1的人物身上"
+            instruction = "Put the clothing from Image 2 onto the person in Image 1, keeping the person's face, hair, pose, and background exactly the same."
         elif task_type == "accessory":
-            instruction = "将图2中的配饰添加到图1的人物身上"
+            instruction = "Add the accessory from Image 2 to the person in Image 1, keeping the person's appearance exactly the same."
         elif task_type == "full_outfit":
-            instruction = "将图2的完整造型应用到图1的人物身上"
+            instruction = "Apply the complete outfit from Image 2 to the person in Image 1, preserving the person's face, hair, and pose."
         else:
-            instruction = "按照用户意图合成图片"
+            instruction = "Combine elements from both images as instructed."
     
     # 调用 PromptLibrary 构建提示词
     return prompt_library.build_composite_prompt(

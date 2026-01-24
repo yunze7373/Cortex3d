@@ -1,41 +1,43 @@
 name: full_outfit
-version: "1.0"
-description: "完整造型合成模板 - 高保真细节保留（遵循 Google 官方推荐格式）"
-
-# 参考文档: https://ai.google.dev/gemini-api/docs/image-generation
-# 第5节: 高保真细节保留
+version: "2.0"
+description: "完整换装模板（含多件服饰）- 高保真细节保留"
 
 template: |
-  Using the provided images, apply the complete outfit/look from Image 2 onto the person in Image 1.
+  You are given TWO images:
+  - **IMAGE 1 (FIRST IMAGE)**: A photo of a PERSON. This is the SUBJECT whose face, body, and background must be preserved EXACTLY.
+  - **IMAGE 2 (SECOND IMAGE)**: A photo of a COMPLETE OUTFIT (full clothing ensemble). This entire outfit should replace the person's current clothing.
 
-  Ensure that the following features of the person in Image 1 remain COMPLETELY UNCHANGED:
-  - Face: all facial features, expression, gaze direction, makeup
-  - Hair: exact style, length, color, texture
-  - Skin tone and any visible marks
-  - Body proportions and build
-  - Pose: exact body position, hand placement, leg stance, head angle
-  - Background: environment, lighting, shadows
+  ## YOUR TASK
+  Replace ALL clothing on the person in IMAGE 1 with the complete outfit from IMAGE 2.
 
-  The new outfit should:
-  - Include all clothing items and accessories from Image 2
-  - Fit naturally on the person's body shape and pose
-  - Have realistic fabric draping, folds, and wrinkles matching the pose
-  - Maintain consistent style across all garments
-  - Reflect the same lighting conditions as Image 1
-  - Create consistent shadows
+  ## CRITICAL PRESERVATION REQUIREMENTS
+  The following features of the PERSON in IMAGE 1 must remain **100% IDENTICAL**:
+  - **Face**: Every facial feature, expression, gaze direction, makeup - NO changes allowed
+  - **Hair**: Exact style, length, color, texture - must be identical
+  - **Skin tone**: Must remain exactly the same
+  - **Body proportions**: Height, build, shape - must be identical
+  - **Pose**: Body position, hand placement, leg stance, head angle - must be identical
+  - **Background**: Environment, lighting direction, shadows - must be unchanged
+
+  ## OUTFIT TRANSFER REQUIREMENTS
+  The complete outfit from IMAGE 2 should:
+  - Include ALL clothing items visible (top, bottom, shoes, accessories if present)
+  - Fit naturally on the person's body shape from IMAGE 1
+  - Show realistic fabric draping and wrinkles matching the pose
+  - Maintain color accuracy from the original outfit
+  - Create consistent shadows matching the lighting in IMAGE 1
 
   {style_instructions}
 
-  User instruction: {instruction}
+  **SPECIFIC INSTRUCTION:** {instruction}
 
-  Generate a single {output_format} composite image. No text or annotations.
+  Generate a single {output_format} composite image showing the person from IMAGE 1 wearing the complete outfit from IMAGE 2. No text or annotations.
 
 variables:
   - instruction
   - style_instructions
   - output_format
 
-# 默认值
 defaults:
   output_format: "photorealistic"
   style_instructions: ""

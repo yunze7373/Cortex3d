@@ -1,39 +1,45 @@
 name: clothing
-version: "1.0"
-description: "换装合成模板 - 高保真细节保留（遵循 Google 官方推荐格式）"
+version: "2.0"
+description: "换装合成模板 - 高保真细节保留（遵循Google官方推荐格式）"
 
 # 参考文档: https://ai.google.dev/gemini-api/docs/image-generation
 # 第5节: 高保真细节保留
 
 template: |
-  Using the provided images, place the clothing/garment from Image 2 onto the person in Image 1.
+  You are given TWO images:
+  - **IMAGE 1 (FIRST IMAGE)**: A photo of a PERSON. This is the SUBJECT whose face, body, pose, and background must be preserved EXACTLY.
+  - **IMAGE 2 (SECOND IMAGE)**: A photo of CLOTHING/GARMENT. This clothing should be placed onto the person.
 
-  Ensure that the following features of the person in Image 1 remain COMPLETELY UNCHANGED:
-  - Face: all facial features, expression, gaze direction, makeup
-  - Hair: exact style, length, color, texture
-  - Skin tone and any visible marks
-  - Body proportions and build
-  - Pose: exact body position, hand placement, leg stance, head angle
-  - Background: environment, lighting, shadows
+  ## YOUR TASK
+  Put the clothing from IMAGE 2 onto the person in IMAGE 1.
 
-  The new clothing should:
-  - Fit naturally on the person's body shape and pose
-  - Have realistic fabric draping, folds, and wrinkles matching the pose
-  - Reflect the same lighting conditions as Image 1
+  ## CRITICAL PRESERVATION REQUIREMENTS
+  The following features of the PERSON in IMAGE 1 must remain **100% IDENTICAL**:
+  - **Face**: Every facial feature, expression, gaze direction, makeup - NO changes allowed
+  - **Hair**: Exact style, length, color, texture - must be identical
+  - **Skin tone**: Must remain exactly the same
+  - **Body proportions**: Height, build, shape - must be identical  
+  - **Pose**: Body position, hand placement, leg stance, head angle - must be identical
+  - **Background**: Environment, lighting direction, shadows - must be unchanged
+
+  ## CLOTHING TRANSFER REQUIREMENTS
+  The clothing from IMAGE 2 should:
+  - Fit naturally on the person's body shape from IMAGE 1
+  - Show realistic fabric draping and wrinkles matching the pose
+  - Reflect the same lighting conditions as IMAGE 1
   - Create consistent shadows
 
   {style_instructions}
 
-  User instruction: {instruction}
+  **SPECIFIC INSTRUCTION:** {instruction}
 
-  Generate a single {output_format} composite image. No text or annotations.
+  Generate a single {output_format} composite image showing the person from IMAGE 1 wearing the clothing from IMAGE 2. No text or annotations.
 
 variables:
   - instruction
   - style_instructions
   - output_format
 
-# 默认值
 defaults:
   output_format: "photorealistic"
   style_instructions: ""
