@@ -131,13 +131,14 @@ def load_model():
                 print(f"      ✅ Text Encoder 已加载 ({quantization_mode})")
                 
                 # 3. 组装 Pipeline，传入量化后的组件
+                # 注意: QwenImageEditPipeline 只支持 device_map="balanced" 或 "cuda"
                 print("   📦 组装 Pipeline...")
                 pipe = QwenImageEditPipeline.from_pretrained(
                     model_id,
                     transformer=transformer_quantized,
                     text_encoder=text_encoder_quantized,
                     torch_dtype=torch.bfloat16,
-                    device_map="auto",  # 自动分配到 GPU/CPU
+                    device_map="balanced",  # 平衡分配到可用设备
                 )
                 print(f"   ✅ {quantization_mode} 量化模式已启用")
                 
