@@ -62,48 +62,105 @@ def load_model():
         if USE_QUANTIZATION:
             # 使用 8-bit 量化减少显存
             try:
-                # 尝试从 diffusers 导入量化配置 (最新版)
+                # 尝试从 diffusers 不同路径导入量化配置
+                quantization_config_cls = None
                 try:
                     from diffusers import BitsAndBytesConfig
+                    quantization_config_cls = BitsAndBytesConfig
                 except ImportError:
-                    from diffusers.utils import BitsAndBytesConfig
+                    try:
+                        from diffusers.utils import BitsAndBytesConfig
+                        quantization_config_cls = BitsAndBytesConfig
+                    except ImportError:
+                        try:
+                            from diffusers.quantizers import BitsAndBytesConfig
+                            quantization_config_cls = BitsAndBytesConfig
+                        except ImportError:
+                            pass
                 
-                print("   📦 使用 Diffusers BitsAndBytesConfig")
-                quantization_config = BitsAndBytesConfig(
-                    load_in_8bit=True,
-                    bnb_8bit_compute_dtype=torch.bfloat16,
-                )
-                
-                pipe = QwenImageEditPipeline.from_pretrained(
-                    model_id,
-                    torch_dtype=torch.bfloat16,
-                    quantization_config=quantization_config,
-                )
-                print("   ✅ 8-bit 量化模式已启用")
+                if quantization_config_cls:
+                    print(f"   📦 使用量化配置类: {quantization_config_cls.__module__}.{quantization_config_cls.__name__}")
+                    quantization_config = quantization_config_cls(
+                        load_in_8bit=True,
+                        bnb_8bit_compute_dtype=torch.bfloat16,
+                    )
+                    
+                    pipe = QwenImageEditPipeline.from_pretrained(
+                        model_id,
+                        torch_dtype=torch.bfloat16,
+                        quantization_config=quantization_config,
+                        low_cpu_mem_usage=True,
+                    )
+                    print("   ✅ 8-bit 量化模式已启用")
+                else:
+                    raise ImportError("无法找到 diffusers.BitsAndBytesConfig")
                 
             except Exception as e:
                 print(f"   ⚠️ 量化加载失败: {e}")
-                print("   🔄 尝试 transformers 量化配置...")
+                print("   🔄 尝试 transformers 量化配置回退...")
                 
-                # 回退方案：分别加载组件（如果 pipeline 量化失败）
+                # 回退方案：分别加载组件
+                # Qwen-Image-Edit = Tokenizer + Text Encoder (Qwen2-VL) + VAE + Transformer + Scheduler
                 try:
                     from transformers import BitsAndBytesConfig as TrBitsAndBytesConfig
-                    from transformers import Qwen2VLForConditionalGeneration
-                    from diffusers import Qwen2VLTokenizer
+                    from transformers import Qwen2_5_VLForConditionalGeneration, AutoTokenizer
+                    from diffusers import AutoencoderKL, QwenImageEditPipeline
                     
-                    # 仅量化 Transformer (如果支持分离加载) 或者回退到 CPU offload
-                    # 这里为了简单，如果 Diffusers 量化失败，我们直接回退到 CPU Offload 模式，
-                    # 避免复杂的组件手动拼装导致更多错误。
+                    print("   📦 手动加载并量化组件...")
+                    
+                    # 1. 量化 Text Encoder (这是显存大户)
+                    bnb_config = TrBitsAndBytesConfig(
+                        load_in_8bit=True,
+                        bnb_8bit_compute_dtype=torch.bfloat16
+                    )
+                    
+                    # 注意: Qwen-Image-Edit 可能使用特定的子文件夹
+                    # 我们尝试从 pipeline 配置中推断或者直接加载
+                    # 这里为了保险，还是尝试直接回退到标准模式但开启更激进的 offload
+                    # 因为手动拼装 pipeline 风险很大，且容易出错
+                    print("   ⚠️ 组件分离加载过于复杂，转为标准模式 + CPU Offload")
                     raise e
                     
                 except Exception as e2:
                     print(f"   ⚠️ 最终量化失败: {e2}")
-                    print("   🔄 回退到标准模式 (CPU Offload)...")
+                    print("   🔄 回退到标准模式 (Sequential CPU Offload)...")
+                    
+                    # 尝试加载 pipeline (不带量化)，但开启 low_cpu_mem_usage
+                    # 如果只有 16GB VRAM，全量加载可能会在 to("cuda") 时失败
+                    # 所以我们先加载到 CPU，然后 enable_sequential_cpu_offload
                     pipe = QwenImageEditPipeline.from_pretrained(
                         model_id,
                         torch_dtype=torch.bfloat16,
+                        low_cpu_mem_usage=True,
+                        device_map="balance" # 尝试让 accelerate 自动分配
                     )
-                    pipe.to("cuda")
+                    # 不要调用 pipe.to("cuda")，而是使用 offload
+                    pass
+        else:
+            # 标准加载
+            pipe = QwenImageEditPipeline.from_pretrained(
+                model_id,
+                torch_dtype=torch.bfloat16,
+                low_cpu_mem_usage=True,
+            )
+            pipe.to("cuda")
+        
+        # 检查是否需要 CPU offload
+        if torch.cuda.is_available():
+            total_vram = torch.cuda.get_device_properties(0).total_memory / 1024**3
+            if total_vram < 20: # 20GB 以下都建议开启 offload，除非已经量化且很小
+                # 检查是否已量化
+                is_quantized = hasattr(pipe, "quantization_config") and pipe.quantization_config is not None
+                
+                if not is_quantized:
+                    print(f"   ⚠️ GPU 显存 ({total_vram:.1f}GB) 可能不足以运行 20B 模型(非量化)")
+                    print("   🔄 启用 Sequential CPU Offload (速度较慢但省显存)...")
+                    pipe.enable_sequential_cpu_offload()
+                elif total_vram < 10: # 即便是 8-bit，如果显存小于 10GB 也要小心
+                    print(f"   ⚠️ 显存紧张，启用 Model CPU Offload...")
+                    pipe.enable_model_cpu_offload()
+        
+        pipe.set_progress_bar_config(disable=True)
         else:
             # 标准加载
             pipe = QwenImageEditPipeline.from_pretrained(
