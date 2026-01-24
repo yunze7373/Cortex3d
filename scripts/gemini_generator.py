@@ -1541,19 +1541,29 @@ def smart_extract_clothing(
     # =========================================================================
     analysis_prompt = """Analyze this image and determine its content type:
 
-1. **Pure clothing item**: Only clothing/garment visible, no person wearing it (may have background)
-2. **Person wearing clothing**: A person is wearing the clothing
+1. **Pure clothing item**: Clothing displayed without a person wearing it. This includes:
+   - Flat lay / product photography (clothing laid flat on surface)
+   - Clothing on hangers or mannequins
+   - Multiple clothing items arranged together (outfit sets)
+   - Clothing with accessories (hats, bags, jewelry) displayed together
+   
+2. **Person wearing clothing**: A REAL human person (with visible face/body) is actually wearing the clothing
+   - Must have clear human features (face, hands, body)
+   - NOT mannequins or clothing forms
+
 3. **Ambiguous**: Cannot clearly determine
 
 Also check if there is a background:
 - Has background: Yes/No
 - Background type: (white/solid color/complex scene/transparent)
 
+IMPORTANT: Flat lay photos showing clothing arranged on a surface are "Pure clothing item", NOT "Person wearing clothing".
+
 Please respond in this exact format:
 Content: [Pure clothing item / Person wearing clothing / Ambiguous]
 Has background: [Yes / No]
 Background type: [description]
-Clothing description: [brief description of the clothing]"""
+Clothing description: [brief description of the main clothing items visible]"""
 
     try:
         # 对于AI分析，使用视觉-文本模型（gemini-2.0-flash），而不是图像生成模型
@@ -1588,12 +1598,38 @@ Clothing description: [brief description of the clothing]"""
         has_background = False
         
         result_lower = analysis_result.lower()
-        if "pure clothing" in result_lower or "only clothing" in result_lower:
-            content_type = "pure_clothing"
-        elif "person wearing" in result_lower or "wearing clothing" in result_lower:
-            content_type = "person_wearing"
         
-        if "has background: yes" in result_lower:
+        # 更全面的关键词匹配，优先识别"纯衣服"场景
+        pure_clothing_keywords = [
+            "pure clothing", "only clothing", "clothing item",
+            "flat lay", "product photo", "no person", "without person",
+            "mannequin", "hanger", "displayed", "arranged"
+        ]
+        person_wearing_keywords = [
+            "person wearing", "wearing clothing", "human wearing",
+            "someone wearing", "model wearing", "person is wearing"
+        ]
+        
+        # 先检查是否有人穿着（需要更强的证据）
+        has_person_signal = any(kw in result_lower for kw in person_wearing_keywords)
+        has_pure_signal = any(kw in result_lower for kw in pure_clothing_keywords)
+        
+        # 如果同时有两种信号，优先认为是纯衣服（因为AI可能误判flat lay）
+        if has_pure_signal and not has_person_signal:
+            content_type = "pure_clothing"
+        elif has_person_signal and not has_pure_signal:
+            content_type = "person_wearing"
+        elif has_pure_signal and has_person_signal:
+            # 冲突时，检查更具体的描述
+            if "real person" in result_lower or "human face" in result_lower:
+                content_type = "person_wearing"
+            else:
+                content_type = "pure_clothing"  # 默认为纯衣服
+        
+        if "has background: yes" in result_lower or "background: yes" in result_lower:
+            has_background = True
+        # 白色/浅色背景也算有背景（需要处理）
+        if "white background" in result_lower or "solid color" in result_lower:
             has_background = True
         
         print(f"     ✅ 检测结果: 内容={content_type}, 背景={has_background}")
@@ -1666,17 +1702,33 @@ Clothing description: [brief description of the clothing]"""
         # 步骤2b: AI提取衣服
         print(f"  🎨 步骤2b: AI提取衣服...")
         
-        # 使用更直接的提示词，要求生成图像而不是返回HTML/文本
-        extraction_prompt = """Based on this image of a person wearing clothing, generate a new image showing ONLY the clothing items (coat, shirt, pants, hat, etc.) displayed flat as if laid out on a white background.
+        # 强调保持原样，不要添加或修改任何东西
+        extraction_prompt = """Extract ONLY the clothing from this image of a person wearing clothes.
 
-Requirements:
-- Show the clothing items arranged neatly on a plain white background
-- Display them as if photographed for a product catalog
-- Include all visible garments: coat, shirt, pants, hat, accessories
-- Make them clearly visible and well-lit
-- NO person in the output, just the clothing items themselves
+CRITICAL REQUIREMENTS:
+1. **PRESERVE EXACT APPEARANCE**: The extracted clothing must look EXACTLY like in the original image
+   - Same size, proportions, colors, textures, patterns
+   - Same style, cut, and design details
+   - NO modifications, NO enhancements, NO changes
 
-Generate a product-style photo of the extracted clothing."""
+2. **EXTRACT ONLY WHAT EXISTS**: 
+   - Only extract clothing items that are ACTUALLY VISIBLE in the original image
+   - Do NOT add any items that don't exist (no extra hats, accessories, jewelry)
+   - Do NOT invent or imagine clothing parts that are hidden or not shown
+
+3. **OUTPUT FORMAT**:
+   - Display the extracted clothing items on a clean white background
+   - Arrange them neatly as if for a product catalog (flat lay style)
+   - Maintain the ORIGINAL SIZE and proportions of each item
+   - Keep realistic, natural appearance - no exaggeration
+
+4. **FORBIDDEN**:
+   - Do NOT shrink or enlarge the clothing
+   - Do NOT add accessories, jewelry, or items not in the original
+   - Do NOT change colors, patterns, or textures
+   - Do NOT include any person or body parts
+
+Generate an image showing ONLY the extracted clothing items exactly as they appear in the original, arranged on white background."""
 
         try:
             # 对于图像生成（提取衣服），必须使用图像生成模型
