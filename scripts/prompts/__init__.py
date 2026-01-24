@@ -455,6 +455,175 @@ class PromptLibrary:
             final_rules_instructions=self._get_final_rules_instructions(view_count)
         )
 
+    # =========================================================================
+    # 合成功能（换装、配饰等）- 与多视角生成使用相同的风格系统
+    # =========================================================================
+    
+    def build_composite_prompt(
+        self,
+        instruction: str,
+        composite_type: str = "clothing",
+        style: str = None,
+        num_images: int = 2
+    ) -> str:
+        """
+        构建合成提示词（换装、配饰等）
+        
+        使用与多视角生成相同的风格预设系统，确保一致性。
+        
+        Args:
+            instruction: 用户的合成指令
+            composite_type: 合成类型 ("clothing", "accessory", "full_outfit", "general", "auto")
+            style: 风格描述（支持 anime, photorealistic 等预设）
+            num_images: 图片数量
+        
+        Returns:
+            完整的提示词字符串
+        """
+        # 自动检测合成类型
+        if composite_type == "auto":
+            composite_type = self._detect_composite_type(instruction)
+        
+        # 加载对应的 YAML 模板
+        try:
+            template_data = self.load_prompt("composite", composite_type)
+        except ValueError:
+            # 回退到 general 模板
+            template_data = self.load_prompt("composite", "general")
+        
+        template = template_data.get("template", "")
+        defaults = template_data.get("defaults", {})
+        
+        # 获取风格指令（使用与多视角相同的风格系统）
+        style_instructions = self._get_composite_style_instructions(style)
+        
+        # 获取输出格式描述
+        output_format = self._get_output_format(style)
+        
+        # 填充模板
+        return template.format(
+            instruction=instruction,
+            style_instructions=style_instructions,
+            output_format=output_format
+        )
+    
+    def _detect_composite_type(self, instruction: str) -> str:
+        """
+        根据用户指令自动检测合成类型
+        
+        Args:
+            instruction: 用户指令
+        
+        Returns:
+            合成类型 ("clothing", "accessory", "full_outfit", "general")
+        """
+        lower_inst = instruction.lower()
+        
+        # 服装关键词
+        clothing_keywords = [
+            "穿", "衣服", "裙", "裤", "上衣", "外套", "衬衫", "t恤", "连衣裙",
+            "wear", "dress", "shirt", "pants", "jacket", "outfit", "clothing",
+            "换装", "换衣", "试穿", "穿上", "换上"
+        ]
+        
+        # 配饰关键词  
+        accessory_keywords = [
+            "帽", "包", "眼镜", "墨镜", "耳环", "项链", "手表", "戒指", "手链",
+            "围巾", "领带", "腰带", "鞋", "袜",
+            "hat", "bag", "glasses", "sunglasses", "earring", "necklace", "watch",
+            "ring", "bracelet", "scarf", "tie", "belt", "shoes", "socks",
+            "戴", "配饰", "饰品", "accessory", "jewelry"
+        ]
+        
+        # 完整造型关键词
+        full_outfit_keywords = [
+            "整套", "全身", "完整造型", "整体", "全套",
+            "complete outfit", "full look", "entire outfit", "whole look"
+        ]
+        
+        # 优先检测完整造型
+        if any(kw in lower_inst for kw in full_outfit_keywords):
+            return "full_outfit"
+        
+        # 然后检测服装
+        if any(kw in lower_inst for kw in clothing_keywords):
+            return "clothing"
+        
+        # 然后检测配饰
+        if any(kw in lower_inst for kw in accessory_keywords):
+            return "accessory"
+        
+        # 默认为 general
+        return "general"
+    
+    def _get_composite_style_instructions(self, style: str = None) -> str:
+        """
+        根据风格参数生成合成专用的风格指令
+        
+        使用与多视角生成相同的风格预设系统
+        
+        Args:
+            style: 风格字符串 (可能包含 photorealistic, anime 等关键词)
+        
+        Returns:
+            风格指令字符串（用于合成场景）
+        """
+        if not style:
+            return ""  # 无风格指定时，使用模板默认（photorealistic）
+        
+        # 从风格预设系统获取
+        from prompts.styles import find_matching_style
+        
+        matched_preset = find_matching_style(style)
+        if matched_preset:
+            # 为合成场景定制风格指令
+            return f"""
+## OUTPUT STYLE REQUIREMENT
+{matched_preset.style_instruction}
+
+Ensure the composite result maintains this exact style while preserving all subject details."""
+        
+        # 自定义风格：使用通用模板
+        return f"""
+## OUTPUT STYLE REQUIREMENT
+**{style}**
+- Apply this style to the final composite image
+- Maintain style consistency across all elements"""
+    
+    def _get_output_format(self, style: str = None) -> str:
+        """
+        根据风格返回输出格式描述
+        
+        Args:
+            style: 风格字符串
+        
+        Returns:
+            输出格式描述 (如 "photorealistic", "anime-style", etc.)
+        """
+        if not style:
+            return "photorealistic"
+        
+        from prompts.styles import find_matching_style
+        
+        matched_preset = find_matching_style(style)
+        if matched_preset:
+            # 根据预设名称返回合适的输出格式描述
+            style_name = matched_preset.name.lower()
+            if style_name in ["anime", "manga", "2d", "cel"]:
+                return "anime-style"
+            elif style_name in ["photorealistic", "real", "photo"]:
+                return "photorealistic"
+            elif style_name in ["paper", "papercraft"]:
+                return "papercraft-style"
+            elif style_name in ["chibi"]:
+                return "chibi-style"
+            elif style_name in ["pixar", "disney"]:
+                return "3D animated"
+            else:
+                return style_name
+        
+        return "stylized"
+
 
 # 全局单例
 prompt_library = PromptLibrary()
@@ -484,3 +653,23 @@ def build_multiview_prompt(
         view_mode=view_mode,
         custom_views=custom_views
     )
+
+
+def build_composite_prompt(
+    instruction: str,
+    composite_type: str = "clothing",
+    style: str = None,
+    num_images: int = 2
+) -> str:
+    """
+    构建合成提示词（换装、配饰等）
+    
+    使用 PromptLibrary 系统，与多视角生成共享风格预设。
+    """
+    return prompt_library.build_composite_prompt(
+        instruction=instruction,
+        composite_type=composite_type,
+        style=style,
+        num_images=num_images
+    )
+

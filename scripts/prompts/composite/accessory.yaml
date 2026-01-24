@@ -1,0 +1,40 @@
+name: accessory
+version: "1.0"
+description: "配饰合成模板 - 高保真细节保留（遵循 Google 官方推荐格式）"
+
+# 参考文档: https://ai.google.dev/gemini-api/docs/image-generation
+# 第5节: 高保真细节保留
+
+template: |
+  Using the provided images, add the accessory/item from Image 2 onto the person in Image 1.
+
+  Ensure that the following features of the person in Image 1 remain COMPLETELY UNCHANGED:
+  - Face: all facial features, expression, gaze direction, makeup
+  - Hair: exact style, length, color, texture (accessory should complement, not hide)
+  - Skin tone and any visible marks
+  - Body proportions and build
+  - Pose: exact body position, hand placement, leg stance, head angle
+  - Existing clothing: all garments remain exactly as shown
+  - Background: environment, lighting, shadows
+
+  The accessory should:
+  - Be positioned naturally on/with the person
+  - Match the scale and perspective of Image 1
+  - Reflect the same lighting conditions as Image 1
+  - Create consistent shadows and reflections
+
+  {style_instructions}
+
+  User instruction: {instruction}
+
+  Generate a single {output_format} composite image. No text or annotations.
+
+variables:
+  - instruction
+  - style_instructions
+  - output_format
+
+# 默认值
+defaults:
+  output_format: "photorealistic"
+  style_instructions: ""

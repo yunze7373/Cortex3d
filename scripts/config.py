@@ -228,23 +228,34 @@ def build_strict_copy_prompt(
 def build_composite_prompt(
     instruction: str,
     composite_type: str = "clothing",
-    num_images: int = 2
+    num_images: int = 2,
+    style: str = None
 ) -> str:
     """
     构建高精度合成提示词（换装、配饰等）
     
-    使用与多视角生成相同级别的严格控制模板
-    优先使用 prompts.wardrobe 模块的工业级模板
+    使用 PromptLibrary + YAML 模板系统，与多视角生成共享风格预设。
     
     Args:
         instruction: 用户的合成指令
         composite_type: 合成类型 ("clothing", "accessory", "general", "auto")
         num_images: 图片数量
+        style: 风格（anime, photorealistic 等）
     
     Returns:
         完整的提示词字符串
     """
-    # 优先尝试使用 wardrobe 模块（工业级模板）
+    # 优先使用 PromptLibrary 系统（与多视角生成统一）
+    lib = _get_prompt_library()
+    if lib and hasattr(lib, 'build_composite_prompt'):
+        return lib.build_composite_prompt(
+            instruction=instruction,
+            composite_type=composite_type,
+            style=style,
+            num_images=num_images
+        )
+    
+    # 回退：尝试使用 wardrobe 模块
     try:
         from prompts.wardrobe import build_wardrobe_prompt, detect_wardrobe_task
         
@@ -256,7 +267,7 @@ def build_composite_prompt(
         task_type_map = {
             "clothing": "clothing",
             "accessory": "accessory",
-            "general": "full_outfit"  # general 使用 full_outfit
+            "general": "full_outfit"
         }
         task_type = task_type_map.get(composite_type, "clothing")
         
@@ -264,20 +275,13 @@ def build_composite_prompt(
             task_type=task_type,
             instruction=instruction,
             num_images=num_images,
-            strict_mode=True
+            strict_mode=True,
+            style=style
         )
     except ImportError:
-        pass  # wardrobe 模块不存在，使用回退逻辑
+        pass
     
-    # 尝试使用 PromptLibrary
-    lib = _get_prompt_library()
-    if lib and hasattr(lib, 'build_composite_prompt'):
-        return lib.build_composite_prompt(
-            instruction=instruction,
-            composite_type=composite_type,
-            num_images=num_images
-        )
-    
+    # 最终回退：硬编码模板（不推荐）
     # 自动检测合成类型
     if composite_type == "auto":
         lower_inst = instruction.lower()
@@ -291,8 +295,7 @@ def build_composite_prompt(
         else:
             composite_type = "general"
     
-    # 回退到 Google 官方推荐的高保真细节保留格式
-    # 参考: https://ai.google.dev/gemini-api/docs/image-generation#5_high_fidelity_detail_preservation
+    # 回退模板
     if composite_type == "clothing":
         return f"""Using the provided images, place the clothing/garment from Image 2 onto the person in Image 1.
 

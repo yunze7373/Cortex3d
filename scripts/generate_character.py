@@ -1013,14 +1013,68 @@ def main():
             print(f"  🎯 模型: {wear_model_name}")
         
         print(f"  🔄 调用模式: {args.mode.upper()}")
+        
+        # =================================================================
+        # 检测风格参数（与 --anime, --real 等共享同一系统）
+        # =================================================================
+        from prompts.styles import get_style_preset, find_matching_style
+        
+        wear_style = None
+        active_preset = None
+        
+        # 风格参数映射表
+        style_flags = {
+            'photorealistic': getattr(args, 'photorealistic', False),
+            'anime': getattr(args, 'anime', False),
+            'ghibli': getattr(args, 'ghibli', False),
+            'pixel': getattr(args, 'pixel', False),
+            'minecraft': getattr(args, 'minecraft', False),
+            'clay': getattr(args, 'clay', False),
+            'plush': getattr(args, 'plush', False),
+            'paper': getattr(args, 'paper', False),
+            'cyberpunk': getattr(args, 'cyberpunk', False),
+            'fantasy': getattr(args, 'fantasy', False),
+            'watercolor': getattr(args, 'watercolor', False),
+            'oil': getattr(args, 'oil', False),
+            '3d-toon': getattr(args, 'toon3d', False),
+            'comic': getattr(args, 'comic', False),
+            'minimal': getattr(args, 'minimal', False),
+            'lowpoly': getattr(args, 'lowpoly', False),
+            'chibi': getattr(args, 'chibi', False),
+        }
+        
+        # 查找激活的风格预设
+        for preset_name, is_active in style_flags.items():
+            if is_active:
+                active_preset = get_style_preset(preset_name)
+                if active_preset:
+                    wear_style = active_preset.prompt
+                    print(f"  🎨 风格: {active_preset.name.upper()} ({active_preset.description})")
+                    break
+        
+        # 如果没有预设激活，尝试从 --style 参数匹配预设
+        if not active_preset and getattr(args, 'style', None):
+            matched = find_matching_style(args.style)
+            if matched:
+                active_preset = matched
+                wear_style = matched.prompt
+                print(f"  🎨 匹配风格: {matched.name.upper()}")
+            else:
+                wear_style = args.style
+                print(f"  🎨 自定义风格: {wear_style}")
+        
+        if not wear_style:
+            print(f"  🎨 风格: 默认 (photorealistic)")
+        
         print("")
         
-        # 构建提示词（使用与多视图相同级别的严格模板）
+        # 构建提示词（使用 PromptLibrary 系统，与多视图共享风格预设）
         final_prompt = build_wardrobe_prompt(
             task_type=task_type,
             instruction=instruction,
             num_images=1 + len(resolved_targets),
-            strict_mode=args.wear_strict
+            strict_mode=args.wear_strict,
+            style=wear_style  # 传递风格参数
         )
         
         # 打印最终提示词（如果启用导出）
