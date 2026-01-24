@@ -996,24 +996,45 @@ def main():
             resolved_targets.append(str(p))
         
         # =================================================================
-        # 🔪 智能切割预处理：对衣服/配饰图片去除背景，凸显主体
-        # 这样可以让 AI 更清晰地识别衣服/配饰本身
+        # 🔪 智能切割预处理：对主体人物和衣服/配饰图片去除背景
+        # 这样可以让 AI 更清晰地识别人物和衣服/配饰
         # =================================================================
         if not getattr(args, 'wear_no_rembg', False):
-            print(f"\n  🔪 衣物图片预处理 (智能切割去背景)...")
+            print(f"\n  🔪 图片预处理 (智能切割去背景)...")
             try:
                 from image_processor import remove_background
                 import cv2
                 
+                output_dir = Path(args.output)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                
+                # 1. 处理主体人物图片
+                print(f"     [主体] 处理: {main_image.name}...")
+                main_img = cv2.imread(str(main_image))
+                if main_img is not None:
+                    try:
+                        processed_main = remove_background(main_img, model_name="birefnet-general")
+                        processed_main_path = output_dir / f"_wear_preprocessed_main_{main_image.name}"
+                        if not str(processed_main_path).lower().endswith('.png'):
+                            processed_main_path = processed_main_path.with_suffix('.png')
+                        cv2.imwrite(str(processed_main_path), processed_main)
+                        main_image = processed_main_path
+                        print(f"            ✅ 已去除背景 -> {processed_main_path.name}")
+                    except Exception as e:
+                        print(f"            [警告] 去背景失败: {e}，使用原图")
+                else:
+                    print(f"            [警告] 无法读取图片，跳过预处理")
+                
+                # 2. 处理衣服/配饰图片
                 processed_targets = []
                 for i, target_path in enumerate(resolved_targets, 1):
                     target_name = Path(target_path).name
-                    print(f"     [{i}] 处理: {target_name}...")
+                    print(f"     [衣物{i}] 处理: {target_name}...")
                     
                     # 读取图片
                     img = cv2.imread(target_path)
                     if img is None:
-                        print(f"         [警告] 无法读取图片，跳过预处理")
+                        print(f"            [警告] 无法读取图片，跳过预处理")
                         processed_targets.append(target_path)
                         continue
                     
@@ -1022,8 +1043,6 @@ def main():
                         processed_img = remove_background(img, model_name="birefnet-general")
                         
                         # 保存处理后的图片到临时文件
-                        output_dir = Path(args.output)
-                        output_dir.mkdir(parents=True, exist_ok=True)
                         processed_path = output_dir / f"_wear_preprocessed_{i}_{target_name}"
                         
                         # 转换为 PNG 以保留透明度
@@ -1032,9 +1051,9 @@ def main():
                         
                         cv2.imwrite(str(processed_path), processed_img)
                         processed_targets.append(str(processed_path))
-                        print(f"         ✅ 已去除背景 -> {processed_path.name}")
+                        print(f"            ✅ 已去除背景 -> {processed_path.name}")
                     except Exception as e:
-                        print(f"         [警告] 去背景失败: {e}，使用原图")
+                        print(f"            [警告] 去背景失败: {e}，使用原图")
                         processed_targets.append(target_path)
                 
                 # 用处理后的图片替换原目标列表
@@ -1044,7 +1063,7 @@ def main():
                 print(f"     [警告] 无法加载去背景模块: {e}")
                 print(f"     [警告] 跳过预处理，使用原图")
         else:
-            print(f"\n  ⏭️  跳过衣物预处理 (--wear-no-rembg)")
+            print(f"\n  ⏭️  跳过图片预处理 (--wear-no-rembg)")
         
         # 构建指令（全英文，以获得最佳效果）
         if args.wear_instruction:
