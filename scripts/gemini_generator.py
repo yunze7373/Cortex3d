@@ -1511,6 +1511,7 @@ def composite_images(
     proxy_base_url: str = None,
     composite_type: str = "auto",
     composite_prompt_template: str = None,
+    export_prompt: bool = False,
 ) -> Optional[str]:
     """
     组合多张图片创建新场景
@@ -1583,6 +1584,14 @@ def composite_images(
     print(f"  合成类型: {composite_type}")
     print(f"  模型: {model_name}")
     print(f"  调用模式: {mode.upper()}")
+    
+    # 打印最终提示词
+    if export_prompt:
+        print(f"\n{'='*60}")
+        print("[最终合成提示词]")
+        print(f"{'='*60}")
+        print(enhanced_instruction)
+        print(f"{'='*60}\n")
     
     # 根据模式选择调用方式
     if mode == "proxy":

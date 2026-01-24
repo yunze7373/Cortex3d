@@ -1133,6 +1133,7 @@ def main():
                 mode=args.mode,
                 composite_type=args.composite_type,
                 composite_prompt_template=args.composite_prompt_template,
+                export_prompt=args.export_prompt,
             )
             
             if output_path:
