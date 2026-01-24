@@ -1741,19 +1741,20 @@ def _analyze_image_via_proxy(image_path, prompt, api_key, model_name, proxy_base
         mime_type = mime_map.get(suffix, "image/jpeg")
         b64_image = base64.b64encode(image_bytes).decode("utf-8")
         
-        endpoint = f"{proxy_base_url.rstrip('/')}/chat/completions"
+        # AiProxy 使用 /generate 端点，而不是 /chat/completions
+        endpoint = f"{proxy_base_url.rstrip('/')}/generate"
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         
+        # AiProxy 格式：使用 prompt + image
         payload = {
+            "prompt": prompt,
             "model": model_name,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_image}"}}
-                    ]
-                }
+            "image": f"data:{mime_type};base64,{b64_image}",
+            "safetySettings": [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"}
             ]
         }
         
@@ -1761,10 +1762,11 @@ def _analyze_image_via_proxy(image_path, prompt, api_key, model_name, proxy_base
         
         if response.status_code == 200:
             result = response.json()
-            if "choices" in result and len(result["choices"]) > 0:
-                return result["choices"][0]["message"]["content"]
+            # AiProxy 返回格式：{"reply": "文本内容"}
+            if "reply" in result:
+                return result["reply"].strip()
             else:
-                print(f"     [DEBUG] 响应格式异常: {result}")
+                print(f"     [DEBUG] 响应格式异常，缺少reply字段: {list(result.keys())}")
                 return None
         else:
             print(f"     [DEBUG] API调用失败: {response.status_code}")
