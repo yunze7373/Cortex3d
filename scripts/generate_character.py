@@ -274,621 +274,622 @@ def main():
             pass
     
     parser = argparse.ArgumentParser(
-        description="Cortex3d - Generate multi-view character images from description"
+        description="🎨 Cortex3d Character Generator - AI多视角角色图像生成与3D转换工具",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例用法:
+  基础生成:
+    %(prog)s "赛博朋克女战士" --style cyberpunk --views 8
+    
+  图像参考:
+    %(prog)s --input photo.jpg --style anime --to-3d
+    
+  换装功能:
+    %(prog)s --input model.jpg --wear dress.png --accessory hat.png
+    
+  高质量输出:
+    %(prog)s "魔法师" --quality ultra --resolution 4K --pro
+    
+  本地模式:
+    %(prog)s "机器人" --mode local --style pixel
+    
+环境变量:
+  AIPROXY_TOKEN     - AiProxy服务令牌 (proxy模式)
+  GEMINI_API_KEY    - Google Gemini API密钥 (direct模式) 
+  ZIMAGE_URL        - 本地Z-Image服务地址 (local模式)
+        """
     )
-    parser.add_argument(
+    
+    # =========================================================================
+    # 📝 基础参数组 (Basic Arguments)
+    # =========================================================================
+    basic_group = parser.add_argument_group('📝 基础设置', '基本生成参数和认证设置')
+    
+    basic_group.add_argument(
         "description",
         nargs="?",
-        help="Character description"
+        help="角色描述文本，如 '赛博朋克女战士' 或 '可爱的机器人'"
     )
-    parser.add_argument(
-        "--from-image",
-        dest="from_image",
-        default=None,
-        help="Extract character features from reference image. Example: photo.jpg"
-    )
-    parser.add_argument(
+    
+    basic_group.add_argument(
         "--mode",
         choices=["proxy", "direct", "local"],
         default="proxy",
-        help="生成模式: proxy=AiProxy服务, direct=直连Gemini API, local=本地Z-Image"
+        metavar="MODE",
+        help="生成模式 (默认: proxy)\n"
+             "proxy  - AiProxy云服务 (推荐)\n"
+             "direct - 直连Gemini API\n"  
+             "local  - 本地Z-Image服务"
     )
-    parser.add_argument(
-        "--token",
-        default=None,  # 将根据 mode 自动选择环境变量
-        help="认证 Token: proxy模式使用 AIPROXY_TOKEN, direct模式使用 GEMINI_API_KEY, local模式不需要"
+    
+    basic_group.add_argument(
+        "--token", "--auth",
+        dest="token",
+        metavar="TOKEN",
+        help="认证令牌 (自动选择环境变量)\n"
+             "proxy模式: AIPROXY_TOKEN\n"
+             "direct模式: GEMINI_API_KEY"
     )
-    parser.add_argument(
-        "--local-url",
-        dest="local_url",
-        default=None,
-        help="本地 Z-Image 服务地址 (默认: http://localhost:8199)"
-    )
-    parser.add_argument(
-        "--local-steps",
-        dest="local_steps",
-        type=int,
-        default=9,
-        help="本地模型推理步数 (Z-Image推荐9)"
-    )
-    parser.add_argument(
-        "--analysis-api",
-        dest="analysis_api",
-        choices=["auto", "proxy", "direct", "local"],
-        default="auto",
-        help="图像分析API: auto=跟随--mode, proxy=用AiProxy分析, direct=直连Gemini, local=跳过分析"
-    )
-    parser.add_argument(
-        "--model",
-        default=None,
-        help="Model name. Default: models/nano-banana-pro-preview (same for both proxy and direct mode)"
-    )
-    parser.add_argument(
+    
+    basic_group.add_argument(
         "--output", "-o",
         default="test_images",
-        help="Output directory"
+        metavar="DIR",
+        help="输出目录 (默认: test_images)"
     )
-    parser.add_argument(
-        "--no-cut",
-        action="store_true",
-        help="Disable auto-cutting"
-    )
-    parser.add_argument(
-        "--to-3d",
-        action="store_true",
-        help="Auto-convert to 3D model after generation"
-    )
-    parser.add_argument(
-        "--algo",
-        choices=["hunyuan3d", "hunyuan3d-2.1", "hunyuan3d-omni", "trellis", "trellis2"],
-        default="hunyuan3d",
-        help="3D algorithm. Default: hunyuan3d. Use omni for pose control"
-    )
-    parser.add_argument(
-        "--quality",
-        choices=["balanced", "high", "ultra"],
-        default="high",
-        help="3D quality: balanced(fast)/high(default)/ultra(best but slow)"
-    )
-    parser.add_argument(
-        "--geometry-only", "--fast",
-        dest="geometry_only",
-        action="store_true",
-        help="Generate geometry only, no texture (much faster)"
-    )
-    parser.add_argument(
+    
+    basic_group.add_argument(
         "--preview",
         action="store_true",
-        help="Auto-open preview after generation"
+        help="生成后自动预览结果"
     )
-    parser.add_argument(
-        "--pose",
-        default=None,
-        help="Pose control file path (only for hunyuan3d-omni). Example: poses/t_pose.json"
+    
+    # =========================================================================
+    # 📥 输入源参数组 (Input Sources)
+    # =========================================================================
+    input_group = parser.add_argument_group('📥 输入源设置', '指定输入图像和数据源')
+    
+    input_group.add_argument(
+        "--input", "--from-image",
+        dest="from_image",
+        metavar="IMAGE",
+        help="参考图像路径，支持从图像提取角色特征\n"
+             "示例: photo.jpg 或 reference_images/model.png"
     )
-    parser.add_argument(
+    
+    input_group.add_argument(
+        "--from-id",
+        metavar="ID", 
+        help="使用已存在的图像ID跳过2D生成直接进行3D转换\n"
+             "示例: a7af1af9-a592-4499-a456-2bea8428fe49"
+    )
+    
+    input_group.add_argument(
         "--strict",
         action="store_true",
-        help="Strict copy mode: generate multi-view 100%% based on reference image, no AI creativity. Use with --from-image"
-    )
-    parser.add_argument(
-        "--preprocess",
-        action="store_true",
-        help="Preprocess input image: remove background for better AI quality. Use with --from-image"
-    )
-    parser.add_argument(
-        "--preprocess-model",
-        dest="preprocess_model",
-        choices=["birefnet-general", "isnet-general-use", "u2net"],
-        default="birefnet-general",
-        help="Background removal model for preprocessing. Default: birefnet-general"
-    )
-    
-    parser.add_argument(
-        "--resolution",
-        choices=["1K", "2K", "4K"],
-        default="2K",
-        help="Image resolution: 1K(fast)/2K(default)/4K(high quality but slow)"
-    )
-    
-    parser.add_argument(
-        "--aspect-ratio",
-        dest="aspect_ratio",
-        choices=["1:1", "3:2", "2:3", "16:9", "9:16", "4:3", "3:4"],
-        default=None,
-        help="Image aspect ratio. Default: 3:2 for multi-view, 1:1 for composite. Use 1:1 for square images (1024x1024)"
-    )
-    
-    parser.add_argument(
-        "--pro",
-        action="store_true",
-        help="Use advanced Gemini Pro model (gemini-3-pro-image-preview) for higher quality. Slower but better results."
-    )
-    
-    parser.add_argument(
-        "--export-prompt",
-        action="store_true",
-        help="Export prompt and parameters instead of calling API. Use this to manually copy to Gemini App when API quota is limited."
-    )
-    
-    parser.add_argument(
-        "--style",
-        default=None,
-        help="Style description or preset name. Use --list-styles to see all presets."
-    )
-    
-    parser.add_argument(
-        "--photorealistic", "--real",
-        dest="photorealistic",
-        action="store_true",
-        help="Preset: Photorealistic (8k, raw photo, realistic texture)"
-    )
-    
-    parser.add_argument(
-        "--anime",
-        action="store_true",
-        help="Preset: Anime/manga style (cel shaded, vibrant colors)"
+        help="严格复制模式: 100%%基于参考图像生成，无AI创意\n"
+             "适用于精确复制现有角色外观"
     )
     
     # =========================================================================
-    # 扩展风格预设参数
+    # 👁️ 视角参数组 (View Configuration)  
     # =========================================================================
-    parser.add_argument(
-        "--ghibli",
-        action="store_true",
-        help="Preset: Studio Ghibli / Miyazaki style (watercolor, whimsical)"
-    )
+    view_group = parser.add_argument_group('👁️ 视角配置', '控制多视角生成的视角数量和方向')
     
-    parser.add_argument(
-        "--pixel",
-        action="store_true",
-        help="Preset: Pixel art / retro game style (16-bit, crisp pixels)"
-    )
-    
-    parser.add_argument(
-        "--minecraft", "--voxel",
-        dest="minecraft",
-        action="store_true",
-        help="Preset: Minecraft / voxel block style (cubic geometry)"
-    )
-    
-    parser.add_argument(
-        "--clay", "--claymation",
-        dest="clay",
-        action="store_true",
-        help="Preset: Claymation / plasticine style (stop-motion aesthetic)"
-    )
-    
-    parser.add_argument(
-        "--plush", "--felt",
-        dest="plush",
-        action="store_true",
-        help="Preset: Plush toy / felt fabric style (soft, kawaii)"
-    )
-    
-    parser.add_argument(
-        "--paper", "--papercraft",
-        dest="paper",
-        action="store_true",
-        help="Preset: Paper cutout / Paper Mario style (flat 2.5D)"
-    )
-    
-    parser.add_argument(
-        "--cyberpunk", "--neon",
-        dest="cyberpunk",
-        action="store_true",
-        help="Preset: Cyberpunk / neon sci-fi style"
-    )
-    
-    parser.add_argument(
-        "--fantasy", "--medieval",
-        dest="fantasy",
-        action="store_true",
-        help="Preset: High fantasy / medieval RPG style"
-    )
-    
-    parser.add_argument(
-        "--watercolor",
-        action="store_true",
-        help="Preset: Traditional watercolor painting style"
-    )
-    
-    parser.add_argument(
-        "--oil", "--oil-painting",
-        dest="oil",
-        action="store_true",
-        help="Preset: Classical oil painting style"
-    )
-    
-    parser.add_argument(
-        "--3d-toon", "--pixar",
-        dest="toon3d",
-        action="store_true",
-        help="Preset: 3D cartoon / Pixar-Disney style"
-    )
-    
-    parser.add_argument(
-        "--comic", "--marvel",
-        dest="comic",
-        action="store_true",
-        help="Preset: American comic book / superhero style"
-    )
-    
-    parser.add_argument(
-        "--minimal", "--flat",
-        dest="minimal",
-        action="store_true",
-        help="Preset: Minimalist / flat design style"
-    )
-    
-    parser.add_argument(
-        "--lowpoly",
-        action="store_true",
-        help="Preset: Low poly / geometric 3D style"
-    )
-    
-    parser.add_argument(
-        "--list-styles",
-        dest="list_styles",
-        action="store_true",
-        help="List all available style presets and exit"
-    )
-    
-    # =========================================================================
-    # 换装预处理 - 类似 --anime 的简便参数
-    # 用法: --wear dress.png 或 --wear "red dress.png" "让她穿上这件衣服"
-    # =========================================================================
-    parser.add_argument(
-        "--wear", "--outfit", "--clothing",
-        dest="wear_image",
-        type=str,
-        nargs="+",
-        metavar="IMAGE",
-        help="换装模式: 让主体穿上指定衣服。用法: --wear dress.png 或 --wear dress.png '换上这件红色裙子'"
-    )
-    
-    parser.add_argument(
-        "--accessory", "--add-item",
-        dest="accessory_images",
-        type=str,
-        nargs="+",
-        metavar="IMAGE",
-        help="配饰模式: 给主体添加配饰。用法: --accessory hat.png bag.png"
-    )
-    
-    parser.add_argument(
-        "--wear-strict",
-        dest="wear_strict",
-        action="store_true",
-        default=True,
-        help="换装严格模式: 100%%保留主体面部/身材/姿势 (默认开启)"
-    )
-    
-    parser.add_argument(
-        "--wear-instruction",
-        dest="wear_instruction",
-        type=str,
-        default=None,
-        help="自定义换装指令 (可选，默认自动生成)"
-    )
-    
-    parser.add_argument(
-        "--wear-model", "--hifi",
-        dest="wear_model",
-        type=str,
-        choices=["flash", "pro"],
-        default="flash",
-        help="换装模型: flash(快速,默认) 或 pro(高保真,gemini-3-pro-image-preview)"
-    )
-
-    parser.add_argument(
-        "--wear-no-rembg",
-        dest="wear_no_rembg",
-        action="store_true",
-        default=False,
-        help="跳过衣服/配饰图片的智能切割预处理（默认会自动去除背景以凸显衣物）"
-    )
-
-    parser.add_argument(
-        "--from-id",
-        dest="from_id",
-        default=None,
-        help="Skip 2D generation, use existing image ID for 3D. Example: a7af1af9-a592-4499-a456-2bea8428fe49"
-    )
-    
-    # =========================================================================
-    # Multi-view mode parameters
-    # =========================================================================
-    parser.add_argument(
-        "--views",
+    view_group.add_argument(
+        "--views", "-v",
         choices=["4", "6", "8"],
         default="4",
-        help="Number of views: 4(default)=standard, 6=with 45-degree angles, 8=with top/bottom"
+        metavar="N",
+        help="标准视角数量 (默认: 4)\n"
+             "4 - 前后左右四视角\n"
+             "6 - 增加前右、后左45度角\n"
+             "8 - 增加顶部、底部视角"
     )
     
-    parser.add_argument(
+    view_group.add_argument(
         "--custom-views",
-        dest="custom_views",
         nargs="+",
-        default=None,
         metavar="VIEW",
-        help="Custom view list (overrides --views). Options: front, front_right, right, back, left, front_left, top, bottom"
+        help="自定义视角列表 (覆盖--views设置)\n"
+             "可选: front, front_right, right, back, back_left, left, top, bottom\n"
+             "示例: --custom-views front right back"
+    )
+    
+    view_group.add_argument(
+        "--iterative-360",
+        choices=["4", "6", "8"],
+        metavar="N",
+        help="迭代360度模式，按顺序生成提高一致性\n"
+             "每个视图使用前一个作为参考，需配合--input使用"
     )
     
     # =========================================================================
-    # Subject isolation parameters (主体隔离参数)
+    # ✨ 质量参数组 (Quality Settings)
     # =========================================================================
-    parser.add_argument(
+    quality_group = parser.add_argument_group('✨ 质量设置', '控制生成质量和模型选择')
+    
+    quality_group.add_argument(
+        "--resolution", "--res",
+        dest="resolution",
+        choices=["1K", "2K", "4K"],
+        default="2K", 
+        help="图像分辨率 (默认: 2K)\n"
+             "1K - 快速生成\n"
+             "2K - 平衡质量\n"
+             "4K - 高质量但较慢"
+    )
+    
+    quality_group.add_argument(
+        "--model", "--engine",
+        dest="model",
+        metavar="MODEL",
+        help="指定生成模型 (默认: models/nano-banana-pro-preview)\n"
+             "留空使用最新推荐模型"
+    )
+    
+    quality_group.add_argument(
+        "--pro", "--high-quality",
+        dest="pro", 
+        action="store_true",
+        help="启用Pro模型获得更高质量 (gemini-3-pro-image-preview)\n"
+             "速度较慢但效果更好"
+    )
+    
+    quality_group.add_argument(
+        "--aspect-ratio", "--ratio",
+        dest="aspect_ratio",
+        choices=["1:1", "3:2", "2:3", "16:9", "9:16", "4:3", "3:4"],
+        metavar="RATIO",
+        help="图像宽高比\n"
+             "默认: 多视角用3:2，合成图用1:1"
+    )
+    
+    # =========================================================================
+    # 🎨 风格参数组 (Style Configuration)
+    # =========================================================================
+    style_group = parser.add_argument_group('🎨 风格配置', '选择角色的艺术风格和视觉效果')
+    
+    style_group.add_argument(
+        "--style",
+        metavar="STYLE",
+        help="自定义风格描述或预设名称\n"
+             "示例: 'cyberpunk' 或 'watercolor painting style'"
+    )
+    
+    # 风格预设 - 基础类型
+    style_basic = style_group.add_mutually_exclusive_group()
+    style_basic.add_argument("--photorealistic", "--real", dest="photorealistic", action="store_true", help="写实摄影风格")
+    style_basic.add_argument("--anime", action="store_true", help="日式动漫风格")
+    style_basic.add_argument("--comic", "--marvel", dest="comic", action="store_true", help="美式漫画风格")
+    style_basic.add_argument("--3d-toon", "--pixar", dest="toon3d", action="store_true", help="3D卡通风格")
+    
+    # 风格预设 - 艺术类型
+    style_art = style_group.add_mutually_exclusive_group()
+    style_art.add_argument("--watercolor", action="store_true", help="水彩画风格")
+    style_art.add_argument("--oil", "--oil-painting", dest="oil", action="store_true", help="油画风格")
+    style_art.add_argument("--ghibli", action="store_true", help="宫崎骏/吉卜力风格")
+    style_art.add_argument("--minimal", "--flat", dest="minimal", action="store_true", help="极简扁平风格")
+    
+    # 风格预设 - 游戏/数字类型  
+    style_game = style_group.add_mutually_exclusive_group()
+    style_game.add_argument("--pixel", action="store_true", help="像素艺术风格")
+    style_game.add_argument("--minecraft", "--voxel", dest="minecraft", action="store_true", help="体素方块风格")
+    style_game.add_argument("--lowpoly", action="store_true", help="低多边形3D风格")
+    
+    # 风格预设 - 材质类型
+    style_material = style_group.add_mutually_exclusive_group()
+    style_material.add_argument("--clay", "--claymation", dest="clay", action="store_true", help="粘土动画风格")
+    style_material.add_argument("--plush", "--felt", dest="plush", action="store_true", help="毛绒玩具风格")
+    style_material.add_argument("--paper", "--papercraft", dest="paper", action="store_true", help="纸质工艺风格")
+    
+    # 风格预设 - 主题类型
+    style_theme = style_group.add_mutually_exclusive_group()
+    style_theme.add_argument("--cyberpunk", "--neon", dest="cyberpunk", action="store_true", help="赛博朋克风格")
+    style_theme.add_argument("--fantasy", "--medieval", dest="fantasy", action="store_true", help="奇幻中世纪风格")
+    
+    style_group.add_argument(
+        "--list-styles",
+        action="store_true",
+        help="列出所有可用风格预设并退出"
+    )
+    
+    
+    # =========================================================================
+    # 🚀 3D转换参数组 (3D Conversion)
+    # =========================================================================
+    d3_group = parser.add_argument_group('🚀 3D转换设置', '控制3D模型生成和质量')
+    
+    d3_group.add_argument(
+        "--to-3d", "--3d",
+        dest="to_3d",
+        action="store_true",
+        help="生成2D图像后自动转换为3D模型"
+    )
+    
+    d3_group.add_argument(
+        "--algo", "--algorithm",
+        dest="algo",
+        choices=["hunyuan3d", "hunyuan3d-2.1", "hunyuan3d-omni", "trellis", "trellis2"],
+        default="hunyuan3d",
+        metavar="ALGO",
+        help="3D重建算法 (默认: hunyuan3d)\n"
+             "hunyuan3d      - 标准版，速度快\n"
+             "hunyuan3d-2.1  - 改进版，质量更好\n"
+             "hunyuan3d-omni - 全能版，支持姿势控制\n"
+             "trellis/trellis2 - 高质量重建"
+    )
+    
+    d3_group.add_argument(
+        "--3d-quality", "--quality",
+        dest="quality",
+        choices=["balanced", "high", "ultra"],
+        default="high",
+        help="3D生成质量 (默认: high)\n"
+             "balanced - 快速生成\n"
+             "high     - 平衡质量\n"
+             "ultra    - 最佳质量但最慢"
+    )
+    
+    d3_group.add_argument(
+        "--geometry-only", "--fast-3d",
+        dest="geometry_only",
+        action="store_true", 
+        help="仅生成几何体，跳过纹理生成 (大幅提升速度)"
+    )
+    
+    d3_group.add_argument(
+        "--pose",
+        metavar="FILE",
+        help="姿势控制文件 (仅hunyuan3d-omni支持)\n"
+             "示例: poses/t_pose.json"
+    )
+    
+    # =========================================================================
+    # 👗 换装编辑参数组 (Wardrobe & Editing)
+    # =========================================================================
+    edit_group = parser.add_argument_group('👗 换装编辑设置', '服装更换和角色编辑功能')
+    
+    edit_group.add_argument(
+        "--wear", "--outfit", 
+        dest="wear_image",
+        nargs="+",
+        metavar="IMAGE",
+        help="换装模式: 让角色穿上指定服装\n"
+             "支持: --wear dress.png 或 --wear dress.png '说明文字'"
+    )
+    
+    edit_group.add_argument(
+        "--accessory", "--add-item",
+        dest="accessory_images", 
+        nargs="+",
+        metavar="IMAGE",
+        help="配饰模式: 为角色添加配饰\n"
+             "示例: --accessory hat.png bag.png"
+    )
+    
+    edit_group.add_argument(
+        "--wear-strict",
+        action="store_true",
+        default=True,
+        help="换装严格模式: 完全保留原角色特征 (默认开启)"
+    )
+    
+    edit_group.add_argument(
+        "--wear-model",
+        choices=["flash", "pro"],
+        default="flash",
+        help="换装所用模型 (默认: flash)\n"
+             "flash - 快速模式\n"
+             "pro   - 高保真模式"
+    )
+    
+    
+    # =========================================================================
+    # 🔧 处理参数组 (Processing Options)
+    # =========================================================================
+    proc_group = parser.add_argument_group('🔧 处理选项', '图像处理和输出控制')
+    
+    proc_group.add_argument(
+        "--no-cut", "--no-crop",
+        dest="no_cut",
+        action="store_true",
+        help="禁用自动切割功能"
+    )
+    
+    proc_group.add_argument(
+        "--preprocess", "--clean",
+        dest="preprocess",
+        action="store_true",
+        help="预处理输入图像: 去除背景提高AI生成质量"
+    )
+    
+    proc_group.add_argument(
+        "--preprocess-model",
+        choices=["birefnet-general", "isnet-general-use", "u2net"],
+        default="birefnet-general",
+        metavar="MODEL",
+        help="背景去除模型 (默认: birefnet-general)"
+    )
+    
+    proc_group.add_argument(
         "--subject-only", "--isolate",
         dest="subject_only",
         action="store_true",
-        help="Only process the main subject (person/character), remove all background objects like cars, furniture, etc."
+        help="仅处理主体角色，移除所有背景对象"
     )
     
-    parser.add_argument(
+    proc_group.add_argument(
         "--with-props",
-        dest="with_props",
         nargs="+",
-        default=None,
         metavar="PROP",
-        help="Include specific props/objects with the subject. Examples: --with-props bicycle basketball guitar"
+        help="指定要保留的道具/对象\n"
+             "示例: --with-props bicycle guitar hat"
     )
     
-    # =========================================================================
-    # Negative prompt parameters
-    # =========================================================================
-    parser.add_argument(
-        "--no-negative",
-        dest="no_negative",
+    proc_group.add_argument(
+        "--export-prompt", "--dry-run",
+        dest="export_prompt",
         action="store_true",
-        help="Disable negative prompts"
-    )
-    
-    parser.add_argument(
-        "--negative-categories",
-        dest="negative_categories",
-        nargs="+",
-        default=["anatomy", "quality", "layout"],
-        choices=["anatomy", "quality", "layout"],
-        help="Negative prompt categories (default: anatomy quality layout)"
+        help="仅导出提示词不调用API (用于调试或手动使用)"
     )
     
     # =========================================================================
-    # 360-degree iterative mode (Gemini API best practice)
+    # 🔍 智能验证参数组 (Smart Validation)
     # =========================================================================
-    parser.add_argument(
-        "--iterative-360",
-        choices=["4", "6", "8"],
-        dest="iterative_360",
-        default=None,
-        help="Iterative 360-degree mode with specified view count (4/6/8). Generate views sequentially, using each output as reference for the next. Requires --from-image."
-    )
+    valid_group = parser.add_argument_group('🔍 智能验证设置', '自动检测和补全缺失视角')
     
-    # =========================================================================
-    # 智能视角验证与自动补全 (Auto View Validation & Completion)
-    # =========================================================================
-    parser.add_argument(
-        "--auto-complete",
-        action="store_true",
+    valid_group.add_argument(
+        "--auto-complete", "--smart-fix",
         dest="auto_complete",
-        help="自动验证生成的多视角图并补全缺失视角。AI会检测每个面板的实际视角，发现缺失则自动补生成。"
-    )
-    
-    parser.add_argument(
-        "--validate-only",
         action="store_true",
-        dest="validate_only",
-        help="仅验证生成的图片视角，不进行补全。输出检测结果和建议。"
+        help="自动验证并补全缺失的视角"
     )
     
-    parser.add_argument(
-        "--max-completion-retries",
-        type=int,
+    valid_group.add_argument(
+        "--validate-only", "--check-only", 
+        dest="validate_only",
+        action="store_true",
+        help="仅验证视角完整性，不进行补全"
+    )
+    
+    valid_group.add_argument(
+        "--max-retries",
         dest="max_completion_retries",
+        type=int,
         default=3,
+        metavar="N",
         help="自动补全的最大重试次数 (默认: 3)"
     )
     
+    
     # =========================================================================
-    # P0 高优先级编辑功能 - 添加/移除元素
+    # ⚙️ 高级参数组 (Advanced Settings)
     # =========================================================================
-    parser.add_argument(
+    advanced_group = parser.add_argument_group('⚙️ 高级设置', '专业用户和特殊用途的高级选项')
+    
+    # 本地服务设置
+    local_sub = advanced_group.add_mutually_exclusive_group()
+    local_sub.add_argument(
+        "--local-url",
+        metavar="URL",
+        help="本地Z-Image服务地址 (默认: http://localhost:8199)"
+    )
+    
+    advanced_group.add_argument(
+        "--local-steps",
+        type=int,
+        default=9,
+        metavar="N", 
+        help="本地模型推理步数 (默认: 9)"
+    )
+    
+    # API设置
+    advanced_group.add_argument(
+        "--analysis-api",
+        choices=["auto", "proxy", "direct", "local"],
+        default="auto",
+        metavar="API",
+        help="图像分析API选择 (默认: auto)\n"
+             "auto   - 跟随--mode设置\n"
+             "proxy  - 强制使用AiProxy\n"
+             "direct - 强制直连Gemini\n"
+             "local  - 跳过分析"
+    )
+    
+    # 负面提示词控制
+    neg_group = advanced_group.add_mutually_exclusive_group()
+    neg_group.add_argument(
+        "--no-negative",
+        action="store_true",
+        help="完全禁用负面提示词"
+    )
+    neg_group.add_argument(
+        "--negative-categories",
+        nargs="+",
+        default=["anatomy", "quality", "layout"],
+        choices=["anatomy", "quality", "layout"],
+        metavar="CAT",
+        help="负面提示词类别 (默认: anatomy quality layout)"
+    )
+    
+    # 换装高级设置
+    advanced_group.add_argument(
+        "--wear-instruction",
+        metavar="TEXT",
+        help="自定义换装指令 (可选，默认自动生成)"
+    )
+    
+    advanced_group.add_argument(
+        "--wear-no-rembg",
+        action="store_true", 
+        help="跳过服装图片的背景去除预处理"
+    )
+    
+    
+    # =========================================================================
+    # 🛠️ 编辑模式参数组 (Edit Modes) - P0高优先级功能
+    # =========================================================================
+    edit_mode_group = parser.add_argument_group('🛠️ 专业编辑模式', 'P0高优先级图像编辑和修复功能')
+    
+    # 编辑模式选择 (互斥)
+    edit_mode_select = edit_mode_group.add_mutually_exclusive_group()
+    
+    edit_mode_select.add_argument(
         "--mode-edit",
         action="store_true",
-        dest="mode_edit",
-        help="激活编辑模式: 添加/移除/修改角色元素。需要配合 --edit-elements 和 --from-edited"
+        help="元素编辑模式: 添加/移除/修改角色元素"
     )
     
-    parser.add_argument(
-        "--edit-elements",
-        type=str,
-        dest="edit_elements",
-        help="编辑指令。格式: 'add:xxx' 或 'remove:xxx' 或 'modify:xxx'。例: 'add:肩部火焰翅膀'"
-    )
-    
-    parser.add_argument(
-        "--from-edited",
-        type=str,
-        dest="from_edited",
-        help="要编辑的源图像路径"
-    )
-    
-    # =========================================================================
-    # P0 高优先级编辑功能 - 语义遮盖/细节修复
-    # =========================================================================
-    parser.add_argument(
-        "--mode-refine",
+    edit_mode_select.add_argument(
+        "--mode-refine", 
         action="store_true",
-        dest="mode_refine",
-        help="激活优化模式: 修复特定细节(脸部/手指/姿势等)。需要配合 --refine-details 和 --from-refine"
+        help="细节修复模式: 修复面部/手部/姿势等问题"
     )
     
-    parser.add_argument(
-        "--refine-details",
-        choices=["face", "hands", "pose", "eyes", "custom"],
-        dest="refine_details",
-        help="要优化的细节部位"
-    )
-    
-    parser.add_argument(
-        "--detail-issue",
-        type=str,
-        dest="detail_issue",
-        help="具体问题描述。例: '左手有6根手指，需要改为5根'"
-    )
-    
-    parser.add_argument(
-        "--from-refine",
-        type=str,
-        dest="from_refine",
-        help="要优化的源图像路径"
-    )
-    
-    # ========================================
-    # P1: 风格转换模式参数
-    # ========================================
-    parser.add_argument(
+    edit_mode_select.add_argument(
         "--mode-style",
-        action="store_true",
-        dest="mode_style",
-        help="激活风格转换模式: 改变角色整体美学风格。需要配合 --style-preset/--custom-style 和 --from-style"
+        action="store_true", 
+        help="风格转换模式: 改变整体艺术风格"
     )
     
-    parser.add_argument(
-        "--style-preset",
-        type=str,
-        dest="style_preset",
-        choices=["anime", "cinematic", "oil-painting", "watercolor", "comic", "3d"],
-        help="风格预设: anime(日本动画) | cinematic(电影级) | oil-painting(油画) | watercolor(水彩) | comic(漫画) | 3d(3D渲染)"
-    )
-    
-    parser.add_argument(
-        "--custom-style",
-        type=str,
-        dest="custom_style",
-        help="自定义风格描述(覆盖 --style-preset)。例: 'impressionist Renaissance painting'"
-    )
-    
-    parser.add_argument(
-        "--from-style",
-        type=str,
-        dest="from_style",
-        help="要进行风格转换的源图像路径"
-    )
-    
-    parser.add_argument(
-        "--preserve-details",
-        action="store_true",
-        dest="preserve_details",
-        default=True,
-        help="风格转换时是否保留原始细节 (默认: 是)"
-    )
-    
-    # =========================================================================
-    # P0 高优先级功能 - 高级合成：组合多张图片
-    # =========================================================================
-    parser.add_argument(
+    edit_mode_select.add_argument(
         "--mode-composite",
         action="store_true",
-        dest="mode_composite",
-        help="激活合成模式: 组合多张图片创建新场景。用于换衣服、换配饰、创意拼贴等"
+        help="图像合成模式: 组合多张图片创建新场景"
     )
     
-    parser.add_argument(
-        "--composite-images",
-        nargs="+",
-        dest="composite_images",
-        metavar="IMAGE",
-        help="要合成的多张图片路径。例: model.png dress.png hat.png"
-    )
-    
-    parser.add_argument(
-        "--composite-instruction",
-        type=str,
-        dest="composite_instruction",
-        help="合成指令。例: '让第二张图的人穿上第一张图的裙子' 或 'Put the hat from image 2 on the person in image 1'"
-    )
-    
-    parser.add_argument(
-        "--composite-type",
-        type=str,
-        dest="composite_type",
-        choices=["auto", "clothing", "accessory", "general"],
-        default="auto",
-        help="合成类型: auto(自动检测), clothing(换装-严格保持主体), accessory(配饰), general(通用)"
-    )
-    
-    parser.add_argument(
-        "--composite-output-name",
-        type=str,
-        dest="composite_output_name",
-        default=None,
-        help="合成输出文件名 (可选，默认自动生成)"
-    )
-    
-    parser.add_argument(
-        "--composite-prompt-template",
-        type=str,
-        dest="composite_prompt_template",
-        default=None,
-        help="自定义合成提示词模板（支持 {instruction}、{num_images}、{image_list} 占位符）"
-    )
-    
-    parser.add_argument(
-        "--composite-no-smart-extract",
-        action="store_false",
-        dest="composite_smart_extract",
-        default=True,
-        help="禁用智能提取，直接使用原图进行合成（默认启用智能提取）"
-    )
-    
-    # =========================================================================
-    # P0 功能: 高保真细节保留 (Detail Preserve Edit)
-    # =========================================================================
-    parser.add_argument(
+    edit_mode_select.add_argument(
         "--mode-preserve",
         action="store_true",
-        dest="mode_preserve",
-        help="激活高保真编辑模式: 在修改图像时保留关键细节(面部、徽标等)。比普通编辑更适合需要保留精细特征的场景"
+        help="高保真编辑模式: 保留关键细节的精确编辑"
     )
     
-    parser.add_argument(
+    # 编辑参数 (根据不同模式使用)
+    edit_mode_group.add_argument(
+        "--edit-elements",
+        metavar="ACTION",
+        help="编辑指令 (--mode-edit)\n"
+             "格式: 'add:描述' 'remove:描述' 'modify:描述'\n"
+             "示例: 'add:火焰翅膀'"
+    )
+    
+    edit_mode_group.add_argument(
+        "--from-edited", "--edit-source",
+        dest="from_edited",
+        metavar="IMAGE",
+        help="编辑源图像路径"
+    )
+    
+    edit_mode_group.add_argument(
+        "--refine-details", "--fix-part",
+        dest="refine_details",
+        choices=["face", "hands", "pose", "eyes", "custom"],
+        help="要修复的部位 (--mode-refine)"
+    )
+    
+    edit_mode_group.add_argument(
+        "--detail-issue", "--problem",
+        dest="detail_issue",
+        metavar="DESC",
+        help="具体问题描述 (--mode-refine)\n"
+             "示例: '左手有6根手指，需要改为5根'"
+    )
+    
+    edit_mode_group.add_argument(
+        "--from-refine", "--fix-source",
+        dest="from_refine", 
+        metavar="IMAGE",
+        help="修复源图像路径"
+    )
+    
+    # 风格转换参数
+    edit_mode_group.add_argument(
+        "--style-preset",
+        choices=["anime", "cinematic", "oil-painting", "watercolor", "comic", "3d"],
+        metavar="PRESET",
+        help="风格预设 (--mode-style)"
+    )
+    
+    edit_mode_group.add_argument(
+        "--custom-style",
+        metavar="DESC",
+        help="自定义风格描述 (--mode-style)\n"
+             "示例: 'impressionist Renaissance painting'"
+    )
+    
+    edit_mode_group.add_argument(
+        "--from-style", "--style-source",
+        dest="from_style",
+        metavar="IMAGE", 
+        help="风格转换源图像路径"
+    )
+    
+    edit_mode_group.add_argument(
+        "--preserve-details",
+        action="store_true",
+        default=True,
+        help="风格转换时保留原始细节 (默认: 开启)"
+    )
+    
+    
+    # 合成模式参数
+    edit_mode_group.add_argument(
+        "--composite-images",
+        nargs="+",
+        metavar="IMAGE",
+        help="要合成的多张图片路径 (--mode-composite)\n"
+             "示例: model.png dress.png hat.png"
+    )
+    
+    edit_mode_group.add_argument(
+        "--composite-instruction",
+        metavar="TEXT",
+        help="合成指令 (--mode-composite)\n"
+             "示例: '让第二张图的人穿上第一张图的裙子'"
+    )
+    
+    edit_mode_group.add_argument(
+        "--composite-type",
+        choices=["auto", "clothing", "accessory", "general"],
+        default="auto",
+        help="合成类型 (默认: auto)"
+    )
+    
+    # 高保真编辑参数
+    edit_mode_group.add_argument(
         "--preserve-image",
-        type=str,
-        dest="preserve_image",
         metavar="IMAGE",
-        help="主图片路径 (包含要保留细节的图片)"
+        help="主图片路径 (--mode-preserve)\n"
+             "包含要保留细节的图片"
     )
     
-    parser.add_argument(
+    edit_mode_group.add_argument(
         "--preserve-element",
-        type=str,
-        dest="preserve_element",
-        metavar="IMAGE",
-        default=None,
-        help="元素图片路径 (可选，要添加到主图的元素，如 logo、配饰等)"
+        metavar="IMAGE", 
+        help="元素图片路径 (--mode-preserve)\n"
+             "要添加的元素，如logo、配饰等"
     )
     
-    parser.add_argument(
+    edit_mode_group.add_argument(
         "--preserve-detail-desc",
-        type=str,
-        dest="preserve_detail_desc",
-        help="要保留的关键细节描述。例: '保持女性的面部特征完全不变'"
+        metavar="DESC",
+        help="要保留的关键细节描述 (--mode-preserve)\n"
+             "示例: '保持女性的面部特征完全不变'"
     )
     
-    parser.add_argument(
+    edit_mode_group.add_argument(
         "--preserve-instruction",
-        type=str,
-        dest="preserve_instruction",
-        help="修改指令。例: '将 logo 添加到她的黑色 T 恤上'"
+        metavar="TEXT",
+        help="修改指令 (--mode-preserve)\n"
+             "示例: '将logo添加到她的黑色T恤上'"
     )
     
-    parser.add_argument(
-        "--preserve-output-name",
-        type=str,
-        dest="preserve_output_name",
-        default=None,
-        help="输出文件名 (可选)"
+    # 通用输出设置
+    edit_mode_group.add_argument(
+        "--edit-output-name",
+        metavar="NAME",
+        help="编辑输出文件名 (可选，默认自动生成)"
     )
     
     # 在解析参数前，检查常见的参数错误并提供友好提示
@@ -897,17 +898,26 @@ def main():
         if arg.startswith('--'):
             # 检查常见拼写错误
             if arg == '--view':
-                print(f"\n[ERROR] Parameter '--view' does not exist")
-                print(f"[HINT] Did you mean '--views'?")
-                print(f"       Example: python scripts/generate_character.py --views 8\n")
+                print(f"\n[ERROR] 参数 '--view' 不存在")
+                print(f"[提示] 您可能想使用 '--views' 或 '-v'")
+                print(f"       示例: python scripts/generate_character.py --views 8\n")
                 friendly_hint_shown = True
+                break
+            # 检查旧版参数提示
+            elif arg in ['--from-image']:
+                print(f"\n[提示] 参数 '{arg}' 仍然可用")
+                print(f"       新版本推荐使用: '--input' (功能相同)\n")
+                break
+            elif arg in ['--geometry-only']:
+                print(f"\n[提示] 参数 '{arg}' 仍然可用")  
+                print(f"       新版本推荐使用: '--fast-3d' (功能相同)\n")
                 break
             # 检查带数字的无效参数（如 --14, --360 等）
             elif len(arg) > 2 and arg[2:].replace('-', '').isdigit():
-                print(f"\n[ERROR] Invalid parameter: '{arg}'")
-                print(f"[HINT] To generate multi-view images, use one of:")
-                print(f"       --views 8              # Standard multi-view (8 fixed angles)")
-                print(f"       --iterative-360 8      # Iterative 360 (8 sequential angles, better consistency)\n")
+                print(f"\n[ERROR] 无效参数: '{arg}'")
+                print(f"[提示] 要生成多视角图像，请使用以下选项:")
+                print(f"       --views 8              # 标准多视角 (8个固定角度)")
+                print(f"       --iterative-360 8      # 迭代360度 (8个连续角度，更好的一致性)\n")
                 friendly_hint_shown = True
                 break
     
@@ -920,6 +930,22 @@ def main():
             pass  # argparse 已经打印了 usage，我们的提示在上面
         raise
     
+    # 参数后处理 - 确保别名兼容性
+    if hasattr(args, 'edit_output_name') and args.edit_output_name:
+        # 将通用编辑输出名应用到具体的编辑模式
+        if not hasattr(args, 'composite_output_name'):
+            args.composite_output_name = args.edit_output_name
+        if not hasattr(args, 'preserve_output_name'):
+            args.preserve_output_name = args.edit_output_name
+    
+    # 确保旧参数名的兼容性
+    if not hasattr(args, 'custom_views'):
+        args.custom_views = getattr(args, 'custom_views', None)
+    if not hasattr(args, 'composite_smart_extract'):
+        args.composite_smart_extract = True
+    if not hasattr(args, 'composite_prompt_template'):
+        args.composite_prompt_template = None
+    
     # 根据模式自动设置token(如果未提供)
     if args.token is None:
         if args.mode == "proxy":
@@ -928,22 +954,50 @@ def main():
             args.token = os.environ.get("GEMINI_API_KEY")
         # local 模式不需要 token
     
-    # Banner
+    # Banner 显示
     try:
         print("""
-╔═══════════════════════════════════════════════════════════════╗
-║                    Cortex3d 角色生成器                         ║
-║         AI 多视角图像生成 → 切割 → 去背景 → 3D建模             ║
-╚═══════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════╗
+║                    🎨 Cortex3d 角色生成器 v2.0                     ║
+║            AI多视角图像生成 → 智能切割 → 3D建模 → 换装编辑            ║
+║                                                                  ║
+║  💡 使用提示: --help 查看完整参数  --list-styles 查看所有风格        ║
+╚══════════════════════════════════════════════════════════════════╝
         """)
     except UnicodeEncodeError:
         # 在某些终端中使用 ASCII 艺术代替
         print("""
-============================================================
-                     Cortex3d Character Generator
-        AI Multi-view Image Generation → Cropping → Background Removal → 3D Modeling
-============================================================
+=================================================================
+                 Cortex3d Character Generator v2.0
+   AI Multi-view Generation -> Smart Cropping -> 3D Modeling -> Wardrobe Editing
+   
+   Tips: Use --help for full parameters  --list-styles for all styles
+=================================================================
         """)
+    
+    # 显示当前配置概览
+    print(f"🔧 模式: {args.mode.upper()}")
+    if args.from_image:
+        print(f"📥 输入: {args.from_image}")
+    if args.description:
+        print(f"📝 描述: {args.description[:50]}{'...' if len(args.description) > 50 else ''}")
+    
+    style_info = []
+    for style_attr in ['photorealistic', 'anime', 'pixel', 'cyberpunk', 'ghibli', 'clay', 'watercolor', 'oil']:
+        if hasattr(args, style_attr) and getattr(args, style_attr):
+            style_info.append(style_attr)
+    if args.style:
+        style_info.append(f"custom({args.style[:20]})")
+    if style_info:
+        print(f"🎨 风格: {', '.join(style_info)}")
+    
+    print(f"👁️  视角: {args.views}视角" + (f" (迭代360°)" if args.iterative_360 else ""))
+    print(f"📐 分辨率: {args.resolution}")
+    
+    if args.to_3d:
+        print(f"🚀 3D转换: {args.algo} ({args.quality}质量)")
+    
+    print("─" * 65)
     
     # =========================================================================
     # 列出所有可用风格预设
@@ -951,7 +1005,7 @@ def main():
     if getattr(args, 'list_styles', False):
         from prompts.styles import STYLE_PRESETS, list_all_styles
         
-        print("\n📎 可用风格预设:")
+        print("\n🎨 可用风格预设:")
         print("=" * 70)
         
         seen = set()
@@ -965,9 +1019,10 @@ def main():
         
         print("\n" + "=" * 70)
         print("💡 使用方法:")
-        print("   python scripts/generate_character.py --from-image img.png --pixel")
-        print("   python scripts/generate_character.py --from-image img.png --style minecraft")
-        print("   python scripts/generate_character.py --from-image img.png --ghibli --custom-views front left")
+        print("   python scripts/generate_character.py --input img.png --pixel")
+        print("   python scripts/generate_character.py --input img.png --style minecraft") 
+        print("   python scripts/generate_character.py --input img.png --ghibli --custom-views front left")
+        print("   python scripts/generate_character.py 'warrior' --cyberpunk --to-3d")
         print("")
         sys.exit(0)
     
