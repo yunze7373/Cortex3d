@@ -392,6 +392,20 @@ def main():
     )
     
     parser.add_argument(
+        "--aspect-ratio",
+        dest="aspect_ratio",
+        choices=["1:1", "3:2", "2:3", "16:9", "9:16", "4:3", "3:4"],
+        default=None,
+        help="Image aspect ratio. Default: 3:2 for multi-view, 1:1 for composite. Use 1:1 for square images (1024x1024)"
+    )
+    
+    parser.add_argument(
+        "--pro",
+        action="store_true",
+        help="Use advanced Gemini Pro model (gemini-3-pro-image-preview) for higher quality. Slower but better results."
+    )
+    
+    parser.add_argument(
         "--export-prompt",
         action="store_true",
         help="Export prompt and parameters instead of calling API. Use this to manually copy to Gemini App when API quota is limited."
@@ -1598,6 +1612,19 @@ def main():
         print(f"  └─ 合成指令: {args.composite_instruction}")
         print(f"  └─ 输出目录: {args.output}")
         print(f"  └─ 调用模式: {args.mode.upper()}")
+        
+        # 确定使用的模型（支持 --pro 参数）
+        if getattr(args, 'pro', False):
+            composite_model = "gemini-3-pro-image-preview"
+            print(f"  └─ 模型: {composite_model} (Pro 高保真模式)")
+        else:
+            composite_model = args.model if args.model else "gemini-2.5-flash-image"
+            print(f"  └─ 模型: {composite_model}")
+        
+        # 确定分辨率和宽高比
+        composite_resolution = getattr(args, 'resolution', '2K') or '2K'
+        composite_aspect_ratio = getattr(args, 'aspect_ratio', None) or '1:1'  # 合成默认用 1:1 正方形
+        print(f"  └─ 分辨率: {composite_resolution}, 宽高比: {composite_aspect_ratio}")
         print("")
         
         # 导入合成函数
@@ -1618,13 +1645,15 @@ def main():
                 image_paths=image_paths,
                 instruction=args.composite_instruction,
                 api_key=args.token,
-                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                model_name=composite_model,
                 output_dir=args.output,
                 output_name=args.composite_output_name,
                 mode=args.mode,
                 composite_type=composite_type_to_use,
                 composite_prompt_template=args.composite_prompt_template,
                 export_prompt=args.export_prompt,
+                resolution=composite_resolution,
+                aspect_ratio=composite_aspect_ratio,
             )
             
             if output_path:

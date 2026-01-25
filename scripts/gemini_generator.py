@@ -2011,6 +2011,8 @@ def composite_images(
     composite_prompt_template: str = None,
     export_prompt: bool = False,
     instruction_is_final: bool = False,
+    resolution: str = "2K",
+    aspect_ratio: str = "1:1",
 ) -> Optional[str]:
     """
     组合多张图片创建新场景
@@ -2030,6 +2032,8 @@ def composite_images(
         composite_type: 合成类型 ("clothing", "accessory", "general", "auto")
         composite_prompt_template: 自定义合成提示词模板 (可选)
         instruction_is_final: 如果为 True，instruction 已是完整提示词，不再处理
+        resolution: 分辨率 ("1K", "2K", "4K")
+        aspect_ratio: 宽高比 ("1:1", "3:2", "2:3", "16:9", "9:16")
     
     Returns:
         合成后图像的路径
@@ -2115,7 +2119,9 @@ def composite_images(
             model_name=model_name,
             output_dir=output_dir,
             output_name=output_name,
-            proxy_base_url=proxy_base_url
+            proxy_base_url=proxy_base_url,
+            resolution=resolution,
+            aspect_ratio=aspect_ratio
         )
     else:
         return _composite_via_direct(
@@ -2124,7 +2130,9 @@ def composite_images(
             api_key=api_key,
             model_name=model_name,
             output_dir=output_dir,
-            output_name=output_name
+            output_name=output_name,
+            resolution=resolution,
+            aspect_ratio=aspect_ratio
         )
 
 
@@ -2219,7 +2227,9 @@ def _composite_via_proxy(
     model_name: str,
     output_dir: str,
     output_name: str = None,
-    proxy_base_url: str = None
+    proxy_base_url: str = None,
+    resolution: str = "2K",
+    aspect_ratio: str = "1:1"
 ) -> Optional[str]:
     """通过 AiProxy 代理进行多图合成"""
     import requests
@@ -2262,6 +2272,8 @@ def _composite_via_proxy(
         "prompt": instruction,
         "model": model_name,
         "images": [img["data"] for img in images_data],  # 多图数组
+        "image_size": resolution,  # 分辨率: 1K, 2K, 4K
+        "aspect_ratio": aspect_ratio,  # 宽高比: 1:1, 3:2, 2:3, 16:9, 9:16
         "safetySettings": [
             { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH" },
             { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH" },
@@ -2328,7 +2340,9 @@ def _composite_via_direct(
     api_key: str,
     model_name: str,
     output_dir: str,
-    output_name: str = None
+    output_name: str = None,
+    resolution: str = "2K",
+    aspect_ratio: str = "1:1"
 ) -> Optional[str]:
     """直连 Gemini API 进行多图合成"""
     from pathlib import Path
