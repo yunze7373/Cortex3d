@@ -1134,10 +1134,11 @@ def main():
         print(f"  📝 指令: {instruction[:60]}{'...' if len(instruction) > 60 else ''}")
         print(f"  🔒 严格模式: {'开启' if args.wear_strict else '关闭'}")
         
-        # 确定使用的模型
-        if getattr(args, 'wear_model', 'flash') == 'pro':
+        # 确定使用的模型（支持 --pro 或 --wear-model pro）
+        use_pro_model = getattr(args, 'pro', False) or getattr(args, 'wear_model', 'flash') == 'pro'
+        if use_pro_model:
             wear_model_name = "gemini-3-pro-image-preview"
-            print(f"  🎯 模型: Gemini 3 Pro (高保真)")
+            print(f"  🎯 模型: {wear_model_name} (Pro 高保真)")
         else:
             wear_model_name = args.model if args.model else "gemini-2.5-flash-image"
             print(f"  🎯 模型: {wear_model_name}")
