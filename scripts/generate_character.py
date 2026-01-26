@@ -386,6 +386,22 @@ def main():
              "示例: --random --random-theme '科幻战士'"
     )
     
+    input_group.add_argument(
+        "--random-character",
+        action="store_true",
+        help="随机人物+固定衣服: 配合 --composite-images 使用\n"
+             "人物由AI随机生成，穿上指定的衣服图片\n"
+             "示例: --random-character --composite-images dress.png"
+    )
+    
+    input_group.add_argument(
+        "--random-clothing",
+        metavar="STYLE",
+        help="固定人物+随机衣服: 配合 --from-image 使用\n"
+             "人物来自参考图，衣服由AI根据描述随机生成\n"
+             "示例: --from-image model.png --random-clothing '时尚连衣裙'"
+    )
+    
     # =========================================================================
     # 👁️ 视角参数组 (View Configuration)  
     # =========================================================================
@@ -988,6 +1004,10 @@ def main():
         if not hasattr(args, 'preserve_output_name'):
             args.preserve_output_name = args.edit_output_name
     
+    # 确保 composite_output_name 总是存在
+    if not hasattr(args, 'composite_output_name') or args.composite_output_name is None:
+        args.composite_output_name = None  # 使用默认名称
+    
     # 确保旧参数名的兼容性
     if not hasattr(args, 'custom_views'):
         args.custom_views = getattr(args, 'custom_views', None)
@@ -1214,6 +1234,10 @@ def main():
             print(f"🎲 随机生成: 主题 '{random_theme}'")
         else:
             print(f"🎲 随机生成: AI自由创作")
+    elif getattr(args, 'random_character', False):
+        print(f"🎲 随机人物: AI生成人物 + 指定衣服")
+    elif getattr(args, 'random_clothing', None):
+        print(f"🎲 随机衣服: 指定人物 + AI生成 '{args.random_clothing}'")
     elif args.from_image:
         print(f"📥 输入: {args.from_image}")
     if args.description:
@@ -1763,13 +1787,66 @@ def main():
         print("[高级合成模式]")
         print("  用途: 换衣服、换配饰、创意拼贴、产品模型等")
         
-        # 验证必需参数
-        if not args.composite_images or len(args.composite_images) < 1:
-            print("[ERROR] --mode-composite 需要 --composite-images 参数（至少1张图片）")
-            print("        示例: --composite-images model.png dress.png")
-            print("        或配合 --from-image: --from-image model.png --composite-images dress.png")
-            print("        或单图模式: --composite-images model.png --composite-instruction '让这个人穿上JNBY的衣服'")
-            sys.exit(1)
+        # =====================================================================
+        # 🎲 随机人物 + 固定衣服模式
+        # =====================================================================
+        random_character_mode = getattr(args, 'random_character', False)
+        if random_character_mode:
+            print("\n[🎲 随机人物模式]")
+            print("  人物: AI随机生成")
+            print("  衣服: 使用指定图片")
+            
+            if not args.composite_images:
+                print("[ERROR] --random-character 需要 --composite-images 指定衣服图片")
+                print("        示例: --random-character --composite-images dress.png")
+                sys.exit(1)
+            
+            # 为随机人物生成描述
+            random_theme = getattr(args, 'random_theme', None) or ''
+            if random_theme:
+                character_desc = f"a unique {random_theme} character"
+            else:
+                character_desc = "a unique and attractive character with distinctive features"
+            
+            # 自动生成合成指令
+            if not args.composite_instruction:
+                args.composite_instruction = f"Generate {character_desc} wearing the clothing from the provided image. The character should be in a natural pose showing the outfit clearly."
+                print(f"  [自动指令] {args.composite_instruction[:80]}...")
+        
+        # =====================================================================
+        # 🎲 固定人物 + 随机衣服模式
+        # =====================================================================
+        random_clothing_style = getattr(args, 'random_clothing', None)
+        if random_clothing_style:
+            print("\n[🎲 随机衣服模式]")
+            print(f"  人物: 使用参考图片")
+            print(f"  衣服: AI随机生成 ({random_clothing_style})")
+            
+            if not args.from_image:
+                print("[ERROR] --random-clothing 需要 --from-image 指定人物图片")
+                print("        示例: --from-image model.png --random-clothing '时尚连衣裙'")
+                sys.exit(1)
+            
+            # 自动生成合成指令
+            if not args.composite_instruction:
+                args.composite_instruction = f"Keep the person exactly as shown in the image, but dress them in {random_clothing_style}. The clothing should be stylish, well-fitted, and match the character's style."
+                print(f"  [自动指令] {args.composite_instruction[:80]}...")
+            
+            # 不需要额外的图片，只用 from_image
+            if not args.composite_images:
+                args.composite_images = []  # 空列表，单图模式
+        
+        # 验证必需参数（除非是特殊随机模式）
+        if not random_character_mode and not random_clothing_style:
+            if not args.composite_images or len(args.composite_images) < 1:
+                print("[ERROR] --mode-composite 需要 --composite-images 参数（至少1张图片）")
+                print("        示例: --composite-images model.png dress.png")
+                print("        或配合 --from-image: --from-image model.png --composite-images dress.png")
+                print("        或单图模式: --composite-images model.png --composite-instruction '让这个人穿上JNBY的衣服'")
+                print("\n        🎲 随机模式:")
+                print("        --random-character --composite-images dress.png (随机人物穿指定衣服)")
+                print("        --from-image model.png --random-clothing '连衣裙' (指定人物穿随机衣服)")
+                sys.exit(1)
         
         if not args.composite_instruction:
             print("[ERROR] --mode-composite 需要 --composite-instruction 参数（合成指令）")
@@ -1778,9 +1855,9 @@ def main():
         
         # 如果有 --from-image，将其作为第一张图片
         if args.from_image:
-            all_images = [args.from_image] + args.composite_images
+            all_images = [args.from_image] + (args.composite_images or [])
         else:
-            all_images = args.composite_images
+            all_images = args.composite_images or []
         
         # 判断是单图模式还是多图模式
         single_image_mode = len(all_images) == 1
