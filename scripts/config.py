@@ -211,7 +211,8 @@ def build_strict_copy_prompt(
     custom_views: List[str] = None,
     style: str = None,
     subject_only: bool = False,
-    with_props: List[str] = None
+    with_props: List[str] = None,
+    user_instruction: str = None
 ) -> str:
     """
     构建严格复制模式提示词（100%复制原图）
@@ -222,6 +223,7 @@ def build_strict_copy_prompt(
         style: 风格描述 (photorealistic, anime, 或自定义)
         subject_only: 只处理主体，移除背景物体
         with_props: 要包含的道具列表
+        user_instruction: 用户额外指令（如"补全身体"等）
     
     Returns:
         完整的提示词字符串
@@ -231,7 +233,8 @@ def build_strict_copy_prompt(
         base_prompt = lib.build_strict_copy_prompt(
             view_mode=view_mode,
             custom_views=custom_views,
-            style=style
+            style=style,
+            user_instruction=user_instruction
         )
         # 添加主体隔离指令
         subject_instructions = _build_subject_instructions(subject_only, with_props)

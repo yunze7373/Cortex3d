@@ -2628,7 +2628,12 @@ def main():
                     sys.exit(1)
         elif args.from_image and args.strict:
             print(f"\n[严格复制模式] 跳过图片分析，100%基于原图生成")
-            description = "(strict mode - no description needed)"
+            # 如果用户提供了描述，将其作为额外指令传递
+            if args.description:
+                description = f"(strict mode) User instruction: {args.description}"
+                print(f"[用户指令] {args.description}")
+            else:
+                description = "(strict mode - no description needed)"
         
         # 确定是否使用图片参考模式
         ref_image_path = args.from_image if args.from_image else None
@@ -2724,9 +2729,14 @@ def main():
                     print(f"[默认描述] {description}")
                     print(f"[提示] 建议使用 --strict 模式或提供描述以获得更好效果")
             else:
-                # 严格模式：跳过分析
+                # 严格模式：跳过分析，但保留用户指令
                 print(f"\n[严格复制模式] 跳过图片分析，100% 基于原图生成")
-                description = "(strict mode - no description needed)"
+                # 如果用户提供了描述，将其作为额外指令传递
+                if args.description:
+                    description = f"(strict mode) User instruction: {args.description}"
+                    print(f"[用户指令] {args.description}")
+                else:
+                    description = "(strict mode - no description needed)"
         
         # 确定视角模式
         view_mode = f"{args.views}-view"

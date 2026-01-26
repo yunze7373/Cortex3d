@@ -156,9 +156,12 @@ def generate_character_views(
             custom_views=custom_views,
             style=style,
             subject_only=subject_only,
-            with_props=with_props
+            with_props=with_props,
+            user_instruction=character_description  # 传递用户指令
         )
         print("[模式] 严格复制 - 100% 基于参考图像")
+        if character_description:
+            print(f"[用户指令] {character_description}")
     elif reference_image_b64:
         from config import build_image_reference_prompt
         full_prompt = build_image_reference_prompt(

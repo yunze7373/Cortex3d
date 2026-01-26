@@ -392,7 +392,8 @@ class PromptLibrary:
         self,
         view_mode: str = "4-view",
         custom_views: List[str] = None,
-        style: str = None
+        style: str = None,
+        user_instruction: str = None
     ) -> str:
         """
         构建严格复制模式提示词
@@ -401,6 +402,7 @@ class PromptLibrary:
             view_mode: 视角模式 (4-view, 6-view, 8-view, custom)
             custom_views: 自定义视角列表 (仅 custom 模式)
             style: 风格描述 (photorealistic, anime, 或自定义)
+            user_instruction: 用户额外指令（如"补全身体"等）
         
         Returns:
             完整提示词
@@ -442,7 +444,7 @@ class PromptLibrary:
         top_bottom_instructions = self._get_top_bottom_instructions(view_names)
         
         template = self.load_prompt("multiview", "strict_copy")
-        return template.get("template", "").format(
+        base_prompt = template.get("template", "").format(
             view_count=view_count,
             layout_description=layout_desc,
             panel_list=format_panel_list(views),
@@ -454,6 +456,20 @@ class PromptLibrary:
             spatial_lock_instructions=self._get_spatial_lock_instructions(view_count),
             final_rules_instructions=self._get_final_rules_instructions(view_count)
         )
+        
+        # 如果有用户指令，添加到提示词末尾
+        if user_instruction and user_instruction.strip():
+            user_instruction_block = f"""
+==================================================
+## ⚠️ ADDITIONAL USER INSTRUCTION (IMPORTANT)
+{user_instruction.strip()}
+
+Apply this instruction while maintaining all strict copy requirements above.
+==================================================
+"""
+            base_prompt = base_prompt + user_instruction_block
+        
+        return base_prompt
 
     # =========================================================================
     # 合成功能（换装、配饰等）- 与多视角生成使用相同的风格系统

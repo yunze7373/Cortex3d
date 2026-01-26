@@ -462,12 +462,20 @@ def generate_character_multiview(
     # 优先级: 严格模式 > 自定义视角 > 图片参考 > 默认多视角
     if use_strict_mode:
         print("[MODE] 严格复制模式 (100%基于原图，不允许创意改动)")
+        # 从 character_description 中提取用户指令（如果有）
+        user_instruction = None
+        if character_description and character_description.startswith("(strict mode)"):
+            # 解析用户指令: "(strict mode) User instruction: xxx"
+            if "User instruction:" in character_description:
+                user_instruction = character_description.split("User instruction:", 1)[1].strip()
+                print(f"[用户指令] {user_instruction}")
         prompt = build_strict_copy_prompt(
             view_mode=view_mode,
             custom_views=custom_views,
             style=style,
             subject_only=subject_only,
-            with_props=with_props
+            with_props=with_props,
+            user_instruction=user_instruction
         )
     elif custom_views:
         # 自定义视角模式 - 即使有参考图也使用自定义视角
