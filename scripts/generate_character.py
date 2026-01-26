@@ -892,7 +892,42 @@ def main():
         help="编辑输出文件名 (可选，默认自动生成)"
     )
     
-    # 在解析参数前，检查常见的参数错误并提供友好提示
+    
+    # =========================================================================
+    # 🤖 智能助手参数组 (AI Assistant)
+    # =========================================================================
+    ai_group = parser.add_argument_group('🤖 智能助手', '通过AI对话自动生成最佳参数组合')
+    
+    ai_group.add_argument(
+        "--ai-assistant", "--smart", "--interactive",
+        dest="ai_assistant",
+        action="store_true",
+        help="启动高级智能对话助手，通过自然语言生成最佳参数组合"
+    )
+    
+    ai_group.add_argument(
+        "--smart-chat", "--chat",
+        dest="smart_chat",
+        action="store_true",
+        help="启动简化智能助手，快速参数推荐和意图识别"
+    )
+    
+    ai_group.add_argument(
+        "--analyze-image", "--ai-analyze",
+        type=str, metavar='IMAGE',
+        dest="analyze_image",
+        help="智能分析图像特征并推荐最佳参数配置"
+    )
+    
+    ai_group.add_argument(
+        "--quick-setup",
+        choices=["beginner", "fast", "quality", "3d"],
+        help="快速设置预设\n"
+             "beginner - 新手友好设置\n"
+             "fast     - 快速预览模式\n" 
+             "quality  - 高质量模式\n"
+             "3d       - 3D生成优化"
+    )
     friendly_hint_shown = False
     for arg in sys.argv[1:]:
         if arg.startswith('--'):
@@ -945,6 +980,187 @@ def main():
         args.composite_smart_extract = True
     if not hasattr(args, 'composite_prompt_template'):
         args.composite_prompt_template = None
+    
+    
+    # =========================================================================
+    # 🤖 智能助手功能检查
+    # =========================================================================
+    
+    # 高级智能助手
+    if getattr(args, 'ai_assistant', False):
+        print("\n🧠 启动高级智能对话助手...")
+        try:
+            from smart_assistant import AdvancedParameterAssistant
+            assistant = AdvancedParameterAssistant()
+            print(assistant.start_intelligent_conversation())
+            
+            while True:
+                try:
+                    user_input = input("\n🗣️ 请描述您的需求: ").strip()
+                    
+                    if not user_input:
+                        continue
+                        
+                    if user_input.lower() in ['quit', 'exit', '退出', 'q']:
+                        print("\n👋 感谢使用Cortex3d智能助手！")
+                        sys.exit(0)
+                        
+                    if user_input.lower() == 'restart':
+                        assistant = AdvancedParameterAssistant()
+                        print(assistant.start_intelligent_conversation())
+                        continue
+                        
+                    response, continue_chat, command_args = assistant.process_natural_language_input(user_input)
+                    
+                    if continue_chat:
+                        print(response)
+                    else:
+                        # 显示最终推荐
+                        recommendation = response if isinstance(response, dict) else assistant._generate_smart_recommendation()
+                        print(assistant.format_smart_recommendation(recommendation))
+                        
+                        # 询问是否执行
+                        while True:
+                            choice = input("\n🤔 是否立即执行推荐命令? (y/n/modify): ").lower()
+                            if choice in ['y', 'yes', '是', '执行']:
+                                print("\n✅ 请复制上面的命令到新终端执行，或按Ctrl+C退出助手后执行。")
+                                sys.exit(0)
+                            elif choice in ['n', 'no', '否', '不']:
+                                print("\n📋 命令已生成，您可以稍后手动执行。")
+                                sys.exit(0)
+                            elif choice in ['modify', 'adjust', '修改', '调整']:
+                                print("\n🔧 请描述您希望如何调整参数：")
+                                break
+                            else:
+                                print("请输入 y/n/modify")
+                        
+                except KeyboardInterrupt:
+                    print("\n\n👋 感谢使用智能助手！")
+                    sys.exit(0)
+                    
+        except ImportError:
+            print("❌ 找不到高级智能助手模块，请检查 smart_assistant.py 文件")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ 智能助手出现错误: {e}")
+            sys.exit(1)
+    
+    # 简化智能助手
+    if getattr(args, 'smart_chat', False):
+        print("\n🤖 启动简化智能助手...")
+        try:
+            from intelligent_assistant import IntelligentParameterAssistant
+            assistant = IntelligentParameterAssistant()
+            print(assistant.start_conversation())
+            
+            while True:
+                try:
+                    user_input = input("\n💬 您的回答: ").strip()
+                    
+                    if not user_input:
+                        continue
+                        
+                    if user_input.lower() in ['quit', 'exit', '退出', 'q']:
+                        print("\n👋 感谢使用智能助手！")
+                        sys.exit(0)
+                        
+                    response, continue_chat = assistant.analyze_user_input(user_input)
+                    print(response)
+                    
+                    if not continue_chat:
+                        print("\n✅ 智能助手配置完成！请复制上面的命令来执行。")
+                        sys.exit(0)
+                        
+                except KeyboardInterrupt:
+                    print("\n\n👋 感谢使用智能助手！")
+                    sys.exit(0)
+        except ImportError:
+            print("❌ 智能助手模块未找到，请确保 intelligent_assistant.py 在 scripts 目录下")
+            sys.exit(1)
+    
+    # 图像智能分析
+    if getattr(args, 'analyze_image', None):
+        print(f"\n🖼️ 开始智能分析图像: {args.analyze_image}")
+        try:
+            from smart_assistant import AdvancedParameterAssistant
+            assistant = AdvancedParameterAssistant()
+            
+            # 分析图像并推荐参数
+            if not Path(args.analyze_image).exists():
+                print(f"❌ 图像文件不存在: {args.analyze_image}")
+                sys.exit(1)
+                
+            print("🔍 正在分析图像特征...")
+            
+            # 模拟图像分析（实际可以集成计算机视觉模型）
+            analysis_input = f"我有一张图片 {args.analyze_image}，请帮我分析并推荐最佳的角色生成参数"
+            
+            response, continue_chat, command_args = assistant.process_natural_language_input(analysis_input)
+            
+            if not continue_chat:
+                recommendation = response if isinstance(response, dict) else assistant._generate_smart_recommendation()
+                print("\n📊 图像分析完成！")
+                print(assistant.format_smart_recommendation(recommendation))
+                
+                # 自动设置输入图像参数
+                if hasattr(args, 'input_image'):
+                    args.input_image = args.analyze_image
+                
+                choice = input("\n🤔 是否使用推荐参数继续生成? (y/n): ").lower()
+                if choice not in ['y', 'yes', '是']:
+                    sys.exit(0)
+            
+        except ImportError:
+            print("❌ 找不到智能分析模块")
+            sys.exit(1)
+        except Exception as e:
+            print(f"❌ 图像分析失败: {e}")
+            sys.exit(1)
+    
+    # =========================================================================
+    # 🚀 快速设置预设
+    # =========================================================================
+    if getattr(args, 'quick_setup', None):
+        print(f"\n🚀 应用快速设置: {args.quick_setup}")
+        
+        if args.quick_setup == "beginner":
+            # 新手友好设置
+            args.views = "4"
+            args.resolution = "2K"
+            args.preview = True
+            if not hasattr(args, 'anime') or not args.anime:
+                args.anime = True
+            print("  ✅ 新手模式：4视角，2K分辨率，动漫风格，自动预览")
+            
+        elif args.quick_setup == "fast":
+            # 快速预览模式
+            args.views = "4"
+            args.resolution = "1K"
+            args.no_negative = True
+            args.preview = True
+            print("  ⚡ 快速模式：4视角，1K分辨率，无负面提示词，快速预览")
+            
+        elif args.quick_setup == "quality":
+            # 高质量模式
+            args.views = "8"
+            args.resolution = "4K"
+            args.pro = True
+            args.auto_complete = True
+            args.preview = True
+            print("  💎 高质量模式：8视角，4K分辨率，Pro模型，智能补全")
+            
+        elif args.quick_setup == "3d":
+            # 3D优化模式
+            args.views = "8"
+            args.resolution = "4K"
+            args.to_3d = True
+            args.algo = "hunyuan3d-2.1"
+            args.quality = "high"
+            args.auto_complete = True
+            args.preview = True
+            print("  🚀 3D模式：8视角，4K分辨率，HunYuan3D-2.1，高质量3D")
+        
+        print("────────────────────────────────────────")
     
     # 根据模式自动设置token(如果未提供)
     if args.token is None:
