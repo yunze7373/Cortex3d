@@ -371,6 +371,21 @@ def main():
              "适用于精确复制现有角色外观"
     )
     
+    input_group.add_argument(
+        "--random",
+        action="store_true",
+        help="随机生成模式: 无需参考图，AI自由创作随机角色\n"
+             "生成符合多视角标准的全新角色图像\n"
+             "示例: --random --views 4 --style anime"
+    )
+    
+    input_group.add_argument(
+        "--random-theme",
+        metavar="THEME",
+        help="随机模式的主题提示 (可选)\n"
+             "示例: --random --random-theme '科幻战士'"
+    )
+    
     # =========================================================================
     # 👁️ 视角参数组 (View Configuration)  
     # =========================================================================
@@ -1193,7 +1208,13 @@ def main():
     
     # 显示当前配置概览
     print(f"🔧 模式: {args.mode.upper()}")
-    if args.from_image:
+    if getattr(args, 'random', False):
+        random_theme = getattr(args, 'random_theme', None)
+        if random_theme:
+            print(f"🎲 随机生成: 主题 '{random_theme}'")
+        else:
+            print(f"🎲 随机生成: AI自由创作")
+    elif args.from_image:
         print(f"📥 输入: {args.from_image}")
     if args.description:
         print(f"📝 描述: {args.description[:50]}{'...' if len(args.description) > 50 else ''}")
@@ -2271,6 +2292,16 @@ def main():
     # 获取角色描述
     if args.description:
         description = args.description
+    elif getattr(args, 'random', False):
+        # 随机生成模式：AI自由创作，无需参考图
+        random_theme = getattr(args, 'random_theme', None) or ''
+        if random_theme:
+            description = f"Create a unique and creative character: {random_theme}"
+            print(f"[INFO] 随机生成模式：主题 '{random_theme}'")
+        else:
+            description = "Create a unique, creative, and visually interesting character with distinctive features and outfit"
+            print("[INFO] 随机生成模式：AI自由创作全新角色")
+        print("[特点] 无参考图输入，生成符合多视角标准的随机角色")
     elif args.from_image:
         # 使用图片参考模式时，描述是可选的（会从图片分析获取）
         description = ""
