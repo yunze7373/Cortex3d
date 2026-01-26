@@ -74,6 +74,18 @@ class AdvancedParameterAssistant:
                 "quality_boost": ["--pro", "--res", "4K", "--auto-complete"],
                 "speed_boost": ["--res", "2K"],
                 "description": "风格转换和艺术化"
+            },
+            "image_composite": {
+                "base": ["--mode-composite"],
+                "quality_boost": ["--pro", "--res", "4K"],
+                "speed_boost": ["--res", "2K"],
+                "description": "图像合成和换装"
+            },
+            "simple_wardrobe": {
+                "base": ["--wear", "clothing_item.png"],
+                "quality_boost": ["--wear-model", "pro", "--res", "4K"],
+                "speed_boost": ["--wear-model", "flash", "--res", "2K"],
+                "description": "简单快速换装"
             }
         }
     
@@ -183,9 +195,14 @@ class AdvancedParameterAssistant:
             scores['multi_view'] = 0.7
         
         # 检测特殊要求
-        if re.search(r'(换装|服装|衣服|dress|clothing)', user_input):
+        if re.search(r'(快速换装|简单换装|wear|轻量换装)', user_input):
+            intent['simple_wardrobe'] = True
+            scores['simple_wardrobe'] = 0.9
+        elif re.search(r'(换装|服装|衣服|dress|clothing|穿上|合成|composite|换衣服)', user_input):
             intent['wardrobe'] = True
+            intent['composite_mode'] = True
             scores['wardrobe'] = 0.8
+            scores['composite'] = 0.9
             
         # 检测编辑和修复需求
         if re.search(r'(修复|修理|fix|repair|restore|enhance|improve)', user_input):
@@ -303,8 +320,12 @@ class AdvancedParameterAssistant:
         if intent.get('multi_view') and '-v' not in base_args:
             base_args.extend(['-v', '8'])
         
-        if intent.get('wardrobe'):
-            base_args.extend(['--wear', 'clothing_item.png'])
+        if intent.get('simple_wardrobe'):
+            # 使用简单换装参数，需要用户提供 --from-image
+            base_args.extend(['--from-image', 'your_image.jpg'])
+        elif intent.get('wardrobe') or intent.get('composite_mode'):
+            # 使用图像合成模式而不是wear参数
+            base_args.extend(['--mode-composite', '--composite-instruction', '"将元素进行智能合成"'])
             
         # 修复和预处理功能
         if intent.get('needs_preprocess'):
@@ -365,7 +386,11 @@ class AdvancedParameterAssistant:
         intent = self.context.detected_intent
         
         # 基于检测到的意图选择模板
-        if intent.get('needs_repair') or intent.get('quality_issue'):
+        if intent.get('simple_wardrobe'):
+            return 'simple_wardrobe'
+        elif intent.get('composite_mode'):
+            return 'image_composite'
+        elif intent.get('needs_repair') or intent.get('quality_issue'):
             if intent.get('detail_fix'):
                 return 'detail_fix'
             else:
@@ -419,8 +444,10 @@ class AdvancedParameterAssistant:
         if intent.get('multi_view'):
             explanations.append("👁️ 多视角生成，提供全方位角色展示")
             
-        if intent.get('wardrobe'):
-            explanations.append("👗 换装功能，智能服装替换")
+        if intent.get('simple_wardrobe'):
+            explanations.append("👗 快速换装模式，轻量级服装替换")
+        elif intent.get('wardrobe') or intent.get('composite_mode'):
+            explanations.append("👗 图像合成模式，智能换装和物品组合")
             
         # 修复和增强功能说明
         if intent.get('needs_preprocess'):
