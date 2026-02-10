@@ -230,7 +230,7 @@ Generate ONE clean panel of the {view_name} view."""
     def __init__(
         self,
         api_key: str = None,
-        model_name: str = "gemini-2.0-flash",
+        model_name: str = "gemini-3-flash-preview",
         max_retries: int = 3,
         verbose: bool = True,
         mode: str = "proxy",
@@ -332,7 +332,7 @@ Generate ONE clean panel of the {view_name} view."""
         
         payload = {
             "prompt": self.DETECTION_PROMPT,
-            "model": "gemini-2.0-flash",  # 分析使用 flash 模型
+            "model": "gemini-3-flash-preview",  # 分析使用 flash 模型
             "image": f"data:{mime_type};base64,{b64_image}",
             "safetySettings": [
                 { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH" },
@@ -794,7 +794,7 @@ Generate ONE clean panel of the {view_name} view."""
             self._log(f"[INFO] 使用旧版 google.generativeai SDK")
             
             try:
-                model = genai.GenerativeModel("gemini-2.0-flash-exp-image-generation")
+                model = genai.GenerativeModel("gemini-2.5-flash-image")
                 response = model.generate_content(
                     [prompt, ref_img],
                     generation_config=genai.GenerationConfig(

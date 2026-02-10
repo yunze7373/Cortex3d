@@ -31,7 +31,7 @@ except ImportError:
 IMAGE_MODEL = "models/nano-banana-pro-preview"
 
 # 文本模型
-TEXT_MODEL = "gemini-2.0-flash"
+TEXT_MODEL = "gemini-3-flash-preview"
 
 # AiProxy 服务地址
 AIPROXY_BASE_URL = os.environ.get("AIPROXY_URL", "https://bot.bigjj.click/aiproxy")

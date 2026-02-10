@@ -115,10 +115,13 @@ def generate_image_via_proxy(
     MAX_RETRIES = 1
     
     # 定义回退模型 map
+    # nano-banana-pro-preview = gemini-3-pro-image-preview (支持4K)
+    # 回退到 gemini-2.5-flash-image (仅1024px，但更稳定)
     FALLBACK_MODELS = {
-        "models/nano-banana-pro-preview": "gemini-2.5-flash-image",
-        "nano-banana-pro-preview": "gemini-2.5-flash-image",
-        IMAGE_MODEL: "gemini-2.5-flash-image"
+        "models/nano-banana-pro-preview": "gemini-3-pro-image-preview",
+        "nano-banana-pro-preview": "gemini-3-pro-image-preview",
+        IMAGE_MODEL: "gemini-3-pro-image-preview",
+        "gemini-3-pro-image-preview": "gemini-2.5-flash-image",
     }
 
     current_model = model
@@ -325,7 +328,7 @@ materials, and spatial positions. This will be used to generate a 3D model."""
     # 使用 Gemini 模型进行图片分析
     payload = {
         "prompt": analysis_prompt,
-        "model": "gemini-2.0-flash",  # 使用文本/视觉模型
+        "model": "gemini-3-flash-preview",  # 使用文本/视觉模型
         "image": f"data:{mime_type};base64,{b64_image}",
         "safetySettings": [
             { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH" },

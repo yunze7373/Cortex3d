@@ -219,10 +219,13 @@ def generate_character_views(
             {"category": HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH},
         ]
         
-        # 定义回退模型（和代理模式完全一致）
+        # 定义回退模型（当主模型不可用时降级使用）
+        # nano-banana-pro-preview = gemini-3-pro-image-preview (支持4K)
+        # 回退到 gemini-2.5-flash-image (仅1024px，但更稳定)
         FALLBACK_MODELS = {
-            "models/nano-banana-pro-preview": "gemini-2.5-flash-image",
-            "nano-banana-pro-preview": "gemini-2.5-flash-image",
+            "models/nano-banana-pro-preview": "gemini-3-pro-image-preview",
+            "nano-banana-pro-preview": "gemini-3-pro-image-preview",
+            "gemini-3-pro-image-preview": "gemini-2.5-flash-image",
         }
         
         current_model = model_name
@@ -1569,9 +1572,9 @@ Background type: [description]
 Clothing description: [brief description of the main clothing items visible]"""
 
     try:
-        # 对于AI分析，使用视觉-文本模型（gemini-2.0-flash），而不是图像生成模型
+        # 对于AI分析，使用视觉-文本模型（gemini-3-flash-preview），而不是图像生成模型
         # 图像生成模型（如 gemini-2.5-flash-image）只能生成图像，不能分析图像
-        analysis_model = "gemini-2.0-flash"  # 文本/视觉模型，用于分析
+        analysis_model = "gemini-3-flash-preview"  # 文本/视觉模型，用于分析
         
         # 根据模式调用AI分析
         if mode == "proxy":
@@ -2546,8 +2549,8 @@ def analyze_image_for_character(image_path: str, api_key: str, user_guidance: st
         # 加载图像
         image = PIL_Image.open(image_path)
         
-        # 创建视觉模型（和代理模式完全一致，使用 gemini-2.0-flash）
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        # 创建视觉模型（和代理模式完全一致，使用 gemini-3-flash-preview）
+        model = genai.GenerativeModel("gemini-3-flash-preview")
         
         # 构建分析提示词
         analysis_prompt = """Analyze this image and provide a detailed character description for 3D modeling reference.
@@ -2616,7 +2619,7 @@ def main():
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
-        help="模型名称 (默认: gemini-2.0-flash-exp)"
+        help="模型名称 (默认: gemini-3-flash-preview)"
     )
     parser.add_argument(
         "--output", "-o",
