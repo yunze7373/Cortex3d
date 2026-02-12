@@ -118,10 +118,9 @@ def generate_image_via_proxy(
     # nano-banana-pro-preview = gemini-3-pro-image-preview (支持4K)
     # 回退到 gemini-2.5-flash-image (仅1024px，但更稳定)
     FALLBACK_MODELS = {
-        "models/nano-banana-pro-preview": "gemini-3-pro-image-preview",
-        "nano-banana-pro-preview": "gemini-3-pro-image-preview",
-        IMAGE_MODEL: "gemini-3-pro-image-preview",
         "gemini-3-pro-image-preview": "gemini-2.5-flash-image",
+        "models/gemini-3-pro-image-preview": "gemini-2.5-flash-image",
+        IMAGE_MODEL: "gemini-2.5-flash-image",
     }
 
     current_model = model

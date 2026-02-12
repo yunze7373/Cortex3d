@@ -28,7 +28,7 @@ except ImportError:
 # =============================================================================
 
 # 图像生成模型 (NanoBanana Pro) - 用于 proxy/direct 模式
-IMAGE_MODEL = "models/nano-banana-pro-preview"
+IMAGE_MODEL = "gemini-3-pro-image-preview"
 
 # 文本模型
 TEXT_MODEL = "gemini-3-flash-preview"
