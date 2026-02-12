@@ -135,7 +135,7 @@ def generate_image_via_proxy(
                 endpoint,
                 headers=headers,
                 json=payload,
-                timeout=120
+                timeout=600
             )
             
             if response.status_code == 200:
