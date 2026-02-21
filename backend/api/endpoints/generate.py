@@ -178,8 +178,15 @@ async def generate_multiview(request: GenerateRequest):
 
         views = view_mapping.get(request.viewMode or "4-view", ["front", "right", "back", "left"])
 
+        # 使用asset_id前缀来查找文件（脚本生成的文件带有asset_id前缀）
         for view in views:
             for ext in [".png", ".jpg", ".jpeg"]:
+                # 尝试带asset_id前缀的文件名
+                file_path = output_path / f"{asset_id}_{view}{ext}"
+                if file_path.exists():
+                    images[view] = image_to_base64(str(file_path))
+                    break
+                # 尝试不带前缀的文件名
                 file_path = output_path / f"{view}{ext}"
                 if file_path.exists():
                     images[view] = image_to_base64(str(file_path))
@@ -332,6 +339,12 @@ async def change_clothes(request: ChangeClothesRequest):
 
         for view in views:
             for ext in [".png", ".jpg", ".jpeg"]:
+                # 尝试带asset_id前缀的文件名
+                file_path = output_path / f"{asset_id}_{view}{ext}"
+                if file_path.exists():
+                    images[view] = image_to_base64(str(file_path))
+                    break
+                # 尝试不带前缀的文件名
                 file_path = output_path / f"{view}{ext}"
                 if file_path.exists():
                     images[view] = image_to_base64(str(file_path))
