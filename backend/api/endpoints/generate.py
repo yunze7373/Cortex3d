@@ -10,8 +10,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 # Add the project root to the path
-# __file__ = /home/han/projects/cortex3d/backend/api/endpoints/generate.py
-# parent = endpoints, parent.parent = api, parent.parent.parent = backend, parent.parent.parent.parent = cortex3d
 project_root = Path(__file__).parent.parent.parent.parent
 scripts_dir = project_root / "scripts"
 sys.path.insert(0, str(scripts_dir))
@@ -90,7 +88,7 @@ class ChangeStyleResponse(BaseModel):
 # ============ 辅助函数 ============
 
 def base64_to_temp_file(base64_str: str, suffix: str = ".png") -> str:
-    """将base64图片保存到临时文件"""
+    """将base64图片保存到临时文件，不打印base64内容"""
     if "," in base64_str:
         base64_str = base64_str.split(",")[1]
 
@@ -129,6 +127,13 @@ async def generate_multiview(request: GenerateRequest):
 
         os.makedirs(output_dir, exist_ok=True)
 
+        # 处理参考图片（如果是base64则保存到临时文件）
+        reference_image_path = None
+        if request.referenceImage:
+            reference_image_path = base64_to_temp_file(request.referenceImage, ".png")
+
+        print(f"[生成多视角] 开始生成, description={request.description[:50]}...")
+
         result = generate_character_multiview(
             character_description=request.description,
             token=token,
@@ -137,7 +142,7 @@ async def generate_multiview(request: GenerateRequest):
             model=request.model or "gemini-3-pro-image-preview",
             style=request.style or "cinematic character",
             asset_id=asset_id,
-            reference_image_path=request.referenceImage,
+            reference_image_path=reference_image_path,
             use_image_reference_prompt=request.useImageReferencePrompt,
             use_strict_mode=request.useStrictMode,
             resolution=request.resolution or "2K",
@@ -148,6 +153,13 @@ async def generate_multiview(request: GenerateRequest):
             subject_only=request.subjectOnly,
             with_props=request.withProps,
         )
+
+        # 清理临时参考图片
+        if reference_image_path:
+            try:
+                os.unlink(reference_image_path)
+            except:
+                pass
 
         if not result:
             raise HTTPException(status_code=500, detail="生成失败")
@@ -179,6 +191,7 @@ async def generate_multiview(request: GenerateRequest):
         if not images:
             raise HTTPException(status_code=500, detail="未找到生成的图片")
 
+        print(f"[生成多视角] 成功, views={list(images.keys())}")
         return GenerateResponse(
             assetId=asset_id,
             status="success",
@@ -205,13 +218,14 @@ async def generate_from_image(request: GenerateRequest):
     if not request.referenceImage:
         raise HTTPException(status_code=400, detail="需要上传参考图片")
 
+    print(f"[图生多视角] 开始处理...")
     request.useImageReferencePrompt = True
     return await generate_multiview(request)
 
 
 @router.post("/extract/clothes")
 async def extract_clothes(request: ExtractClothesRequest):
-    """Extract clothes from character image"""
+    """Extract clothes from character image - 使用智能提取"""
     if not request.image:
         raise HTTPException(status_code=400, detail="需要上传图片")
 
@@ -226,24 +240,30 @@ async def extract_clothes(request: ExtractClothesRequest):
         output_dir = str(project_root / "outputs" / asset_id)
         os.makedirs(output_dir, exist_ok=True)
 
+        print(f"[提取衣服] 开始处理 (智能提取)...")
+
         # 保存上传的图片
         input_path = base64_to_temp_file(request.image, ".png")
 
-        # 调用智能衣服提取
+        # 使用智能提取函数（会自动分析图片内容并选择最佳处理方式）
         extracted_path = smart_extract_clothing(
             image_path=input_path,
             api_key=token,
-            model_name="gemini-3-pro-image-preview",
+            model_name="gemini-2.5-flash-image",
             output_dir=output_dir,
             mode="proxy",
         )
 
         # 清理临时输入文件
-        os.unlink(input_path)
+        try:
+            os.unlink(input_path)
+        except:
+            pass
 
         if not extracted_path or not Path(extracted_path).exists():
             raise HTTPException(status_code=500, detail="衣服提取失败")
 
+        print(f"[提取衣服] 成功: {extracted_path}")
         return ExtractClothesResponse(
             assetId=asset_id,
             status="success",
@@ -277,6 +297,8 @@ async def change_clothes(request: ChangeClothesRequest):
         output_dir = str(project_root / "outputs" / asset_id)
         os.makedirs(output_dir, exist_ok=True)
 
+        print(f"[换装] 开始处理...")
+
         # 保存角色图片
         char_path = base64_to_temp_file(request.characterImage, ".png")
 
@@ -295,7 +317,10 @@ async def change_clothes(request: ChangeClothesRequest):
             view_mode=request.viewMode or "4-view",
         )
 
-        os.unlink(char_path)
+        try:
+            os.unlink(char_path)
+        except:
+            pass
 
         images = {}
         output_path = Path(output_dir)
@@ -318,6 +343,7 @@ async def change_clothes(request: ChangeClothesRequest):
         if not images:
             raise HTTPException(status_code=500, detail="换装生成失败")
 
+        print(f"[换装] 成功")
         return ChangeClothesResponse(
             assetId=asset_id,
             status="success",
@@ -363,6 +389,8 @@ async def change_style(request: ChangeStyleRequest):
         output_dir = str(project_root / "outputs" / asset_id)
         os.makedirs(output_dir, exist_ok=True)
 
+        print(f"[风格转换] 开始处理 style={request.style}")
+
         img_path = base64_to_temp_file(request.image, ".png")
 
         result = generate_character_multiview(
@@ -375,7 +403,10 @@ async def change_style(request: ChangeStyleRequest):
             use_image_reference_prompt=True,
         )
 
-        os.unlink(img_path)
+        try:
+            os.unlink(img_path)
+        except:
+            pass
 
         output_path = Path(output_dir)
         styled_image = None
@@ -389,6 +420,7 @@ async def change_style(request: ChangeStyleRequest):
         if not styled_image:
             raise HTTPException(status_code=500, detail="风格转换失败")
 
+        print(f"[风格转换] 成功")
         return ChangeStyleResponse(
             assetId=asset_id,
             status="success",
