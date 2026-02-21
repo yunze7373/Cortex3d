@@ -3,3 +3,6 @@ uvicorn>=0.24.0
 python-multipart>=0.0.6
 pydantic>=2.5.0
 python-dotenv>=1.0.0
+opencv-python>=4.8.0
+rembg>=2.0.0
+onnxruntime>=2.0.0

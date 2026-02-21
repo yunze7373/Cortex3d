@@ -118,6 +118,7 @@ def get_api_token() -> str:
             token = get_aiproxy_token()
         except:
             pass
+    # 如果没有token，返回空字符串（用于本地测试）
     return token or ""
 
 
@@ -131,8 +132,12 @@ async def generate_multiview(request: GenerateRequest):
         from config import get_aiproxy_token
 
         token = get_api_token()
+        # 如果没有token，尝试使用本地配置
         if not token:
-            raise HTTPException(status_code=400, detail="AIPROXY_TOKEN not configured")
+            try:
+                token = get_aiproxy_token()
+            except:
+                pass
 
         asset_id = str(uuid.uuid4())
         output_dir = f"outputs/{asset_id}"
@@ -285,11 +290,13 @@ async def change_clothes(request: ChangeClothesRequest):
     # 复用multiview逻辑，但使用原图作为参考
     try:
         from aiproxy_client import generate_character_multiview
-        from config import get_aiproxy_token
 
-        token = get_aiproxy_token()
+        token = get_api_token()
         if not token:
-            raise HTTPException(status_code=400, detail="AIPROXY_TOKEN not configured")
+            try:
+                token = get_aiproxy_token()
+            except:
+                pass
 
         asset_id = str(uuid.uuid4())
         output_dir = f"outputs/{asset_id}"
@@ -378,11 +385,13 @@ async def change_style(request: ChangeStyleRequest):
         description = f"same subject, {style_prompts.get(request.style, request.style)}"
 
         from aiproxy_client import generate_character_multiview
-        from config import get_aiproxy_token
 
-        token = get_aiproxy_token()
+        token = get_api_token()
         if not token:
-            raise HTTPException(status_code=400, detail="AIPROXY_TOKEN not configured")
+            try:
+                token = get_aiproxy_token()
+            except:
+                pass
 
         asset_id = str(uuid.uuid4())
         output_dir = f"outputs/{asset_id}"
