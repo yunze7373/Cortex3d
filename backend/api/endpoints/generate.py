@@ -1,6 +1,5 @@
 import os
 import sys
-import asyncio
 import base64
 import uuid
 import tempfile
@@ -12,7 +11,7 @@ from pydantic import BaseModel
 
 # Add the project root to the path
 # __file__ = /home/han/projects/cortex3d/backend/api/endpoints/generate.py
-# parent = endpoints, parent.parent = api, parent.parent.parent = backend, parent.parent.parent.parent = project_root
+# parent = endpoints, parent.parent = api, parent.parent.parent = backend, parent.parent.parent.parent = cortex3d
 project_root = Path(__file__).parent.parent.parent.parent
 scripts_dir = project_root / "scripts"
 sys.path.insert(0, str(scripts_dir))
@@ -92,7 +91,6 @@ class ChangeStyleResponse(BaseModel):
 
 def base64_to_temp_file(base64_str: str, suffix: str = ".png") -> str:
     """将base64图片保存到临时文件"""
-    # 移除data URL前缀
     if "," in base64_str:
         base64_str = base64_str.split(",")[1]
 
@@ -111,17 +109,7 @@ def image_to_base64(image_path: str) -> str:
 
 def get_api_token() -> str:
     """从环境变量获取API token"""
-    # 优先使用环境变量
-    token = os.environ.get("AIPROXY_TOKEN")
-    if not token:
-        # 尝试从配置文件读取
-        try:
-            from config import get_aiproxy_token
-            token = get_aiproxy_token()
-        except:
-            pass
-    # 如果没有token，返回空字符串（用于本地测试）
-    return token or ""
+    return os.environ.get("AIPROXY_TOKEN", "")
 
 
 # ============ API 端点 ============
@@ -131,23 +119,16 @@ async def generate_multiview(request: GenerateRequest):
     """Generate multi-view images from text description"""
     try:
         from aiproxy_client import generate_character_multiview
-        from config import get_aiproxy_token
 
         token = get_api_token()
-        # 如果没有token，尝试使用本地配置
         if not token:
-            try:
-                token = get_aiproxy_token()
-            except:
-                pass
+            raise HTTPException(status_code=400, detail="请设置 AIPROXY_TOKEN 环境变量")
 
         asset_id = str(uuid.uuid4())
-        output_dir = f"outputs/{asset_id}"
+        output_dir = str(project_root / "outputs" / asset_id)
 
-        # 创建输出目录
         os.makedirs(output_dir, exist_ok=True)
 
-        # 调用生成函数
         result = generate_character_multiview(
             character_description=request.description,
             token=token,
@@ -169,13 +150,12 @@ async def generate_multiview(request: GenerateRequest):
         )
 
         if not result:
-            raise HTTPException(status_code=500, detail="Generation failed")
+            raise HTTPException(status_code=500, detail="生成失败")
 
         # 查找生成的图片
         images = {}
         output_path = Path(output_dir)
 
-        # 视角映射
         view_mapping = {
             "single": ["front"],
             "4-view": ["front", "right", "back", "left"],
@@ -186,21 +166,18 @@ async def generate_multiview(request: GenerateRequest):
 
         views = view_mapping.get(request.viewMode or "4-view", ["front", "right", "back", "left"])
 
-        # 查找生成的文件
         for view in views:
-            # 尝试多种文件格式
             for ext in [".png", ".jpg", ".jpeg"]:
                 file_path = output_path / f"{view}{ext}"
                 if file_path.exists():
                     images[view] = image_to_base64(str(file_path))
                     break
 
-        # 添加master图
         if "front" in images:
             images["master"] = images["front"]
 
         if not images:
-            raise HTTPException(status_code=500, detail="No images generated")
+            raise HTTPException(status_code=500, detail="未找到生成的图片")
 
         return GenerateResponse(
             assetId=asset_id,
@@ -226,9 +203,8 @@ async def generate_multiview(request: GenerateRequest):
 async def generate_from_image(request: GenerateRequest):
     """Generate multi-view images from reference image"""
     if not request.referenceImage:
-        raise HTTPException(status_code=400, detail="Reference image is required")
+        raise HTTPException(status_code=400, detail="需要上传参考图片")
 
-    # 复用multiview逻辑，只是强制使用图生图
     request.useImageReferencePrompt = True
     return await generate_multiview(request)
 
@@ -237,45 +213,47 @@ async def generate_from_image(request: GenerateRequest):
 async def extract_clothes(request: ExtractClothesRequest):
     """Extract clothes from character image"""
     if not request.image:
-        raise HTTPException(status_code=400, detail="Image is required")
+        raise HTTPException(status_code=400, detail="需要上传图片")
 
     try:
-        import shutil
-        from image_processor import remove_background
+        from gemini_generator import smart_extract_clothing
+
+        token = get_api_token()
+        if not token:
+            raise HTTPException(status_code=400, detail="请设置 AIPROXY_TOKEN 环境变量")
 
         asset_id = str(uuid.uuid4())
-        output_dir = f"outputs/{asset_id}"
+        output_dir = str(project_root / "outputs" / asset_id)
         os.makedirs(output_dir, exist_ok=True)
 
         # 保存上传的图片
         input_path = base64_to_temp_file(request.image, ".png")
 
-        # 去除背景
-        import cv2
-        img = cv2.imread(input_path)
-        if img is None:
-            raise HTTPException(status_code=400, detail="Invalid image")
+        # 调用智能衣服提取
+        extracted_path = smart_extract_clothing(
+            image_path=input_path,
+            api_key=token,
+            model_name="gemini-3-pro-image-preview",
+            output_dir=output_dir,
+            mode="proxy",
+        )
 
-        # 去除背景
-        result_img = remove_background(img)
-
-        # 保存结果
-        output_path = f"{output_dir}/extracted_clothes.png"
-        cv2.imwrite(output_path, result_img)
-
-        # 清理临时文件
+        # 清理临时输入文件
         os.unlink(input_path)
+
+        if not extracted_path or not Path(extracted_path).exists():
+            raise HTTPException(status_code=500, detail="衣服提取失败")
 
         return ExtractClothesResponse(
             assetId=asset_id,
             status="success",
             originalImage=request.image,
-            extractedClothes=image_to_base64(output_path),
-            extractedProps=["道具1", "道具2"] if request.extractProps else None,
+            extractedClothes=image_to_base64(extracted_path),
+            extractedProps=None,
         )
 
-    except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"Missing dependency: {str(e)}")
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -286,31 +264,24 @@ async def extract_clothes(request: ExtractClothesRequest):
 async def change_clothes(request: ChangeClothesRequest):
     """Change character's clothes"""
     if not request.characterImage:
-        raise HTTPException(status_code=400, detail="Character image is required")
+        raise HTTPException(status_code=400, detail="需要上传角色图片")
 
-    # 服装替换也是通过生成多视角来实现
-    # 复用multiview逻辑，但使用原图作为参考
     try:
         from aiproxy_client import generate_character_multiview
 
         token = get_api_token()
         if not token:
-            try:
-                token = get_aiproxy_token()
-            except:
-                pass
+            raise HTTPException(status_code=400, detail="请设置 AIPROXY_TOKEN 环境变量")
 
         asset_id = str(uuid.uuid4())
-        output_dir = f"outputs/{asset_id}"
+        output_dir = str(project_root / "outputs" / asset_id)
         os.makedirs(output_dir, exist_ok=True)
 
-        # 保存角色图片为临时文件
+        # 保存角色图片
         char_path = base64_to_temp_file(request.characterImage, ".png")
 
-        # 构建描述
         description = request.clothesDescription or "character with new clothes"
 
-        # 调用生成
         result = generate_character_multiview(
             character_description=description,
             token=token,
@@ -324,10 +295,8 @@ async def change_clothes(request: ChangeClothesRequest):
             view_mode=request.viewMode or "4-view",
         )
 
-        # 清理临时文件
         os.unlink(char_path)
 
-        # 查找生成的图片
         images = {}
         output_path = Path(output_dir)
         view_mapping = {
@@ -347,7 +316,7 @@ async def change_clothes(request: ChangeClothesRequest):
             images["master"] = images["front"]
 
         if not images:
-            raise HTTPException(status_code=500, detail="No images generated")
+            raise HTTPException(status_code=500, detail="换装生成失败")
 
         return ChangeClothesResponse(
             assetId=asset_id,
@@ -367,11 +336,15 @@ async def change_clothes(request: ChangeClothesRequest):
 async def change_style(request: ChangeStyleRequest):
     """Change image style"""
     if not request.image:
-        raise HTTPException(status_code=400, detail="Image is required")
+        raise HTTPException(status_code=400, detail="需要上传图片")
 
     try:
-        # 风格转换也通过生成多视角API实现
-        # 使用强化的风格描述
+        from aiproxy_client import generate_character_multiview
+
+        token = get_api_token()
+        if not token:
+            raise HTTPException(status_code=400, detail="请设置 AIPROXY_TOKEN 环境变量")
+
         style_prompts = {
             "anime": "anime style, cel-shaded, vibrant colors",
             "cartoon": "cartoon style, comic book art",
@@ -386,20 +359,10 @@ async def change_style(request: ChangeStyleRequest):
 
         description = f"same subject, {style_prompts.get(request.style, request.style)}"
 
-        from aiproxy_client import generate_character_multiview
-
-        token = get_api_token()
-        if not token:
-            try:
-                token = get_aiproxy_token()
-            except:
-                pass
-
         asset_id = str(uuid.uuid4())
-        output_dir = f"outputs/{asset_id}"
+        output_dir = str(project_root / "outputs" / asset_id)
         os.makedirs(output_dir, exist_ok=True)
 
-        # 保存原图
         img_path = base64_to_temp_file(request.image, ".png")
 
         result = generate_character_multiview(
@@ -414,7 +377,6 @@ async def change_style(request: ChangeStyleRequest):
 
         os.unlink(img_path)
 
-        # 找生成的图
         output_path = Path(output_dir)
         styled_image = None
 
@@ -425,7 +387,7 @@ async def change_style(request: ChangeStyleRequest):
                 break
 
         if not styled_image:
-            raise HTTPException(status_code=500, detail="No styled image generated")
+            raise HTTPException(status_code=500, detail="风格转换失败")
 
         return ChangeStyleResponse(
             assetId=asset_id,
@@ -444,14 +406,12 @@ async def change_style(request: ChangeStyleRequest):
 
 @router.get("/history")
 async def get_history():
-    """Get generation history"""
     return []
 
 
 @router.get("/download/{asset_id}")
 async def download_asset(asset_id: str):
-    """Download generated assets"""
-    output_dir = f"outputs/{asset_id}"
+    output_dir = str(project_root / "outputs" / asset_id)
     if not os.path.exists(output_dir):
-        raise HTTPException(status_code=404, detail="Asset not found")
+        raise HTTPException(status_code=404, detail="素材不存在")
     return {"asset_id": asset_id, "path": output_dir}
