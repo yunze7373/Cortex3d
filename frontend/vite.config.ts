@@ -8,7 +8,8 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        // 改成WSL的IP地址，例如 172.xx.xx.xx
+        target: 'http://192.168.3.9:8000',
         changeOrigin: true,
       },
     },
