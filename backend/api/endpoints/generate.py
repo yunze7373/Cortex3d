@@ -11,10 +11,12 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 # Add the project root to the path
-project_root = Path(__file__).parent.parent.parent
+# __file__ = /home/han/projects/cortex3d/backend/api/endpoints/generate.py
+# parent = endpoints, parent.parent = api, parent.parent.parent = backend, parent.parent.parent.parent = project_root
+project_root = Path(__file__).parent.parent.parent.parent
 scripts_dir = project_root / "scripts"
-sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(scripts_dir))
+sys.path.insert(0, str(project_root))
 
 router = APIRouter()
 
