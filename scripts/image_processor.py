@@ -167,7 +167,9 @@ def remove_small_fragments(image, min_area_ratio: float = 0.05):
             
         # 检查是否接触边界
         x, y, w, h = stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP], stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
-        touches_border = (x <= 1) or (y <= 1) or (x + w >= width - 1) or (y + h >= height - 1)
+        # 边缘容忍度：由于背景去除的边缘平滑/腐蚀效应，邻居残肢可能离绝对边界有几像素距离
+        # 左右边界更可能是邻居残肢，放宽容忍度到 15 像素
+        touches_border = (x <= 15) or (y <= 10) or (x + w >= width - 15) or (y + h >= height - 10)
         
         is_small = area < (max_area * min_area_ratio)
         

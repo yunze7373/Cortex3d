@@ -1512,7 +1512,8 @@ def smart_extract_clothing(
     mode: str = "proxy",
     proxy_base_url: str = None,
     extract_props: bool = False,
-    export_prompt: bool = False
+    export_prompt: bool = False,
+    progress_callback: Optional[callable] = None
 ) -> Optional[Tuple[str, Optional[List[str]]]]:
     """
     智能分析图片并提取衣服
