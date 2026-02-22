@@ -11,6 +11,10 @@ export default defineConfig({
         target: 'http://172.28.124.41:8000',
         changeOrigin: true,
       },
+      '/outputs': {
+        target: 'http://172.28.124.41:8000',
+        changeOrigin: true,
+      },
     },
   },
 })

@@ -1723,35 +1723,37 @@ Clothing description: [brief description of the main clothing items visible]"""
         _report("正在指挥视觉大模型进行全保真服装解剖与剔除...", 60)
         
         # 强调只提取可见部分，不要脑补不存在的部分
-        base_prompt_requirements = """# ROLE: High-Precision Visual Asset Extractor (Cortex3d Specialized)
+        base_prompt_requirements = """# ROLE: Master Apparel Visual Assets Creator (Cortex3d Specialized)
 
 # GOAL:
-Perform a pixel-perfect extraction of clothing items from the provided source image for 3D reconstruction. You are a precision cutout tool, NOT a designer.
+Perform a pixel-perfect, industrial-grade extraction of ALL clothing items from the provided source image for professional 3D reconstruction and e-commerce display. You are a precision tool creating structured apparel assets.
 
 # CRITICAL CONSTRAINTS (ZERO TOLERANCE):
 1. **ABSOLUTE FIDELITY (NO REDESIGN)**: 
    - NEVER change the design, cut, shape, neckline, or silhouette of the clothing.
    - If a dress has specific wrinkles or folds, preserve them exactly.
    - Treat this as a strictly photorealistic cropping task. Do not "genericize" the clothing.
-2. **VISIBILITY FILTER**: 
-   - EXTRACT ONLY items that are >70% visible. 
-   - DO NOT "hallucinate" or complete missing parts.
+2. **COMPLETE GARMENT RECONSTRUCTION**: 
+   - Visually reconstruct the COMPLETE garment. 
+   - If a shirt is tucked in or partially covered by arms, YOU MUST seamlessly fill in and complete the missing parts to show the ENTIRE flat-lay structure of the item.
+   - The final output must look like the complete unworn clothes laid out perfectly.
 3. **ZERO HUMAN REMAINS**: 
    - Remove ALL skin, hair, faces, and body parts. 
-   - Use "ghost mannequin" style where the clothing exactly maintains its 3D volume, folds, and shape as worn, but contains absolutely no human.
+   - Use "ghost mannequin" or "flat lay" styling where the clothing maintains its volume but contains absolutely no human.
 4. **1:1 COLOR & TEXTURE**: 
    - Preserve exact fabric texture (weave, sheen, grain) and hex colors.
 
-# OUTPUT SPECIFICATIONS:
+# OUTPUT SPECIFICATIONS (INDUSTRIAL GRADE LAYOUT):
 - **BACKGROUND**: Solid pure white (#FFFFFF).
-- **LAYOUT**: 
-    - Neatly arranged in the center.
-    - Minimum 50px buffer between separate items.
-    - Items must be oriented vertically (e.g., jackets upright).
+- **STRUCTURED LAYOUT**: 
+    - Neatly arrange ALL extracted items in the center of the image.
+    - If there are multiple items (e.g., jacket, shirt, pants), arrange them logically (top to bottom) like a professional fashion outfit grid.
+    - Create a minimum 50px buffer between separate items.
+    - Items must be oriented perfectly vertically and symmetrically (e.g., jackets upright, pants straight down).
 - **LIGHTING**: Preserve original lighting and volume.
 
 # NEGATIVE PROMPT:
-human skin, face, hair, body parts, altered design, generic shape, blurred edges, artifacts, stylized artistic filters, shadows on background.
+human skin, face, hair, body parts, altered design, generic shape, blurred edges, artifacts, stylized artistic filters, shadows on background, missing sleeves, cut-off collars, messy arrangement.
 
 # TASK:
 Analyze the input image, identify the MAIN clothing items (shirts, pants, dresses, coats, skirts)"""

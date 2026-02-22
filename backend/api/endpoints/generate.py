@@ -282,7 +282,7 @@ async def generate_multiview(request: GenerateRequest):
 
                 for file_path in potential_paths:
                     if file_path.exists():
-                        images[view] = image_to_base64(str(file_path))
+                        images[view] = f"/outputs/{asset_id}/{file_path.name}"
                         break
 
             if "front" in images:
@@ -418,7 +418,7 @@ async def extract_clothes(request: ExtractClothesRequest):
                 "assetId": asset_id,
                 "status": "success",
                 "originalImage": request.image,
-                "extractedClothes": image_to_base64(extracted_path),
+                "extractedClothes": f"/outputs/{asset_id}/{Path(extracted_path).name}",
                 "extractedProps": extracted_props,
             }, message="提取完毕", progress=100)
             
@@ -495,11 +495,11 @@ async def change_clothes(request: ChangeClothesRequest):
             raise HTTPException(status_code=500, detail="换装生成失败")
 
         # 将生成的单张图片作为主图返回，放在 front 和 master 键下
-        output_base64 = image_to_base64(result)
+        output_url = f"/outputs/{asset_id}/{Path(result).name}"
         
         images = {
-            "master": output_base64,
-            "front": output_base64
+            "master": output_url,
+            "front": output_url
         }
 
         print(f"[换装] 成功")
@@ -573,7 +573,7 @@ async def change_style(request: ChangeStyleRequest):
         for ext in [".png", ".jpg", ".jpeg"]:
             files = list(output_path.glob(f"*{ext}"))
             if files:
-                styled_image = image_to_base64(str(files[0]))
+                styled_image = f"/outputs/{asset_id}/{files[0].name}"
                 break
 
         if not styled_image:

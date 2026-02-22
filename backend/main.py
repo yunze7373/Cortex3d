@@ -1,7 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import logging
+import os
+from pathlib import Path
 
 load_dotenv()
 
@@ -32,6 +35,12 @@ from backend.api.endpoints import generate, health
 
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(generate.router, prefix="/api", tags=["Generation"])
+
+# Mount outputs directory for static file serving
+project_root = Path(__file__).parent.parent
+outputs_dir = project_root / "outputs"
+os.makedirs(outputs_dir, exist_ok=True)
+app.mount("/outputs", StaticFiles(directory=str(outputs_dir)), name="outputs")
 
 
 @app.get("/")
