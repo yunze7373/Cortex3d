@@ -164,6 +164,21 @@ async def generate_multiview(request: GenerateRequest):
                 # 从另一个线程安全地推送到异步队列
                 loop.call_soon_threadsafe(queue.put_nowait, {"msg": msg, "percent": percent})
             
+            # 清理自定义视图字符串，处理全角/半角逗号，将单字符串转为列表
+            clean_custom_views = None
+            if request.customViews:
+                clean_custom_views = []
+                for v in request.customViews:
+                    # 替换全角逗号为半角逗号，并分割
+                    parts = str(v).replace('，', ',').split(',')
+                    for p in parts:
+                        clean_p = p.strip().lower()
+                        if clean_p:
+                            clean_custom_views.append(clean_p)
+                # 如果清理后为空，则设为None回退到默认
+                if not clean_custom_views:
+                    clean_custom_views = None
+
             # 使用 asyncio.to_thread 运行阻塞的生成函数
             def sync_generate():
                 return generate_character_multiview(
@@ -179,7 +194,7 @@ async def generate_multiview(request: GenerateRequest):
                     use_strict_mode=request.useStrictMode,
                     resolution=request.resolution or "2K",
                     view_mode=request.viewMode or "4-view",
-                    custom_views=request.customViews,
+                    custom_views=clean_custom_views,
                     use_negative_prompt=request.useNegativePrompt,
                     negative_categories=request.negativeCategories,
                     subject_only=request.subjectOnly,
@@ -227,23 +242,45 @@ async def generate_multiview(request: GenerateRequest):
                 "4-view": ["front", "right", "back", "left"],
                 "6-view": ["front", "frontRight", "right", "back", "left", "frontLeft"],
                 "8-view": ["front", "frontRight", "right", "backRight", "back", "backLeft", "left", "frontLeft"],
-                "custom": request.customViews or ["front"],
+                "custom": clean_custom_views or ["front"],
             }
 
             views = view_mapping.get(request.viewMode or "4-view", ["front", "right", "back", "left"])
 
             yield create_ndjson_event("progress", message="正在构建响应数据...", progress=95)
 
-            # 使用asset_id前缀来查找文件（脚本生成的文件带有asset_id前缀）
-            for view in views:
-                for ext in [".png", ".jpg", ".jpeg"]:
-                    # 尝试带asset_id前缀的文件名
-                    file_path = output_path / f"{asset_id}_{view}{ext}"
-                    if file_path.exists():
-                        images[view] = image_to_base64(str(file_path))
-                        break
-                    # 尝试不带前缀的文件名
-                    file_path = output_path / f"{view}{ext}"
+            # 使用asset_id前缀来查找文件
+            for i, view in enumerate(views):
+                # 将 camelCase 转换为 snake_case 以匹配底层切割生成的文件名 (如 frontRight -> front_right)
+                snake_view = view.replace("Right", "_right").replace("Left", "_left")
+
+                # 尝试通用的命名方式 (assetId_view.png)
+                potential_paths = [
+                    output_path / f"{asset_id}_{view}.png",
+                    output_path / f"{asset_id}_{view}.jpg",
+                    output_path / f"{asset_id}_{view}.jpeg",
+                    output_path / f"{view}.png",
+                    output_path / f"{view}.jpg",
+                    output_path / f"{view}.jpeg",
+                    # 尝试 snake_case 版本 (例如 front_right.png)
+                    output_path / f"{asset_id}_{snake_view}.png",
+                    output_path / f"{asset_id}_{snake_view}.jpg",
+                    output_path / f"{asset_id}_{snake_view}.jpeg",
+                    output_path / f"{snake_view}.png",
+                    output_path / f"{snake_view}.jpg",
+                    output_path / f"{snake_view}.jpeg",
+                ]
+                
+                # 如果是 custom mode 或者是其他非标准个数模式，底层切割算法可能输出为 _view_1, _view_2
+                view_index = i + 1
+                potential_paths.extend([
+                    output_path / f"{asset_id}_view_{view_index}.png",
+                    output_path / f"{asset_id}_view_{view_index}.jpg",
+                    output_path / f"view_{view_index}.png",
+                    output_path / f"view_{view_index}.jpg",
+                ])
+
+                for file_path in potential_paths:
                     if file_path.exists():
                         images[view] = image_to_base64(str(file_path))
                         break
