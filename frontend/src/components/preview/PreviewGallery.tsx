@@ -9,12 +9,14 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { Button, Card, ImageGrid } from '../common';
+import { Button, Card, ImageGrid, RealProgress } from '../common';
 import type { GenerateResponse } from '../../types';
+import type { ProgressEvent } from '../../services/api';
 
 interface PreviewGalleryProps {
   generation: GenerateResponse | null;
   isGenerating: boolean;
+  progressState?: ProgressEvent;
 }
 
 const viewOrder = ['front', 'frontRight', 'right', 'backRight', 'back', 'backLeft', 'left', 'frontLeft'];
@@ -22,6 +24,7 @@ const viewOrder = ['front', 'frontRight', 'right', 'backRight', 'back', 'backLef
 export const PreviewGallery: React.FC<PreviewGalleryProps> = ({
   generation,
   isGenerating,
+  progressState,
 }) => {
   const [selectedView, setSelectedView] = useState<string>('front');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -44,8 +47,8 @@ export const PreviewGallery: React.FC<PreviewGalleryProps> = ({
 
   const images = generation?.images
     ? Object.entries(generation.images)
-        .filter(([_, url]) => url)
-        .map(([view, url]) => ({ id: view, view, url: url! }))
+      .filter(([_, url]) => url)
+      .map(([view, url]) => ({ id: view, view, url: url! }))
     : [];
 
   const sortedImages = [...images].sort(
@@ -119,9 +122,12 @@ export const PreviewGallery: React.FC<PreviewGalleryProps> = ({
               exit={{ opacity: 0 }}
               className="absolute inset-0 flex items-center justify-center"
             >
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-16 h-16 border-4 border-accent-primary/30 border-t-accent-primary rounded-full animate-spin" />
-                <p className="text-text-secondary">正在生成您的图像...</p>
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 bg-bg-secondary w-full h-full relative" style={{ minHeight: '300px' }}>
+                <RealProgress
+                  isProcessing={isGenerating}
+                  progress={progressState?.progress || 0}
+                  message={progressState?.message || '正在准备生成...'}
+                />
               </div>
             </motion.div>
           ) : currentImage ? (

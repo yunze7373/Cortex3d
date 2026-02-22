@@ -7,4 +7,6 @@ export { Modal } from './Modal';
 export { Checkbox } from './Checkbox';
 export { ImageUploader, ImageGrid } from './ImageUploader';
 export { ProgressIndicator, LoadingOverlay } from './Progress';
+export { SimulatedProgress } from './SimulatedProgress';
+export { RealProgress } from './RealProgress';
 export { Slider } from './Slider';

@@ -11,18 +11,116 @@ export const apiClient = axios.create({
   },
 });
 
+// ============ NDJSON 流式请求工具 ============
+
+export interface ProgressEvent {
+  message: string;
+  progress: number;
+}
+
+async function streamingFetch<T>(
+  url: string,
+  body: any,
+  onProgress?: (event: ProgressEvent) => void
+): Promise<T> {
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+
+  const response = await fetch(fullUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`);
+  }
+
+  if (!response.body) {
+    throw new Error('响应缺少 body');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  return new Promise((resolve, reject) => {
+    const processStream = async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+
+          // 留着最后一行不完整的JSON留到下次解析
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+
+            try {
+              const parsed = JSON.parse(line);
+
+              if (parsed.type === 'error') {
+                reject(new Error(parsed.message || '服务器内部错误'));
+                return;
+              } else if (parsed.type === 'progress') {
+                if (onProgress) {
+                  onProgress({
+                    message: parsed.message || '处理中...',
+                    progress: parsed.progress || 0
+                  });
+                }
+              } else if (parsed.type === 'result') {
+                resolve(parsed.data as T);
+                return;
+              }
+            } catch (e) {
+              console.error('Invalid JSON line:', line, e);
+            }
+          }
+        }
+
+        // 处理最后可能剩下的内容
+        if (buffer.trim()) {
+          try {
+            const parsed = JSON.parse(buffer);
+            if (parsed.type === 'error') {
+              reject(new Error(parsed.message || '服务器内部错误'));
+            } else if (parsed.type === 'result') {
+              resolve(parsed.data as T);
+            }
+          } catch (e) {
+            console.error('Invalid final JSON line:', buffer, e);
+          }
+        }
+
+      } catch (e) {
+        reject(e);
+      }
+    };
+
+    processStream();
+  });
+}
+
 // ============ 图像生成 ============
 
-export const generateFromText = async (request: GenerateRequest): Promise<GenerateResponse> => {
-  const response = await apiClient.post<GenerateResponse>('/api/generate/multiview', request);
-  return response.data;
+export const generateFromText = async (
+  request: GenerateRequest,
+  onProgress?: (event: ProgressEvent) => void
+): Promise<GenerateResponse> => {
+  return streamingFetch<GenerateResponse>('/api/generate/multiview', request, onProgress);
 };
 
 export const generateFromImage = async (
-  request: GenerateRequest & { referenceImage: string }
+  request: GenerateRequest & { referenceImage: string },
+  onProgress?: (event: ProgressEvent) => void
 ): Promise<GenerateResponse> => {
-  const response = await apiClient.post<GenerateResponse>('/api/generate/from-image', request);
-  return response.data;
+  return streamingFetch<GenerateResponse>('/api/generate/from-image', request, onProgress);
 };
 
 // ============ 服装提取 ============
@@ -40,9 +138,11 @@ export interface ExtractClothesResponse {
   extractedProps?: string[];
 }
 
-export const extractClothes = async (request: ExtractClothesRequest): Promise<ExtractClothesResponse> => {
-  const response = await apiClient.post<ExtractClothesResponse>('/api/extract/clothes', request);
-  return response.data;
+export const extractClothes = async (
+  request: ExtractClothesRequest,
+  onProgress?: (event: ProgressEvent) => void
+): Promise<ExtractClothesResponse> => {
+  return streamingFetch<ExtractClothesResponse>('/api/extract/clothes', request, onProgress);
 };
 
 // ============ 换衣服 ============

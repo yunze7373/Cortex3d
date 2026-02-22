@@ -7,7 +7,7 @@ import { PreviewGallery } from '../components/preview';
 import { Button, Modal, Input } from '../components/common';
 import { useGenerationStore, useSettingsStore } from '../stores/generationStore';
 import type { GenerateResponse, GenerationHistoryItem, FeatureTab } from '../types';
-import { generateFromText, generateFromImage } from '../services/api';
+import { generateFromText, generateFromImage, type ProgressEvent } from '../services/api';
 
 interface GenerationPageProps {
   activeTab: FeatureTab;
@@ -16,6 +16,7 @@ interface GenerationPageProps {
 
 const GenerationPage: React.FC<GenerationPageProps> = ({ activeTab, onTabChange }) => {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [progressState, setProgressState] = useState<ProgressEvent>({ message: '', progress: 0 });
 
   const {
     formState,
@@ -57,12 +58,14 @@ const GenerationPage: React.FC<GenerationPageProps> = ({ activeTab, onTabChange 
       };
 
       if (formState.referenceImage) {
+        setProgressState({ message: '正在初始化图生图参数...', progress: 0 });
         response = await generateFromImage({
           ...request,
           referenceImage: formState.referenceImage,
-        });
+        }, (event) => setProgressState(event));
       } else {
-        response = await generateFromText(request);
+        setProgressState({ message: '正在初始化文生图参数...', progress: 0 });
+        response = await generateFromText(request, (event) => setProgressState(event));
       }
 
       setCurrentGeneration(response);
@@ -125,7 +128,11 @@ const GenerationPage: React.FC<GenerationPageProps> = ({ activeTab, onTabChange 
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <PreviewGallery generation={currentGeneration} isGenerating={isGenerating} />
+            <PreviewGallery
+              generation={currentGeneration}
+              isGenerating={isGenerating}
+              progressState={progressState}
+            />
           </motion.div>
         </div>
 

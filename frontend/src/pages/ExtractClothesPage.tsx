@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Scissors, Upload, Download, Loader2 } from 'lucide-react';
+import { Scissors, Upload, Download } from 'lucide-react';
 import { MainLayout } from '../components/layout';
-import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, ImageUploader } from '../components/common';
-import { extractClothes } from '../services/api';
+import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, ImageUploader, RealProgress } from '../components/common';
+import { extractClothes, type ProgressEvent } from '../services/api';
 import type { FeatureTab } from '../types';
 
 interface ExtractClothesPageProps {
@@ -21,6 +21,7 @@ const ExtractClothesPage: React.FC<ExtractClothesPageProps> = ({ activeTab, onTa
     extractedProps?: string[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progressState, setProgressState] = useState<ProgressEvent>({ message: '', progress: 0 });
 
   const handleImageSelect = (base64: string) => {
     setSelectedImage(base64);
@@ -38,10 +39,11 @@ const ExtractClothesPage: React.FC<ExtractClothesPageProps> = ({ activeTab, onTa
     setError(null);
 
     try {
+      setProgressState({ message: '正在初始化...', progress: 0 });
       const response = await extractClothes({
         image: selectedImage,
         extractProps,
-      });
+      }, (event) => setProgressState(event));
 
       setResult({
         originalImage: response.originalImage,
@@ -151,8 +153,11 @@ const ExtractClothesPage: React.FC<ExtractClothesPageProps> = ({ activeTab, onTa
             <CardContent>
               {isProcessing ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="w-12 h-12 text-accent-primary animate-spin mb-4" />
-                  <p className="text-text-secondary">正在提取服装...</p>
+                  <RealProgress
+                    isProcessing={isProcessing}
+                    progress={progressState.progress}
+                    message={progressState.message}
+                  />
                 </div>
               ) : result ? (
                 <div className="space-y-4">

@@ -1531,10 +1531,17 @@ def smart_extract_clothing(
         output_dir: 输出目录
         mode: 调用模式 (proxy/direct)
         proxy_base_url: 代理地址
+        extract_props: 是否提取道具
+        export_prompt: 是否仅打印提示词
+        progress_callback: 进度回调函数，接收 (state_msg, percent) 参数
     
     Returns:
         处理后的图片路径，失败返回None
     """
+    def _report(msg: str, percent: int):
+        if progress_callback:
+            progress_callback(msg, percent)
+            
     from pathlib import Path
     import requests
     import base64
@@ -1542,6 +1549,7 @@ def smart_extract_clothing(
     _ensure_imports()
     
     print(f"  🔍 步骤1: AI分析图片内容...")
+    _report("正在与AI引擎连接并分析图片内容...", 10)
     
     # =========================================================================
     # 步骤1: 用AI分析图片内容
@@ -1663,6 +1671,7 @@ Clothing description: [brief description of the main clothing items visible]"""
     # 情况2: 纯衣服，有背景 → 仅去除背景
     if content_type == "pure_clothing" and has_background:
         print(f"  🔪 步骤2: 去除背景...")
+        _report("检测到图片存在无关背景，正在采用图像分割大模型进行精准扣除...", 40)
         try:
             from image_processor import remove_background
             import cv2
@@ -1677,6 +1686,7 @@ Clothing description: [brief description of the main clothing items visible]"""
             cv2.imwrite(str(processed_path), processed)
             
             print(f"     ✅ 背景已去除: {processed_path.name}")
+            _report("图像分割完成，正在保存透明背景图像...", 100)
             return str(processed_path)
             
         except Exception as e:
@@ -1691,6 +1701,7 @@ Clothing description: [brief description of the main clothing items visible]"""
         intermediate_path = image_path
         if has_background:
             print(f"  🔪 步骤2a: 去除背景...")
+            _report("正在使用图像分割引擎扣除环境背景...", 40)
             try:
                 from image_processor import remove_background
                 import cv2
@@ -1708,6 +1719,7 @@ Clothing description: [brief description of the main clothing items visible]"""
         
         # 步骤2b: AI提取衣服
         print(f"  🎨 步骤2b: AI提取衣服...")
+        _report("正在指挥视觉大模型进行全保真服装解剖与剔除...", 60)
         
         # 强调只提取可见部分，不要脑补不存在的部分
         base_prompt_requirements = """# ROLE: High-Precision Visual Asset Extractor (Cortex3d Specialized)
@@ -1790,6 +1802,7 @@ DO NOT draw these items under any circumstances."""
             
             if extract_props and extracted_path:
                 print(f"  🔍 步骤3: 识别提取出的道具...")
+                _report("正在分析提取结果并整理附属道具名录...", 85)
                 # 识别刚刚提取出的图像中的道具
                 identify_prompt = """Look at this image containing extracted clothing and possibly props/accessories.
 Please list any distinct props or accessories (like weapons, bags, hats, distinctive jewelry, etc.) that you see. 
@@ -1822,6 +1835,7 @@ Respond ONLY with a comma-separated list of the props, or 'None' if there are no
 
             if extracted_path:
                 print(f"     ✅ 衣服提取完成: {Path(extracted_path).name}")
+                _report("全保真提取处理完成！", 100)
                 return (extracted_path, extracted_props)
             else:
                 print(f"     ⚠️ 衣服提取失败，使用去背景后的图片")

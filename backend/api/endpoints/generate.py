@@ -107,116 +107,175 @@ def image_to_base64(image_path: str) -> str:
 
 def get_api_token() -> str:
     """从环境变量获取API token"""
+import json
+import asyncio
+from fastapi.responses import StreamingResponse
+
+def get_api_token() -> str:
+    """从环境变量获取API token"""
     return os.environ.get("AIPROXY_TOKEN", "")
 
+# ============ 辅助函数 ============
+
+def create_ndjson_event(event_type: str, data: dict = None, message: str = None, progress: int = None) -> str:
+    """创建 NDJSON 的单行记录"""
+    payload = {"type": event_type}
+    if data is not None:
+        payload["data"] = data
+    if message is not None:
+        payload["message"] = message
+    if progress is not None:
+        payload["progress"] = progress
+    return json.dumps(payload, ensure_ascii=False) + "\n"
 
 # ============ API 端点 ============
 
 @router.post("/generate/multiview")
 async def generate_multiview(request: GenerateRequest):
-    """Generate multi-view images from text description"""
-    try:
-        from aiproxy_client import generate_character_multiview
+    """Generate multi-view images from text description (Streaming NDJSON)"""
+    
+    async def event_generator():
+        try:
+            from aiproxy_client import generate_character_multiview
 
-        token = get_api_token()
-        if not token:
-            raise HTTPException(status_code=400, detail="请设置 AIPROXY_TOKEN 环境变量")
+            token = get_api_token()
+            if not token:
+                yield create_ndjson_event("error", message="请设置 AIPROXY_TOKEN 环境变量")
+                return
 
-        asset_id = str(uuid.uuid4())
-        output_dir = str(project_root / "outputs" / asset_id)
+            asset_id = str(uuid.uuid4())
+            output_dir = str(project_root / "outputs" / asset_id)
 
-        os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(output_dir, exist_ok=True)
 
-        # 处理参考图片（如果是base64则保存到临时文件）
-        reference_image_path = None
-        if request.referenceImage:
-            reference_image_path = base64_to_temp_file(request.referenceImage, ".png")
+            # 处理参考图片（如果是base64则保存到临时文件）
+            reference_image_path = None
+            if request.referenceImage:
+                reference_image_path = base64_to_temp_file(request.referenceImage, ".png")
 
-        print(f"[生成多视角] 开始生成, description={request.description[:50]}...")
+            print(f"[生成多视角] 开始生成, description={request.description[:50]}...")
+            yield create_ndjson_event("progress", message="正在准备请求...", progress=1)
 
-        result = generate_character_multiview(
-            character_description=request.description,
-            token=token,
-            output_dir=output_dir,
-            auto_cut=True,
-            model=request.model or "gemini-3-pro-image-preview",
-            style=request.style or "cinematic character",
-            asset_id=asset_id,
-            reference_image_path=reference_image_path,
-            use_image_reference_prompt=request.useImageReferencePrompt,
-            use_strict_mode=request.useStrictMode,
-            resolution=request.resolution or "2K",
-            view_mode=request.viewMode or "4-view",
-            custom_views=request.customViews,
-            use_negative_prompt=request.useNegativePrompt,
-            negative_categories=request.negativeCategories,
-            subject_only=request.subjectOnly,
-            with_props=request.withProps,
-        )
+            # 建立一个队列用于同步非阻塞线程与异步生成器之间的进度信息
+            queue = asyncio.Queue()
+            loop = asyncio.get_running_loop()
+            
+            def progress_callback(msg: str, percent: int):
+                # 从另一个线程安全地推送到异步队列
+                loop.call_soon_threadsafe(queue.put_nowait, {"msg": msg, "percent": percent})
+            
+            # 使用 asyncio.to_thread 运行阻塞的生成函数
+            def sync_generate():
+                return generate_character_multiview(
+                    character_description=request.description,
+                    token=token,
+                    output_dir=output_dir,
+                    auto_cut=True,
+                    model=request.model or "gemini-3-pro-image-preview",
+                    style=request.style or "cinematic character",
+                    asset_id=asset_id,
+                    reference_image_path=reference_image_path,
+                    use_image_reference_prompt=request.useImageReferencePrompt,
+                    use_strict_mode=request.useStrictMode,
+                    resolution=request.resolution or "2K",
+                    view_mode=request.viewMode or "4-view",
+                    custom_views=request.customViews,
+                    use_negative_prompt=request.useNegativePrompt,
+                    negative_categories=request.negativeCategories,
+                    subject_only=request.subjectOnly,
+                    with_props=request.withProps,
+                    progress_callback=progress_callback
+                )
 
-        # 清理临时参考图片
-        if reference_image_path:
-            try:
-                os.unlink(reference_image_path)
-            except:
-                pass
+            # 启动工作线程
+            task = asyncio.create_task(asyncio.to_thread(sync_generate))
+            
+            # 持续监听队列更新，同时关注任务是否完成
+            while not task.done():
+                try:
+                    # 等待队列消息，设置超时以便定期检查 task 状态
+                    update = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield create_ndjson_event("progress", message=update["msg"], progress=update["percent"])
+                except asyncio.TimeoutError:
+                    continue
 
-        if not result:
-            raise HTTPException(status_code=500, detail="生成失败")
+            # 获取返回值或抛出异常
+            result = task.result()
+            
+            # 清空剩余的队列内容
+            while not queue.empty():
+                update = queue.get_nowait()
+                yield create_ndjson_event("progress", message=update["msg"], progress=update["percent"])
 
-        # 查找生成的图片
-        images = {}
-        output_path = Path(output_dir)
+            # 清理临时参考图片
+            if reference_image_path:
+                try:
+                    os.unlink(reference_image_path)
+                except:
+                    pass
 
-        view_mapping = {
-            "single": ["front"],
-            "4-view": ["front", "right", "back", "left"],
-            "6-view": ["front", "frontRight", "right", "back", "left", "frontLeft"],
-            "8-view": ["front", "frontRight", "right", "backRight", "back", "backLeft", "left", "frontLeft"],
-            "custom": request.customViews or ["front"],
-        }
+            if not result:
+                yield create_ndjson_event("error", message="图像生成失败")
+                return
 
-        views = view_mapping.get(request.viewMode or "4-view", ["front", "right", "back", "left"])
+            # 查找生成的图片
+            images = {}
+            output_path = Path(output_dir)
 
-        # 使用asset_id前缀来查找文件（脚本生成的文件带有asset_id前缀）
-        for view in views:
-            for ext in [".png", ".jpg", ".jpeg"]:
-                # 尝试带asset_id前缀的文件名
-                file_path = output_path / f"{asset_id}_{view}{ext}"
-                if file_path.exists():
-                    images[view] = image_to_base64(str(file_path))
-                    break
-                # 尝试不带前缀的文件名
-                file_path = output_path / f"{view}{ext}"
-                if file_path.exists():
-                    images[view] = image_to_base64(str(file_path))
-                    break
+            view_mapping = {
+                "single": ["front"],
+                "4-view": ["front", "right", "back", "left"],
+                "6-view": ["front", "frontRight", "right", "back", "left", "frontLeft"],
+                "8-view": ["front", "frontRight", "right", "backRight", "back", "backLeft", "left", "frontLeft"],
+                "custom": request.customViews or ["front"],
+            }
 
-        if "front" in images:
-            images["master"] = images["front"]
+            views = view_mapping.get(request.viewMode or "4-view", ["front", "right", "back", "left"])
 
-        if not images:
-            raise HTTPException(status_code=500, detail="未找到生成的图片")
+            yield create_ndjson_event("progress", message="正在构建响应数据...", progress=95)
 
-        print(f"[生成多视角] 成功, views={list(images.keys())}")
-        return GenerateResponse(
-            assetId=asset_id,
-            status="success",
-            images=images,
-            metadata={
-                "description": request.description,
-                "style": request.style,
-                "model": request.model,
-                "createdAt": "2024-01-01T00:00:00Z",
-            },
-        )
+            # 使用asset_id前缀来查找文件（脚本生成的文件带有asset_id前缀）
+            for view in views:
+                for ext in [".png", ".jpg", ".jpeg"]:
+                    # 尝试带asset_id前缀的文件名
+                    file_path = output_path / f"{asset_id}_{view}{ext}"
+                    if file_path.exists():
+                        images[view] = image_to_base64(str(file_path))
+                        break
+                    # 尝试不带前缀的文件名
+                    file_path = output_path / f"{view}{ext}"
+                    if file_path.exists():
+                        images[view] = image_to_base64(str(file_path))
+                        break
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+            if "front" in images:
+                images["master"] = images["front"]
+
+            if not images:
+                yield create_ndjson_event("error", message="未找到生成的图片")
+                return
+
+            print(f"[生成多视角] 成功, views={list(images.keys())}")
+            
+            # 返回最终完成的事件
+            yield create_ndjson_event("result", data={
+                "assetId": asset_id,
+                "status": "success",
+                "images": images,
+                "metadata": {
+                    "description": request.description,
+                    "style": request.style,
+                    "model": request.model,
+                    "createdAt": "2024-01-01T00:00:00Z",
+                },
+            }, message="生成完毕", progress=100)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield create_ndjson_event("error", message=f"服务器内部异常: {str(e)}")
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 
 @router.post("/generate/from-image")
@@ -232,65 +291,101 @@ async def generate_from_image(request: GenerateRequest):
 
 @router.post("/extract/clothes")
 async def extract_clothes(request: ExtractClothesRequest):
-    """Extract clothes from character image - 使用智能提取"""
-    if not request.image:
-        raise HTTPException(status_code=400, detail="需要上传图片")
-
-    try:
-        from gemini_generator import smart_extract_clothing
-
-        token = get_api_token()
-        if not token:
-            raise HTTPException(status_code=400, detail="请设置 AIPROXY_TOKEN 环境变量")
-
-        asset_id = str(uuid.uuid4())
-        output_dir = str(project_root / "outputs" / asset_id)
-        os.makedirs(output_dir, exist_ok=True)
-
-        print(f"[提取衣服] 开始处理 (智能提取)...")
-
-        # 保存上传的图片
-        input_path = base64_to_temp_file(request.image, ".png")
-
-        # 使用智能提取函数（会自动分析图片内容并选择最佳处理方式）
-        result = smart_extract_clothing(
-            image_path=input_path,
-            api_key=token,
-            model_name="gemini-2.5-flash-image",
-            output_dir=output_dir,
-            mode="proxy",
-            extract_props=request.extractProps
-        )
-
-        extracted_path = None
-        extracted_props = None
-        if result:
-             extracted_path, extracted_props = result
-
-        # 清理临时输入文件
+    """Extract clothes from character image - 使用智能提取 (Streaming NDJSON)"""
+    
+    async def event_generator():
         try:
-            os.unlink(input_path)
-        except:
-            pass
+            if not request.image:
+                yield create_ndjson_event("error", message="需要上传图片")
+                return
 
-        if not extracted_path or not Path(extracted_path).exists():
-            raise HTTPException(status_code=500, detail="衣服提取失败")
+            from gemini_generator import smart_extract_clothing
 
-        print(f"[提取衣服] 成功: {extracted_path}, 道具: {extracted_props}")
-        return ExtractClothesResponse(
-            assetId=asset_id,
-            status="success",
-            originalImage=request.image,
-            extractedClothes=image_to_base64(extracted_path),
-            extractedProps=extracted_props,
-        )
+            token = get_api_token()
+            if not token:
+                yield create_ndjson_event("error", message="请设置 AIPROXY_TOKEN 环境变量")
+                return
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+            asset_id = str(uuid.uuid4())
+            output_dir = str(project_root / "outputs" / asset_id)
+            os.makedirs(output_dir, exist_ok=True)
+
+            print(f"[提取衣服] 开始处理 (智能提取)...")
+            yield create_ndjson_event("progress", message="正在接收并保存上传的图像...", progress=1)
+
+            # 保存上传的图片
+            input_path = base64_to_temp_file(request.image, ".png")
+
+            # 建立一个队列用于同步非阻塞线程与异步生成器之间的进度信息
+            queue = asyncio.Queue()
+            loop = asyncio.get_running_loop()
+            
+            def progress_callback(msg: str, percent: int):
+                loop.call_soon_threadsafe(queue.put_nowait, {"msg": msg, "percent": percent})
+
+            def sync_extract():
+                # 使用智能提取函数（会自动分析图片内容并选择最佳处理方式）
+                return smart_extract_clothing(
+                    image_path=input_path,
+                    api_key=token,
+                    model_name="gemini-2.5-flash-image",
+                    output_dir=output_dir,
+                    mode="proxy",
+                    extract_props=request.extractProps,
+                    progress_callback=progress_callback
+                )
+
+            # 启动工作线程
+            task = asyncio.create_task(asyncio.to_thread(sync_extract))
+            
+            # 持续监听队列更新，同时关注任务是否完成
+            while not task.done():
+                try:
+                    update = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield create_ndjson_event("progress", message=update["msg"], progress=update["percent"])
+                except asyncio.TimeoutError:
+                    continue
+
+            # 获取返回值或抛出异常
+            result = task.result()
+            
+            # 清空剩余的队列内容
+            while not queue.empty():
+                update = queue.get_nowait()
+                yield create_ndjson_event("progress", message=update["msg"], progress=update["percent"])
+
+            extracted_path = None
+            extracted_props = None
+            if result:
+                 extracted_path, extracted_props = result
+
+            # 清理临时输入文件
+            try:
+                os.unlink(input_path)
+            except:
+                pass
+
+            if not extracted_path or not Path(extracted_path).exists():
+                yield create_ndjson_event("error", message="衣服提取失败")
+                return
+
+            yield create_ndjson_event("progress", message="正在构建响应数据...", progress=95)
+
+            print(f"[提取衣服] 成功: {extracted_path}, 道具: {extracted_props}")
+            yield create_ndjson_event("result", data={
+                "assetId": asset_id,
+                "status": "success",
+                "originalImage": request.image,
+                "extractedClothes": image_to_base64(extracted_path),
+                "extractedProps": extracted_props,
+            }, message="提取完毕", progress=100)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield create_ndjson_event("error", message=f"服务器内部异常: {str(e)}")
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 
 @router.post("/edit/change-clothes")

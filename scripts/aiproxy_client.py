@@ -390,45 +390,31 @@ def generate_character_multiview(
     negative_categories: list = None,  # 负面提示词类别
     subject_only: bool = False,  # 只处理主体，移除背景物体
     with_props: list = None,  # 要包含的道具列表
-    export_prompt: bool = False  # 是否导出提示词而不调用 API
+    export_prompt: bool = False,  # 是否导出提示词而不调用 API
+    progress_callback: Optional[callable] = None # 进度回调函数
 ) -> Optional[str]:
     """
     生成多视角角色图像并保存
     
     Args:
-        character_description: 角色描述
-        token: AiProxy 客户端令牌
-        output_dir: 输出目录
-        auto_cut: 是否自动切割
-        model: 模型名称
-        style: 风格描述
-        asset_id: 指定的资产ID (如果不给则自动生成 UUID)
-        reference_image_path: 参考图片路径 (可选，用于图生图模式)
-        use_image_reference_prompt: 是否使用图片参考专用提示词（保留原图动作）
-        use_strict_mode: 严格复制模式，100%基于原图，不允许AI创意改动
-        resolution: 图像分辨率 1K/2K/4K (默认: 2K)
-        view_mode: 视角模式 4-view/6-view/8-view/custom (默认: 4-view)
-        custom_views: 自定义视角列表 (仅 custom 模式)
-        use_negative_prompt: 是否使用负面提示词 (默认: True)
-        negative_categories: 负面提示词类别 ["anatomy", "quality", "layout"]
-        subject_only: 只处理主体，移除背景物体
-        with_props: 要包含的道具列表
-        export_prompt: 是否仅导出提示词而不调用 API (默认: False)
+        ... (前略)
+        progress_callback: 进度回调函数，接收 (state_msg, percent) 参数
     
     Returns:
         保存的图像路径 或 None (导出模式返回 None)
     """
+    def _report(msg: str, percent: int):
+        if progress_callback:
+            progress_callback(msg, percent)
+            
     _ensure_imports()
     import uuid
     import json
     
+    _report("正在初始化生成器...", 5)
+    
     # 1. 生成唯一 ID
     if not asset_id:
-        # 使用 UUID + 时间戳前缀确保绝对有序和唯一
-        # 格式: 20260103_uuid
-        # 或者直接 UUID。用户要求作为 "Asset ID"。UUID 更像 ID。
-        # 结合一下：timestamp_shortuuid?
-        # 为了简洁和唯一性，直接用 UUID4 string
         asset_id = str(uuid.uuid4())
         
     # 获取视角配置
@@ -459,6 +445,8 @@ def generate_character_multiview(
         negative_prompt = get_negative_prompt(negative_categories)
         if negative_prompt:
             print(f"[负面提示词] {negative_prompt[:60]}...")
+            
+    _report("正在构建提示词与参数...", 10)
     
     # 构建提示词（根据模式选择不同模板）
     # 优先级: 严格模式 > 自定义视角 > 图片参考 > 默认多视角
@@ -628,6 +616,7 @@ def generate_character_multiview(
         return None
     
     # 调用 AiProxy (实际生成)
+    _report("正在连接AI引擎生成多视角图像...", 30)
     result = generate_image_via_proxy(
         prompt=prompt,
         token=token,
@@ -643,6 +632,8 @@ def generate_character_multiview(
         return None
     
     image_bytes, mime_type = result
+    
+    _report("图像已生成并下载，准备保存...", 80)
     
     # 确定文件扩展名
     ext = "png"
@@ -690,6 +681,7 @@ def generate_character_multiview(
             expected_views = [v.name for v in expected_view_objs]
             
             print("\n[INFO] 自动切割四视图...")
+            _report(f"正在智能裁切并提取 {len(expected_views)} 个预设视角...", 90)
             process_quadrant_image(
                 input_path=str(filepath),
                 output_dir=output_dir,
@@ -711,6 +703,8 @@ def generate_character_multiview(
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2, ensure_ascii=False)
     print(f"[保存元数据] {json_path}")
+    
+    _report("所有处理已完成", 100)
     
     return str(filepath)
 
