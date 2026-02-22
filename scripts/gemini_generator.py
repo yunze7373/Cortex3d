@@ -1707,13 +1707,6 @@ Clothing description: [brief description of the main clothing items visible]"""
                 print(f"     ⚠️ 去除背景失败: {e}，使用原图")
         
         # 步骤2b: AI提取衣服
-
-        if export_prompt:
-            print(f"\n[AI 提示词 - 衣服提取]")
-            print("-" * 40)
-            print(extraction_prompt)
-            print("-" * 40 + "\n")
-
         print(f"  🎨 步骤2b: AI提取衣服...")
         
         # 强调只提取可见部分，不要脑补不存在的部分
