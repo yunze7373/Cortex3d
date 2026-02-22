@@ -14,8 +14,7 @@ import os
 import sys
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
-import base64
+from typing import Optional, Tuple, List
 import io
 
 # 导入共享配置
@@ -1512,15 +1511,18 @@ def smart_extract_clothing(
     output_dir: str = "test_images",
     mode: str = "proxy",
     proxy_base_url: str = None,
-) -> Optional[str]:
+    extract_props: bool = False,
+    export_prompt: bool = False
+) -> Optional[Tuple[str, Optional[List[str]]]]:
     """
     智能分析图片并提取衣服
     
     工作流程：
     1. AI分析图片：判断是纯衣服、有背景的衣服，还是穿着衣服的人
     2. 去除背景（如果有）
-    3. 提取衣服（如果是穿着衣服的人）
-    4. 返回处理后的图片路径
+    3. 提取衣服（如果是穿着衣服的人），如果开启extract_props，则同时提取道具并返回道具列表
+    4. 返回 (处理后的图片路径, 提取的道具列表) 元组
+
     
     Args:
         image_path: 衣服图片路径
@@ -1705,10 +1707,17 @@ Clothing description: [brief description of the main clothing items visible]"""
                 print(f"     ⚠️ 去除背景失败: {e}，使用原图")
         
         # 步骤2b: AI提取衣服
+
+        if export_prompt:
+            print(f"\n[AI 提示词 - 衣服提取]")
+            print("-" * 40)
+            print(extraction_prompt)
+            print("-" * 40 + "\n")
+
         print(f"  🎨 步骤2b: AI提取衣服...")
         
         # 强调只提取可见部分，不要脑补不存在的部分
-        extraction_prompt = """Extract ONLY the clothing that is ACTUALLY VISIBLE in this image.
+        base_prompt_requirements = """Extract ONLY the requested items that are ACTUALLY VISIBLE in this image.
 
 CRITICAL REQUIREMENTS:
 
@@ -1716,36 +1725,45 @@ CRITICAL REQUIREMENTS:
    - If only the upper body is shown (half-body photo), extract ONLY the top/shirt/jacket
    - If pants are only partially visible or cut off, do NOT include them
    - If something is hidden or outside the frame, do NOT imagine or create it
-   - NEVER add clothing items that are not clearly visible in the original image
+   - NEVER add items that are not clearly visible in the original image
 
 2. **PRESERVE EXACT APPEARANCE**:
-   - The extracted clothing must look EXACTLY like in the original image
+   - The extracted items must look EXACTLY like in the original image
    - Same size, proportions, colors, textures, patterns
    - Same style, cut, and design details
    - NO modifications, NO enhancements, NO changes
 
 3. **FORBIDDEN - DO NOT**:
-   - Do NOT "complete" or "imagine" hidden parts of clothing
-   - Do NOT add pants/bottoms if only upper body is shown
-   - Do NOT add accessories, jewelry, hats that aren't clearly visible
-   - Do NOT shrink or enlarge the clothing
+   - Do NOT "complete" or "imagine" hidden parts
+   - Do NOT add items that aren't clearly visible
+   - Do NOT shrink or enlarge the items
    - Do NOT change colors, patterns, or textures
    - Do NOT include any person or body parts
 
 4. **OUTPUT FORMAT**:
-   - Display ONLY the actually visible clothing on a clean white background
+   - Display ONLY the actually visible items on a clean transparent or white background
    - Arrange neatly as flat lay style
    - Maintain ORIGINAL SIZE and proportions
    - Keep realistic, natural appearance
 
-Example: If the photo shows a person from waist up wearing a coat and you can only see part of their pants at the very edge, extract ONLY the coat. Do NOT create full pants.
+Example: If the photo shows a person from waist up wearing a coat and you can only see part of their pants at the very edge, extract ONLY the coat. Do NOT create full pants."""
+        
+        if extract_props:
+            extraction_prompt = base_prompt_requirements + """\n\nGenerate an image showing ONLY the clothing items AND any visible props/accessories (like weapons, bags, distinct hats, jewelry) that are CLEARLY AND FULLY VISIBLE in the original image."""
+        else:
+            extraction_prompt = base_prompt_requirements + """\n\nGenerate an image showing ONLY the clothing items that are CLEARLY AND FULLY VISIBLE in the original image. Do NOT include any props, weapons, bags, or unnecessary accessories."""
 
-Generate an image showing ONLY the clothing items that are CLEARLY AND FULLY VISIBLE in the original image."""
+        if export_prompt:
+            print(f"\n[AI 提示词 - 衣服及道具提取]")
+            print("-" * 40)
+            print(extraction_prompt)
+            print("-" * 40 + "\n")
 
         try:
             # 对于图像生成（提取衣服），必须使用图像生成模型
             # 而不是之前分析用的文本模型
             image_gen_model = "gemini-2.5-flash-image"  # 图像生成模型
+            extracted_props = None
             
             # 调用AI生成提取后的衣服图片
             if mode == "proxy":
@@ -1768,16 +1786,48 @@ Generate an image showing ONLY the clothing items that are CLEARLY AND FULLY VIS
                     output_name=f"_extracted_clothing_{img_name}.png"
                 )
             
+            if extract_props and extracted_path:
+                print(f"  🔍 步骤3: 识别提取出的道具...")
+                # 识别刚刚提取出的图像中的道具
+                identify_prompt = """Look at this image containing extracted clothing and possibly props/accessories.
+Please list any distinct props or accessories (like weapons, bags, hats, distinctive jewelry, etc.) that you see. 
+DO NOT list basic clothes like shirts, pants, skirts, dresses, coats.
+Respond ONLY with a comma-separated list of the props, or 'None' if there are no props. Example: 'red handbag, sword, magic wand' or 'None'."""
+                
+                analysis_model = "gemini-3-flash-preview"
+                if mode == "proxy":
+                    props_result = _analyze_image_via_proxy(
+                        image_path=extracted_path,
+                        prompt=identify_prompt,
+                        api_key=api_key,
+                        model_name=analysis_model,
+                        proxy_base_url=proxy_base_url
+                    )
+                else:
+                    props_result = _analyze_image_via_direct(
+                        image_path=extracted_path,
+                        prompt=identify_prompt,
+                        api_key=api_key,
+                        model_name=analysis_model
+                    )
+                
+                if props_result and props_result.strip().lower() != 'none':
+                    extracted_props = [p.strip() for p in props_result.split(',')]
+                    print(f"     ✅ 识别到道具: {', '.join(extracted_props)}")
+                else:
+                    extracted_props = []
+                    print(f"     ✅ 未识别到额外道具")
+
             if extracted_path:
                 print(f"     ✅ 衣服提取完成: {Path(extracted_path).name}")
-                return extracted_path
+                return (extracted_path, extracted_props)
             else:
                 print(f"     ⚠️ 衣服提取失败，使用去背景后的图片")
-                return str(intermediate_path)
+                return (str(intermediate_path), None) if extract_props else (str(intermediate_path), None)
                 
         except Exception as e:
             print(f"     ⚠️ AI提取出错: {e}")
-            return str(intermediate_path)
+            return (str(intermediate_path), None) if extract_props else (str(intermediate_path), None)
     
     # 默认: 仅去除背景
     print(f"  🔪 步骤2: 默认处理 - 去除背景...")
@@ -1791,11 +1841,11 @@ Generate an image showing ONLY the clothing items that are CLEARLY AND FULLY VIS
             processed_path = output_path_obj / f"_extracted_default_{img_name}.png"
             cv2.imwrite(str(processed_path), processed)
             print(f"     ✅ 处理完成: {processed_path.name}")
-            return str(processed_path)
+            return (str(processed_path), None) if extract_props else (str(processed_path), None)
     except Exception as e:
         print(f"     ⚠️ 处理失败: {e}")
     
-    return image_path
+    return (image_path, None) if extract_props else (image_path, None)
 
 
 def _analyze_image_via_proxy(image_path, prompt, api_key, model_name, proxy_base_url=None):

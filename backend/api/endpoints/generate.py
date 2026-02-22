@@ -253,13 +253,19 @@ async def extract_clothes(request: ExtractClothesRequest):
         input_path = base64_to_temp_file(request.image, ".png")
 
         # 使用智能提取函数（会自动分析图片内容并选择最佳处理方式）
-        extracted_path = smart_extract_clothing(
+        result = smart_extract_clothing(
             image_path=input_path,
             api_key=token,
             model_name="gemini-2.5-flash-image",
             output_dir=output_dir,
             mode="proxy",
+            extract_props=request.extractProps
         )
+
+        extracted_path = None
+        extracted_props = None
+        if result:
+             extracted_path, extracted_props = result
 
         # 清理临时输入文件
         try:
@@ -270,13 +276,13 @@ async def extract_clothes(request: ExtractClothesRequest):
         if not extracted_path or not Path(extracted_path).exists():
             raise HTTPException(status_code=500, detail="衣服提取失败")
 
-        print(f"[提取衣服] 成功: {extracted_path}")
+        print(f"[提取衣服] 成功: {extracted_path}, 道具: {extracted_props}")
         return ExtractClothesResponse(
             assetId=asset_id,
             status="success",
             originalImage=request.image,
             extractedClothes=image_to_base64(extracted_path),
-            extractedProps=None,
+            extractedProps=extracted_props,
         )
 
     except HTTPException:

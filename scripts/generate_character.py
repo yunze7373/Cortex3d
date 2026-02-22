@@ -795,8 +795,19 @@ def main():
         action="store_true",
         help="高保真编辑模式: 保留关键细节的精确编辑"
     )
+
+    edit_mode_select.add_argument(
+        "--mode-extract",
+        action="store_true",
+        help="服装/道具提取模式: 提取图中人穿着的衣物或手持的道具"
+    )
     
     # 编辑参数 (根据不同模式使用)
+    edit_mode_group.add_argument(
+        "--extract-props",
+        action="store_true",
+        help="提取服装饰品时也一并提取道具 (--mode-extract)"
+    )
     edit_mode_group.add_argument(
         "--edit-elements",
         metavar="ACTION",
@@ -2165,6 +2176,74 @@ def main():
                 print("")
         except Exception as e:
             print(f"[ERROR] 高保真编辑出错: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+            
+    # =========================================================================
+    # 服装提取模式检查 (--mode-extract)
+    # =========================================================================
+    if args.mode_extract:
+        print("\n" + "═"*60)
+        print("🔍 激活服装提取模式")
+        print("═"*60)
+        print("  用途: 提取图中人穿着的衣物或手持的道具")
+        
+        # 验证必需参数
+        extract_source = args.from_image
+        if not extract_source:
+            print("[ERROR] --mode-extract 需要 --from-image 参数（输入图片路径）")
+            print("        示例: --from-image person.png --mode-extract")
+            sys.exit(1)
+            
+        # 查找图片
+        main_image = Path(extract_source)
+        if not main_image.exists():
+            for search_dir in [Path("."), Path("test_images"), Path("reference_images"), Path(args.output)]:
+                candidate = search_dir / extract_source
+                if candidate.exists():
+                    main_image = candidate
+                    break
+                    
+        if not main_image.exists():
+            print(f"[ERROR] 提取源图片不存在: {extract_source}")
+            sys.exit(1)
+            
+        print(f"\n  └─ 源图片: {main_image.name}")
+        print(f"  └─ 提取道具: {'是' if args.extract_props else '否'}")
+        print(f"  └─ 模型: {args.model if args.model else 'gemini-2.5-flash-image'}")
+        print(f"  └─ 调用模式: {args.mode.upper()}")
+        print("")
+        
+        # 导入提取函数
+        from gemini_generator import smart_extract_clothing
+        
+        try:
+            result = smart_extract_clothing(
+                image_path=str(main_image),
+                api_key=args.token,
+                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                output_dir=args.output,
+                mode=args.mode,
+                extract_props=args.extract_props,
+                export_prompt=args.export_prompt
+            )
+            
+            if result:
+                output_path, props = result
+                print(f"\n✅ 提取完成！")
+                print(f"   输出文件: {output_path}")
+                if args.extract_props:
+                    print(f"   提取的道具: {', '.join(props) if props else '无'}")
+            else:
+                print(f"\n❌ 提取失败，请检查日志")
+                sys.exit(1)
+                
+            # 提取模式本身就是一个独立的功能，执行完毕后直接退出
+            sys.exit(0)
+            
+        except Exception as e:
+            print(f"[ERROR] 提取出错: {e}")
             import traceback
             traceback.print_exc()
             sys.exit(1)
