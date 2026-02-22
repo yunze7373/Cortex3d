@@ -1713,40 +1713,47 @@ Clothing description: [brief description of the main clothing items visible]"""
         base_prompt_requirements = """# ROLE: High-Precision Visual Asset Extractor (Cortex3d Specialized)
 
 # GOAL:
-Extract clothing items and accessories from the provided source image for 3D reconstruction and digital cataloging. Generate a high-fidelity "Flat Lay" image.
+Perform a pixel-perfect extraction of clothing items from the provided source image for 3D reconstruction. You are a precision cutout tool, NOT a designer.
 
 # CRITICAL CONSTRAINTS (ZERO TOLERANCE):
-1. **VISIBILITY FILTER**: 
+1. **ABSOLUTE FIDELITY (NO REDESIGN)**: 
+   - NEVER change the design, cut, shape, neckline, or silhouette of the clothing.
+   - If a dress has specific wrinkles or folds, preserve them exactly.
+   - Treat this as a strictly photorealistic cropping task. Do not "genericize" the clothing.
+2. **VISIBILITY FILTER**: 
    - EXTRACT ONLY items that are >70% visible. 
-   - If an item (e.g., trousers) is severely occluded by objects or the image frame, DISCARD it. 
    - DO NOT "hallucinate" or complete missing parts.
-2. **ZERO HUMAN REMAINS**: 
-   - Remove ALL skin, hair, and body parts. 
-   - No neck stumps in collars; no hands in gloves; no feet in shoes. 
-   - Use "ghost mannequin" style where the clothing maintains its 3D volume but contains no human.
-3. **FIDELITY LOCK**: 
-   - 1:1 Color Matching (Hex/RGB consistency).
-   - Preserve exact fabric texture (weave, sheen, grain).
-   - Maintain original proportions and architectural silhouette.
+3. **ZERO HUMAN REMAINS**: 
+   - Remove ALL skin, hair, faces, and body parts. 
+   - Use "ghost mannequin" style where the clothing exactly maintains its 3D volume, folds, and shape as worn, but contains absolutely no human.
+4. **1:1 COLOR & TEXTURE**: 
+   - Preserve exact fabric texture (weave, sheen, grain) and hex colors.
 
 # OUTPUT SPECIFICATIONS:
-- **BACKGROUND**: Solid pure white (#FFFFFF) or Alpha Transparency.
+- **BACKGROUND**: Solid pure white (#FFFFFF).
 - **LAYOUT**: 
-    - "Exploded Flat Lay" arrangement. 
-    - Minimum 50px buffer between separate items (e.g., tie must not touch the shirt).
+    - Neatly arranged in the center.
+    - Minimum 50px buffer between separate items.
     - Items must be oriented vertically (e.g., jackets upright).
-- **LIGHTING**: Neutral, de-shadowed lighting. Remove harsh directional shadows from the original scene to ensure texture usability for 3D shaders.
+- **LIGHTING**: Preserve original lighting and volume.
 
 # NEGATIVE PROMPT:
-human skin, face, hair, blurred edges, artifacts, compressed textures, messy background, overlapping items, stylized artistic filters, shadows on background, low resolution.
+human skin, face, hair, body parts, altered design, generic shape, blurred edges, artifacts, stylized artistic filters, shadows on background.
 
 # TASK:
-Analyze the input image, identify the clothing items"""
+Analyze the input image, identify the MAIN clothing items (shirts, pants, dresses, coats, skirts)"""
         
         if extract_props:
-            extraction_prompt = base_prompt_requirements + """ and PROPS/ACCESSORIES (like weapons, bags, distinct hats, jewelry), then generate the extracted image according to these specifications."""
+            extraction_prompt = base_prompt_requirements + """ and any PROPS/ACCESSORIES (like weapons, bags, distinct hats, jewelry, shoes, straps), then generate the extracted image according to these specifications."""
         else:
-            extraction_prompt = base_prompt_requirements + """, then generate the extracted image according to these specifications. Do NOT include any props, weapons, bags, or unnecessary accessories."""
+            extraction_prompt = base_prompt_requirements + """, then generate the extracted image according to these specifications. 
+
+**STRICT EXCLUSIONS**: You MUST completely OMIT and EXCLUDE all non-clothing accessories. This includes, but is not limited to:
+- ALL jewelry (necklaces, chokers, bracelets, rings, earrings)
+- ALL footwear (shoes, boots, heels, socks)
+- ALL straps, belts, bags, or harnesses not physically sewn into the main garment
+- ALL weapons or held props
+DO NOT draw these items under any circumstances."""
 
         if export_prompt:
             print(f"\n[AI 提示词 - 衣服及道具提取]")
