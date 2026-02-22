@@ -395,7 +395,7 @@ async def change_clothes(request: ChangeClothesRequest):
         raise HTTPException(status_code=400, detail="需要上传角色图片")
 
     try:
-        from aiproxy_client import generate_character_multiview
+        from gemini_generator import composite_images
 
         token = get_api_token()
         if not token:
@@ -405,57 +405,55 @@ async def change_clothes(request: ChangeClothesRequest):
         output_dir = str(project_root / "outputs" / asset_id)
         os.makedirs(output_dir, exist_ok=True)
 
-        print(f"[换装] 开始处理...")
+        print(f"[换装] 开始单图换装处理...")
 
         # 保存角色图片
         char_path = base64_to_temp_file(request.characterImage, ".png")
+        image_paths = [char_path]
 
-        description = request.clothesDescription or "character with new clothes"
+        # 检查是否有衣服图片 (图生图换装)
+        if request.clothesImage:
+            clothes_path = base64_to_temp_file(request.clothesImage, ".png")
+            image_paths.append(clothes_path)
 
-        result = generate_character_multiview(
-            character_description=description,
-            token=token,
+        # 构建指令
+        instruction = request.clothesDescription or ""
+        if not instruction and len(image_paths) > 1:
+            instruction = "为角色换上另一张图片里的衣服"
+        elif not instruction:
+            instruction = "character with new clothes"
+
+        # 决定合成类型
+        composite_type = "clothing" if len(image_paths) > 1 else "clothing_text"
+
+        result = composite_images(
+            image_paths=image_paths,
+            instruction=instruction,
+            api_key=token,
+            model_name="gemini-3-pro-image-preview",
             output_dir=output_dir,
-            auto_cut=True,
-            model="gemini-3-pro-image-preview",
-            style=request.targetStyle or "realistic",
-            asset_id=asset_id,
-            reference_image_path=char_path,
-            use_image_reference_prompt=True,
-            view_mode=request.viewMode or "4-view",
+            output_name=f"{asset_id}.jpg",
+            mode="proxy",
+            composite_type=composite_type,
+            resolution="2K"
         )
 
-        try:
-            os.unlink(char_path)
-        except:
-            pass
+        for path in image_paths:
+            try:
+                os.unlink(path)
+            except:
+                pass
 
-        images = {}
-        output_path = Path(output_dir)
-        view_mapping = {
-            "4-view": ["front", "right", "back", "left"],
-            "6-view": ["front", "frontRight", "right", "back", "left", "frontLeft"],
-        }
-        views = view_mapping.get(request.viewMode or "4-view", ["front", "right", "back", "left"])
-
-        for view in views:
-            for ext in [".png", ".jpg", ".jpeg"]:
-                # 尝试带asset_id前缀的文件名
-                file_path = output_path / f"{asset_id}_{view}{ext}"
-                if file_path.exists():
-                    images[view] = image_to_base64(str(file_path))
-                    break
-                # 尝试不带前缀的文件名
-                file_path = output_path / f"{view}{ext}"
-                if file_path.exists():
-                    images[view] = image_to_base64(str(file_path))
-                    break
-
-        if "front" in images:
-            images["master"] = images["front"]
-
-        if not images:
+        if not result:
             raise HTTPException(status_code=500, detail="换装生成失败")
+
+        # 将生成的单张图片作为主图返回，放在 front 和 master 键下
+        output_base64 = image_to_base64(result)
+        
+        images = {
+            "master": output_base64,
+            "front": output_base64
+        }
 
         print(f"[换装] 成功")
         return ChangeClothesResponse(
