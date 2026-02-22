@@ -1710,41 +1710,43 @@ Clothing description: [brief description of the main clothing items visible]"""
         print(f"  🎨 步骤2b: AI提取衣服...")
         
         # 强调只提取可见部分，不要脑补不存在的部分
-        base_prompt_requirements = """Extract ONLY the requested items that are ACTUALLY VISIBLE in this image.
+        base_prompt_requirements = """# ROLE: High-Precision Visual Asset Extractor (Cortex3d Specialized)
 
-CRITICAL REQUIREMENTS:
+# GOAL:
+Extract clothing items and accessories from the provided source image for 3D reconstruction and digital cataloging. Generate a high-fidelity "Flat Lay" image.
 
-1. **EXTRACT ONLY WHAT IS VISIBLE**:
-   - If only the upper body is shown (half-body photo), extract ONLY the top/shirt/jacket
-   - If pants are only partially visible or cut off, do NOT include them
-   - If something is hidden or outside the frame, do NOT imagine or create it
-   - NEVER add items that are not clearly visible in the original image
+# CRITICAL CONSTRAINTS (ZERO TOLERANCE):
+1. **VISIBILITY FILTER**: 
+   - EXTRACT ONLY items that are >70% visible. 
+   - If an item (e.g., trousers) is severely occluded by objects or the image frame, DISCARD it. 
+   - DO NOT "hallucinate" or complete missing parts.
+2. **ZERO HUMAN REMAINS**: 
+   - Remove ALL skin, hair, and body parts. 
+   - No neck stumps in collars; no hands in gloves; no feet in shoes. 
+   - Use "ghost mannequin" style where the clothing maintains its 3D volume but contains no human.
+3. **FIDELITY LOCK**: 
+   - 1:1 Color Matching (Hex/RGB consistency).
+   - Preserve exact fabric texture (weave, sheen, grain).
+   - Maintain original proportions and architectural silhouette.
 
-2. **PRESERVE EXACT APPEARANCE**:
-   - The extracted items must look EXACTLY like in the original image
-   - Same size, proportions, colors, textures, patterns
-   - Same style, cut, and design details
-   - NO modifications, NO enhancements, NO changes
+# OUTPUT SPECIFICATIONS:
+- **BACKGROUND**: Solid pure white (#FFFFFF) or Alpha Transparency.
+- **LAYOUT**: 
+    - "Exploded Flat Lay" arrangement. 
+    - Minimum 50px buffer between separate items (e.g., tie must not touch the shirt).
+    - Items must be oriented vertically (e.g., jackets upright).
+- **LIGHTING**: Neutral, de-shadowed lighting. Remove harsh directional shadows from the original scene to ensure texture usability for 3D shaders.
 
-3. **FORBIDDEN - DO NOT**:
-   - Do NOT "complete" or "imagine" hidden parts
-   - Do NOT add items that aren't clearly visible
-   - Do NOT shrink or enlarge the items
-   - Do NOT change colors, patterns, or textures
-   - Do NOT include any person or body parts
+# NEGATIVE PROMPT:
+human skin, face, hair, blurred edges, artifacts, compressed textures, messy background, overlapping items, stylized artistic filters, shadows on background, low resolution.
 
-4. **OUTPUT FORMAT**:
-   - Display ONLY the actually visible items on a clean transparent or white background
-   - Arrange neatly as flat lay style
-   - Maintain ORIGINAL SIZE and proportions
-   - Keep realistic, natural appearance
-
-Example: If the photo shows a person from waist up wearing a coat and you can only see part of their pants at the very edge, extract ONLY the coat. Do NOT create full pants."""
+# TASK:
+Analyze the input image, identify the clothing items"""
         
         if extract_props:
-            extraction_prompt = base_prompt_requirements + """\n\nGenerate an image showing ONLY the clothing items AND any visible props/accessories (like weapons, bags, distinct hats, jewelry) that are CLEARLY AND FULLY VISIBLE in the original image."""
+            extraction_prompt = base_prompt_requirements + """ and PROPS/ACCESSORIES (like weapons, bags, distinct hats, jewelry), then generate the extracted image according to these specifications."""
         else:
-            extraction_prompt = base_prompt_requirements + """\n\nGenerate an image showing ONLY the clothing items that are CLEARLY AND FULLY VISIBLE in the original image. Do NOT include any props, weapons, bags, or unnecessary accessories."""
+            extraction_prompt = base_prompt_requirements + """, then generate the extracted image according to these specifications. Do NOT include any props, weapons, bags, or unnecessary accessories."""
 
         if export_prompt:
             print(f"\n[AI 提示词 - 衣服及道具提取]")
