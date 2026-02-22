@@ -1735,25 +1735,22 @@ Perform a pixel-perfect, industrial-grade extraction of ALL clothing items from 
    - Treat this as a strictly photorealistic cropping task. Do not "genericize" the clothing.
 2. **COMPLETE GARMENT RECONSTRUCTION**: 
    - Visually reconstruct the COMPLETE garment. 
-   - If a shirt is tucked in or partially covered by arms, YOU MUST seamlessly fill in and complete the missing parts to show the ENTIRE flat-lay structure of the item.
-   - The final output must look like the complete unworn clothes laid out perfectly.
-3. **ZERO HUMAN REMAINS**: 
+   - If a shirt is tucked in or partially covered by arms, YOU MUST seamlessly fill in and reconstruct the missing boundary parts to show the full garment structure.
+3. **ZERO HUMAN REMAINS (GHOST MANNEQUIN)**: 
    - Remove ALL skin, hair, faces, and body parts. 
-   - Use "ghost mannequin" or "flat lay" styling where the clothing maintains its volume but contains absolutely no human.
+   - Use "ghost mannequin" styling where the clothing exactly maintains its 3D volume, folds, and shape as worn together, but contains absolutely no human. Preserve the natural layering and arrangement of the outfit as it was worn.
 4. **1:1 COLOR & TEXTURE**: 
    - Preserve exact fabric texture (weave, sheen, grain) and hex colors.
 
-# OUTPUT SPECIFICATIONS (INDUSTRIAL GRADE LAYOUT):
+# OUTPUT SPECIFICATIONS (OUTFIT RECONSTRUCTION):
 - **BACKGROUND**: Solid pure white (#FFFFFF).
-- **STRUCTURED LAYOUT**: 
-    - Neatly arrange ALL extracted items in the center of the image.
-    - If there are multiple items (e.g., jacket, shirt, pants), arrange them logically (top to bottom) like a professional fashion outfit grid.
-    - Create a minimum 50px buffer between separate items.
-    - Items must be oriented perfectly vertically and symmetrically (e.g., jackets upright, pants straight down).
-- **LIGHTING**: Preserve original lighting and volume.
+- **LAYOUT**: 
+    - Neatly arrange the outfit in the center of the image.
+    - Retain the natural 3D layered structure of the clothing items as they were originally worn.
+- **LIGHTING**: Preserve original lighting and volume to maintain 3D realism.
 
 # NEGATIVE PROMPT:
-human skin, face, hair, body parts, altered design, generic shape, blurred edges, artifacts, stylized artistic filters, shadows on background, missing sleeves, cut-off collars, messy arrangement.
+human skin, face, hair, body parts, altered design, generic shape, blurred edges, artifacts, stylized artistic filters, shadows on background, missing sleeves, cut-off collars.
 
 # TASK:
 Analyze the input image, identify the MAIN clothing items (shirts, pants, dresses, coats, skirts)"""

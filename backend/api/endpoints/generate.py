@@ -464,24 +464,45 @@ async def change_clothes(request: ChangeClothesRequest):
             image_paths.append(clothes_path)
 
         # 构建指令
-        instruction = request.clothesDescription or ""
-        if not instruction and len(image_paths) > 1:
-            instruction = "为角色换上另一张图片里的衣服"
-        elif not instruction:
-            instruction = "character with new clothes"
+        base_instruction = request.clothesDescription
+        if not base_instruction:
+            if len(image_paths) > 1:
+                base_instruction = "Put the clothing from Image 2 onto the person in Image 1. Keep the person's face, hair, pose, and background exactly the same."
+            else:
+                base_instruction = "character with new clothes"
 
         # 决定合成类型
         composite_type = "clothing" if len(image_paths) > 1 else "clothing_text"
 
+        # 像 CLI 一样，提前构建完整 Prompt 并标记 instruction_is_final=True
+        # 由于我们这里没有命令行里的 style 参数传递，默认使用写实风格 (或者可以扩展请求里的目标风格)
+        from prompts.wardrobe import build_wardrobe_prompt
+        # 前端其实传了 request.targetStyle 比如 "写实风格"，但如果没有严格映射，先设为写实
+        target_style_prompt = None
+        if hasattr(request, 'targetStyle') and request.targetStyle:
+            from prompts.styles import get_style_preset, find_matching_style
+            matched = find_matching_style(request.targetStyle)
+            if matched:
+                target_style_prompt = matched.prompt
+
+        final_prompt = build_wardrobe_prompt(
+            task_type=composite_type,
+            instruction=base_instruction,
+            num_images=len(image_paths),
+            strict_mode=True,
+            style=target_style_prompt
+        )
+
         result = composite_images(
             image_paths=image_paths,
-            instruction=instruction,
+            instruction=final_prompt,
             api_key=token,
             model_name="gemini-3-pro-image-preview",
             output_dir=output_dir,
             output_name=f"{asset_id}.jpg",
             mode="proxy",
             composite_type=composite_type,
+            instruction_is_final=True, # 关键修复点：直接传递完整的 prompt
             resolution="2K"
         )
 
