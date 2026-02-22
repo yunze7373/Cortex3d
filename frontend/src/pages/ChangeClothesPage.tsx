@@ -15,7 +15,9 @@ interface ChangeClothesPageProps {
 const ChangeClothesPage: React.FC<ChangeClothesPageProps> = ({ activeTab, onTabChange }) => {
   const [characterImage, setCharacterImage] = useState<string | null>(null);
   const [clothesImage, setClothesImage] = useState<string | null>(null);
+  const [propsImage, setPropsImage] = useState<string | null>(null);
   const [clothesDescription, setClothesDescription] = useState('');
+  const [propsDescription, setPropsDescription] = useState('');
   const [selectedPreset, setSelectedPreset] = useState('');
   const [targetStyle, setTargetStyle] = useState('realistic');
   const [mode, setMode] = useState<'text' | 'image'>('text');
@@ -39,6 +41,12 @@ const ChangeClothesPage: React.FC<ChangeClothesPageProps> = ({ activeTab, onTabC
 
   const handleClothesSelect = (base64: string) => {
     setClothesImage(base64);
+    setResult(null);
+    setError(null);
+  };
+
+  const handlePropsImageSelect = (base64: string) => {
+    setPropsImage(base64);
     setResult(null);
     setError(null);
   };
@@ -72,10 +80,28 @@ const ChangeClothesPage: React.FC<ChangeClothesPageProps> = ({ activeTab, onTabC
     setError(null);
 
     try {
+      let finalDescription = '';
+      if (mode === 'text') {
+        finalDescription = clothesDescription;
+      } else {
+        // Build base description for props text
+        const basePropsText = propsDescription.trim()
+          ? `给这个人穿上这件衣服，并添加这些道具：${propsDescription.trim()}`
+          : '';
+
+        // If props image is provided, explicitly tell the model that IMAGE 3 is a prop
+        if (propsImage) {
+          finalDescription = `图片3 (IMAGE 3) 是需要添加的道具图像，请提取并在人物身上自然地穿戴或手持。\n${basePropsText}`;
+        } else {
+          finalDescription = basePropsText;
+        }
+      }
+
       const response = await changeClothes({
         characterImage,
-        clothesDescription: mode === 'text' ? clothesDescription : '',
+        clothesDescription: finalDescription,
         clothesImage: mode === 'image' && clothesImage ? clothesImage : undefined,
+        propsImage: mode === 'image' && propsImage ? propsImage : undefined,
         targetStyle,
         viewMode: '4-view',
       });
@@ -95,7 +121,9 @@ const ChangeClothesPage: React.FC<ChangeClothesPageProps> = ({ activeTab, onTabC
   const handleReset = () => {
     setCharacterImage(null);
     setClothesImage(null);
+    setPropsImage(null);
     setClothesDescription('');
+    setPropsDescription('');
     setSelectedPreset('');
     setResult(null);
     setError(null);
@@ -156,22 +184,20 @@ const ChangeClothesPage: React.FC<ChangeClothesPageProps> = ({ activeTab, onTabC
                   <button
                     type="button"
                     onClick={() => setMode('text')}
-                    className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
-                      mode === 'text'
-                        ? 'border-accent-primary bg-accent-primary/20 text-accent-primary'
-                        : 'border-border-subtle text-text-secondary hover:border-accent-primary/50'
-                    }`}
+                    className={`flex-1 px-4 py-2 rounded-lg border transition-all ${mode === 'text'
+                      ? 'border-accent-primary bg-accent-primary/20 text-accent-primary'
+                      : 'border-border-subtle text-text-secondary hover:border-accent-primary/50'
+                      }`}
                   >
                     文字描述
                   </button>
                   <button
                     type="button"
                     onClick={() => setMode('image')}
-                    className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
-                      mode === 'image'
-                        ? 'border-accent-primary bg-accent-primary/20 text-accent-primary'
-                        : 'border-border-subtle text-text-secondary hover:border-accent-primary/50'
-                    }`}
+                    className={`flex-1 px-4 py-2 rounded-lg border transition-all ${mode === 'image'
+                      ? 'border-accent-primary bg-accent-primary/20 text-accent-primary'
+                      : 'border-border-subtle text-text-secondary hover:border-accent-primary/50'
+                      }`}
                   >
                     上传衣服图片
                   </button>
@@ -200,13 +226,34 @@ const ChangeClothesPage: React.FC<ChangeClothesPageProps> = ({ activeTab, onTabC
                   />
                 </>
               ) : (
-                <ImageUploader
-                  label="衣服图片"
-                  onImageSelect={handleClothesSelect}
-                  currentImage={clothesImage}
-                  onImageRemove={() => setClothesImage(null)}
-                  helperText="上传要替换的衣服图片"
-                />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <ImageUploader
+                      label="衣服图片"
+                      onImageSelect={handleClothesSelect}
+                      currentImage={clothesImage}
+                      onImageRemove={() => setClothesImage(null)}
+                      helperText="要替换的基础衣服图片"
+                    />
+
+                    <ImageUploader
+                      label="附加道具图片 (可选)"
+                      onImageSelect={handlePropsImageSelect}
+                      currentImage={propsImage}
+                      onImageRemove={() => setPropsImage(null)}
+                      helperText="想要添加的头盔、墨镜、包等"
+                    />
+                  </div>
+
+                  <TextArea
+                    label="附加道具/要求补充 (可选)"
+                    placeholder="例如：戴上图片3里的赛车头盔，头盔要抱在腰间..."
+                    value={propsDescription}
+                    onChange={(e) => setPropsDescription(e.target.value)}
+                    rows={2}
+                    helperText="如果你上传了道具图片，请在这里说明道具该如何佩戴或如何与角色交互"
+                  />
+                </div>
               )}
 
               <Select

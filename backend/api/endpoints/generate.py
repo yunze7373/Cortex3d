@@ -62,6 +62,7 @@ class ChangeClothesRequest(BaseModel):
     characterImage: str
     clothesDescription: Optional[str] = None
     clothesImage: Optional[str] = None
+    propsImage: Optional[str] = None
     targetStyle: Optional[str] = "realistic"
     viewMode: Optional[str] = "4-view"
 
@@ -462,6 +463,11 @@ async def change_clothes(request: ChangeClothesRequest):
         if request.clothesImage:
             clothes_path = base64_to_temp_file(request.clothesImage, ".png")
             image_paths.append(clothes_path)
+            
+        # 检查是否有道具图片 (多模态融合)
+        if request.propsImage:
+            props_path = base64_to_temp_file(request.propsImage, ".png")
+            image_paths.append(props_path)
 
         # 构建指令
         base_instruction = request.clothesDescription

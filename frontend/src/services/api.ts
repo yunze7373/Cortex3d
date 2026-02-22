@@ -156,6 +156,7 @@ export interface ChangeClothesRequest {
   characterImage: string;
   clothesDescription?: string;
   clothesImage?: string;
+  propsImage?: string;
   targetStyle?: string;
   viewMode?: string;
 }
