@@ -209,10 +209,10 @@ async def generate_multiview(request: GenerateRequest):
             while not task.done():
                 try:
                     # 等待队列消息，设置超时以便定期检查 task 状态
-                    update = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    update = await asyncio.wait_for(queue.get(), timeout=1.0)
                     yield create_ndjson_event("progress", message=update["msg"], progress=update["percent"])
                 except asyncio.TimeoutError:
-                    continue
+                    yield "\n" # 发送空行作为 heartbeat 保持流连接活跃
 
             # 获取返回值或抛出异常
             result = task.result()
@@ -295,7 +295,7 @@ async def generate_multiview(request: GenerateRequest):
             print(f"[生成多视角] 成功, views={list(images.keys())}")
             
             # 返回最终完成的事件
-            yield create_ndjson_event("result", data={
+            response_str = create_ndjson_event("result", data={
                 "assetId": asset_id,
                 "status": "success",
                 "images": images,
@@ -306,6 +306,11 @@ async def generate_multiview(request: GenerateRequest):
                     "createdAt": "2024-01-01T00:00:00Z",
                 },
             }, message="生成完毕", progress=100)
+            
+            # 分块发送避免单次巨量 payload 导致网络层或代理层截断
+            chunk_size = 1024 * 1024  # 1MB
+            for i in range(0, len(response_str), chunk_size):
+                yield response_str[i:i + chunk_size]
 
         except Exception as e:
             import traceback
@@ -378,10 +383,10 @@ async def extract_clothes(request: ExtractClothesRequest):
             # 持续监听队列更新，同时关注任务是否完成
             while not task.done():
                 try:
-                    update = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    update = await asyncio.wait_for(queue.get(), timeout=1.0)
                     yield create_ndjson_event("progress", message=update["msg"], progress=update["percent"])
                 except asyncio.TimeoutError:
-                    continue
+                    yield "\n" # 发送空行作为 heartbeat 保持流连接活跃
 
             # 获取返回值或抛出异常
             result = task.result()
@@ -409,13 +414,18 @@ async def extract_clothes(request: ExtractClothesRequest):
             yield create_ndjson_event("progress", message="正在构建响应数据...", progress=95)
 
             print(f"[提取衣服] 成功: {extracted_path}, 道具: {extracted_props}")
-            yield create_ndjson_event("result", data={
+            response_str = create_ndjson_event("result", data={
                 "assetId": asset_id,
                 "status": "success",
                 "originalImage": request.image,
                 "extractedClothes": image_to_base64(extracted_path),
                 "extractedProps": extracted_props,
             }, message="提取完毕", progress=100)
+            
+            # 分块发送避免截断
+            chunk_size = 1024 * 1024  # 1MB
+            for i in range(0, len(response_str), chunk_size):
+                yield response_str[i:i + chunk_size]
 
         except Exception as e:
             import traceback

@@ -90,13 +90,18 @@ async function streamingFetch<T>(
             const parsed = JSON.parse(buffer);
             if (parsed.type === 'error') {
               reject(new Error(parsed.message || '服务器内部错误'));
+              return;
             } else if (parsed.type === 'result') {
               resolve(parsed.data as T);
+              return;
             }
           } catch (e) {
             console.error('Invalid final JSON line:', buffer, e);
           }
         }
+
+        // 如果流已结束但依然没有 resolve 也没有 reject，抛出异常避免前端死锁
+        reject(new Error('数据流异常关闭或解析失败，未收到最终生成的图片'));
 
       } catch (e) {
         reject(e);

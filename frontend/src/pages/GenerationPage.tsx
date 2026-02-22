@@ -55,6 +55,13 @@ const GenerationPage: React.FC<GenerationPageProps> = ({ activeTab, onTabChange 
         negativePrompt: formState.negativePrompt,
         subjectOnly: formState.subjectOnly,
         withProps: formState.withProps,
+        // 以下是新补充补齐的参数 (之前 UI 上有但没传)
+        model: formState.model,
+        useNegativePrompt: formState.useNegativePrompt,
+        negativeCategories: formState.negativeCategories,
+        useStrictMode: formState.useStrictMode,
+        useImageReferencePrompt: formState.useImageReferencePrompt,
+        aspectRatio: formState.aspectRatio,
       };
 
       if (formState.referenceImage) {
