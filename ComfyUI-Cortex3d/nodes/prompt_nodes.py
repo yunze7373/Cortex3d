@@ -1,5 +1,6 @@
 """Prompt 类节点 (6) — 生成/组合 Cortex3d 风格化提示词。"""
 from __future__ import annotations
+from ..utils.errors import node_guard
 
 # ─── 全局分类前缀 ───────────────────────────────────────────────────────────
 CAT = "Cortex3d/Prompt"
@@ -28,6 +29,7 @@ class Cortex3d_MultiviewPromptBuilder:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, character_description, style, view_mode,
                 subject_only=False, with_props=False, custom_views=""):
         from ..adapters.prompt_adapter import PromptAdapter
@@ -65,6 +67,7 @@ class Cortex3d_ImageRefPromptBuilder:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, reference_image, character_description, style, view_mode="standard_4"):
         from ..adapters.prompt_adapter import PromptAdapter
         from ..types.view_config import CortexViewConfig
@@ -99,11 +102,13 @@ class Cortex3d_StrictCopyPromptBuilder:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, character_description, style, view_mode):
         from ..adapters.prompt_adapter import PromptAdapter
         from ..types.view_config import CortexViewConfig
         prompt = PromptAdapter.build_strict_copy_prompt(
-            character_description=character_description, style=style, view_mode=view_mode,
+            view_mode=view_mode, style=style,
+            user_instruction=character_description,
         )
         vc_data = PromptAdapter.get_view_config(view_mode)
         return (prompt, CortexViewConfig.from_config_result(vc_data))
@@ -129,12 +134,20 @@ class Cortex3d_CompositePromptBuilder:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, character_description, style, scene_description, view_mode):
         from ..adapters.prompt_adapter import PromptAdapter
         from ..types.view_config import CortexViewConfig
+        # 将角色+场景合成 instruction，映射 composite_type
+        instruction = f"{character_description}; scene: {scene_description}" if scene_description else character_description
+        # 根据 view_mode 推断 num_images
+        num_images_map = {"standard_4": 4, "standard_6": 6, "turntable_8": 8}
+        num_images = num_images_map.get(view_mode, 4)
         prompt = PromptAdapter.build_composite_prompt(
-            character_description=character_description,
-            style=style, scene_description=scene_description, view_mode=view_mode,
+            instruction=instruction,
+            composite_type="character_scene",
+            num_images=num_images,
+            style=style,
         )
         vc_data = PromptAdapter.get_view_config(view_mode)
         return (prompt, CortexViewConfig.from_config_result(vc_data))
@@ -160,9 +173,19 @@ class Cortex3d_NegativePrompt:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, style, extra_negative=""):
         from ..adapters.prompt_adapter import PromptAdapter
-        neg = PromptAdapter.get_negative_prompt(style=style)
+        # 将 style 字符串转为 categories 列表（adapter 接口）
+        _STYLE_CATEGORIES = {
+            "anime":     ["deformed", "blurry", "watermark"],
+            "realistic": ["deformed", "blurry", "watermark", "cartoon"],
+            "chibi":     ["deformed", "blurry", "watermark", "realistic"],
+            "western":   ["deformed", "blurry", "watermark", "anime"],
+            "sci-fi":    ["deformed", "blurry", "watermark"],
+        }
+        categories = _STYLE_CATEGORIES.get(style, ["deformed", "blurry", "watermark"])
+        neg = PromptAdapter.get_negative_prompt(categories=categories)
         if extra_negative:
             neg = f"{neg}, {extra_negative}"
         return (neg,)
@@ -191,9 +214,11 @@ class Cortex3d_PromptPreset:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, preset_name, view_mode):
         from ..adapters.prompt_adapter import PromptAdapter
         from ..types.view_config import CortexViewConfig
-        prompt = PromptAdapter.load_preset(preset_name=preset_name, view_mode=view_mode)
+        preset_data = PromptAdapter.load_preset(preset_name=preset_name)
+        prompt = preset_data.get("prompt", f"{preset_name} character, multiple views")
         vc_data = PromptAdapter.get_view_config(view_mode)
         return (prompt, CortexViewConfig.from_config_result(vc_data))

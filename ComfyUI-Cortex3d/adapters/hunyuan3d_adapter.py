@@ -7,10 +7,13 @@ from ..bridge.docker_bridge import DockerBridge
 from ..bridge.file_bridge import FileBridge
 from ..types.mesh import CortexMesh
 from ..types.control import CortexControl
+from .cache import ResultCache
 
 logger = logging.getLogger(__name__)
 _bridge = DockerBridge()
 _fb = FileBridge()
+_cache = ResultCache("hunyuan3d")
+_cache_omni = ResultCache("hunyuan3d-omni")
 
 HunyuanVersion = Literal["2.0", "2.1"]
 
@@ -29,6 +32,13 @@ class Hunyuan3DAdapter:
     ) -> Optional[CortexMesh]:
         service_map = {"2.0": "hunyuan3d", "2.1": "hunyuan3d-2.1"}
         service = service_map.get(version, "hunyuan3d-2.1")
+        # ── 缓存查找 ──
+        cache_kw = dict(image_path=image_path, version=version, no_texture=no_texture)
+        hit = _cache.get(**cache_kw)
+        if hit:
+            fmt = "glb" if hit.endswith(".glb") else "obj"
+            return CortexMesh(file_path=hit, format=fmt, source_algo=f"hunyuan3d-{version}")
+
         out_dir = output_dir or str(_fb.make_output_dir(f"comfyui_hunyuan_{version.replace('.','_')}"))
         container_img = _fb.to_container_path(image_path)
         container_out = _fb.to_container_path(out_dir)
@@ -55,6 +65,7 @@ class Hunyuan3DAdapter:
             glb = _fb.find_latest_file(out_dir, "*.obj")
         if not glb:
             return None
+        _cache.put(glb, **cache_kw)
         return CortexMesh(
             file_path=glb,
             format="glb" if glb.endswith(".glb") else "obj",
@@ -74,6 +85,15 @@ class Hunyuan3DAdapter:
         flashvdm: bool = False,
         output_dir: Optional[str] = None,
     ) -> Optional[CortexMesh]:
+        # ── 缓存查找 ──
+        ctrl_key = f"{control.control_type}:{control.data_path}" if control else "none"
+        cache_kw = dict(image_path=image_path, control=ctrl_key,
+                        steps=steps, octree_resolution=octree_resolution,
+                        guidance_scale=guidance_scale, flashvdm=flashvdm)
+        hit = _cache_omni.get(**cache_kw)
+        if hit:
+            return CortexMesh(file_path=hit, format="glb", source_algo="hunyuan3d-omni")
+
         out_dir = output_dir or str(_fb.make_output_dir("comfyui_hunyuan_omni"))
         container_img = _fb.to_container_path(image_path)
         container_out = _fb.to_container_path(out_dir)
@@ -103,4 +123,5 @@ class Hunyuan3DAdapter:
         glb = _fb.find_latest_file(out_dir, "*.glb")
         if not glb:
             return None
+        _cache_omni.put(glb, **cache_kw)
         return CortexMesh(file_path=glb, format="glb", source_algo="hunyuan3d-omni")

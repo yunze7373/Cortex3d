@@ -1,6 +1,7 @@
 """后处理类节点 (4) — UltraShape / 网格锐化 / Blender打印预处理 / 网格验证。"""
 from __future__ import annotations
 import os
+from ..utils.errors import node_guard
 
 CAT = "Cortex3d/PostProcess"
 
@@ -25,6 +26,7 @@ class Cortex3d_UltraShapeRefiner:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, mesh, preset="balanced", low_vram=False):
         from ..adapters.ultrashape_adapter import UltraShapeAdapter
         from ..bridge.file_bridge import FileBridge
@@ -60,6 +62,7 @@ class Cortex3d_MeshSharpener:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, mesh, iterations=3, lambda_factor=-0.5):
         if mesh is None:
             return (None,)
@@ -106,6 +109,7 @@ class Cortex3d_BlenderPrintPrep:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, mesh, profile, height_mm, voxel_size_mm, decimate_ratio, skip_remesh=False):
         if mesh is None:
             return (None,)
@@ -137,6 +141,7 @@ class Cortex3d_MeshValidator:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, mesh, fix_normals=True, fill_holes=False):
         if mesh is None:
             return (None, "mesh is None", False)

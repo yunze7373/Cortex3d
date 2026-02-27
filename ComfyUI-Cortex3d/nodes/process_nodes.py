@@ -1,6 +1,7 @@
 """图像处理类节点 (5) — 切割 / 去背景 / 碎片清除 / 增强 / 合并。"""
 from __future__ import annotations
 import os
+from ..utils.errors import node_guard
 
 CAT = "Cortex3d/Process"
 
@@ -26,6 +27,7 @@ class Cortex3d_MultiviewCutter:
     FUNCTION       = "execute"
     CATEGORY       = CAT
 
+    @node_guard()
     def execute(self, image, view_config, margin=4, no_rembg=False):
         from ..adapters.image_adapter import ImageAdapter
         from ..bridge.file_bridge import FileBridge
@@ -65,6 +67,7 @@ class Cortex3d_BackgroundRemover:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, model="isnet-general-use", bg_color="white"):
         from ..adapters.image_adapter import ImageAdapter
         from ..bridge.file_bridge import FileBridge
@@ -95,6 +98,7 @@ class Cortex3d_FragmentCleaner:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, min_area_ratio=0.05):
         from ..bridge.file_bridge import FileBridge
         from PIL import Image as PILImage
@@ -143,6 +147,7 @@ class Cortex3d_ImageEnhancer:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, scale=2, target_size=0, no_realesrgan=False, no_gfpgan=False):
         from ..adapters.image_adapter import ImageAdapter
         from ..bridge.file_bridge import FileBridge
@@ -176,6 +181,7 @@ class Cortex3d_ImageListMerge:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, images, columns):
         import math
         import torch

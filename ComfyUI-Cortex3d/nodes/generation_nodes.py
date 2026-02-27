@@ -1,6 +1,7 @@
 """图像生成类节点 (5) — Gemini / AiProxy / Z-Image / Qwen。"""
 from __future__ import annotations
 import os
+from ..utils.errors import node_guard
 
 CAT = "Cortex3d/Generate"
 
@@ -46,6 +47,7 @@ class Cortex3d_GeminiGenerator:
     CATEGORY      = CAT
     OUTPUT_IS_LIST = (True, False, False)
 
+    @node_guard()
     def execute(self, prompt, view_config, api_key,
                 model_name="gemini-2.0-flash-exp", negative_prompt="",
                 reference_image=None, resolution=1024,
@@ -105,6 +107,7 @@ class Cortex3d_AiProxyGenerator:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, prompt, api_key, model, width, height,
                 negative_prompt="", reference_image=None, seed=0, steps=20):
         from ..adapters.aiproxy_adapter import AiProxyAdapter
@@ -156,6 +159,7 @@ class Cortex3d_ZImageGenerator:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, prompt, server_url, width, height, steps=20, seed=0):
         from ..adapters.zimage_adapter import ZImageAdapter
         from ..bridge.file_bridge import FileBridge
@@ -196,6 +200,7 @@ class Cortex3d_ZImageImg2Img:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, prompt, server_url, strength, steps=20, seed=0):
         from ..adapters.zimage_adapter import ZImageAdapter
         from ..bridge.file_bridge import FileBridge
@@ -236,6 +241,7 @@ class Cortex3d_QwenImageEdit:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, prompt, server_url, cfg_scale=7.5, steps=30, seed=0):
         from ..adapters.qwen_adapter import QwenAdapter
         from ..bridge.file_bridge import FileBridge

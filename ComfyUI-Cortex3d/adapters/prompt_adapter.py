@@ -23,6 +23,22 @@ def _get_config():
 class PromptAdapter:
     """封装 config.py 的全部提示词构建函数，提供错误处理和回退逻辑。"""
 
+    # ── ComfyUI 节点 → config.py 视角模式名称映射 ──────────────────────
+    _VIEW_MODE_MAP = {
+        "standard_4":  "4-view",
+        "standard_6":  "6-view",
+        "turntable_8": "8-view",
+        "custom":      "custom",
+        # 允许直接传入 config.py 原生名称
+        "4-view": "4-view",
+        "6-view": "6-view",
+        "8-view": "8-view",
+    }
+
+    @classmethod
+    def _map_view_mode(cls, view_mode: str) -> str:
+        return cls._VIEW_MODE_MAP.get(view_mode, view_mode)
+
     # ── 视角提示词构建 ────────────────────────────────────────────────
 
     @staticmethod
@@ -39,7 +55,7 @@ class PromptAdapter:
             return cfg.build_multiview_prompt(
                 character_description=character_description,
                 style=style,
-                view_mode=view_mode,
+                view_mode=PromptAdapter._map_view_mode(view_mode),
                 custom_views=custom_views,
                 subject_only=subject_only,
                 with_props=with_props,
@@ -65,7 +81,7 @@ class PromptAdapter:
         try:
             return cfg.build_image_reference_prompt(
                 character_description=character_description,
-                view_mode=view_mode,
+                view_mode=PromptAdapter._map_view_mode(view_mode),
                 custom_views=custom_views,
                 style=style,
                 subject_only=subject_only,
@@ -90,7 +106,7 @@ class PromptAdapter:
         cfg = _get_config()
         try:
             return cfg.build_strict_copy_prompt(
-                view_mode=view_mode,
+                view_mode=PromptAdapter._map_view_mode(view_mode),
                 custom_views=custom_views,
                 style=style,
                 subject_only=subject_only,
@@ -146,7 +162,7 @@ class PromptAdapter:
         """返回 (views, rows, cols, aspect_ratio) 四元组。"""
         cfg = _get_config()
         try:
-            return cfg.get_view_config(view_mode=view_mode, custom_views=custom_views)
+            return cfg.get_view_config(view_mode=PromptAdapter._map_view_mode(view_mode), custom_views=custom_views)
         except Exception as e:
             logger.error(f"get_view_config 失败: {e}")
             # 默认 4 视角

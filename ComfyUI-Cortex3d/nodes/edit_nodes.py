@@ -1,6 +1,7 @@
 """图像编辑类节点 (3) — 服装提取 / 换装 / 风格迁移。"""
 from __future__ import annotations
 import os
+from ..utils.errors import node_guard
 
 CAT = "Cortex3d/Edit"
 
@@ -26,6 +27,7 @@ class Cortex3d_ClothingExtractor:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, server_url, clothing_description="", cfg_scale=7.5, steps=30):
         from ..adapters.qwen_adapter import QwenAdapter
         from ..bridge.file_bridge import FileBridge
@@ -69,6 +71,7 @@ class Cortex3d_WardrobeChange:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, character_image, clothing_image, server_url,
                 clothing_description="", cfg_scale=7.5, steps=30, seed=0):
         from ..adapters.qwen_adapter import QwenAdapter
@@ -127,6 +130,7 @@ class Cortex3d_StyleTransfer:
         "pixel_art":   "convert to retro 16-bit pixel art style, limited palette, dithering",
     }
 
+    @node_guard()
     def execute(self, image, target_style, server_url, style_strength=0.75, cfg_scale=7.5, steps=30):
         from ..adapters.qwen_adapter import QwenAdapter
         from ..bridge.file_bridge import FileBridge

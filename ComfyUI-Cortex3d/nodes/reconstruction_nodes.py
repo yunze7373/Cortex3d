@@ -1,6 +1,7 @@
 """3D 重建类节点 (6) — InstantMesh / TripoSR / TRELLIS2 / Hunyuan3D / Hunyuan3DOmni / MultiviewReconstruction。"""
 from __future__ import annotations
 import os
+from ..utils.errors import node_guard, ProgressReporter
 
 CAT = "Cortex3d/3D"
 
@@ -73,6 +74,7 @@ class Cortex3d_InstantMesh:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, quality_preset="balanced", diffusion_steps=75,
                 texture_resolution=1024, seed=42, export_texture=True, cortex_config=None):
         from ..adapters.instantmesh_adapter import InstantMeshAdapter
@@ -82,6 +84,8 @@ class Cortex3d_InstantMesh:
 
         fb = FileBridge()
         img_path = fb.tensor_to_tmp_png(image)
+        pr = ProgressReporter(total=3)
+        pr.update(1, "InstantMesh: 参数准备完成")
 
         # 从 CortexConfig 覆盖参数
         if cortex_config:
@@ -89,10 +93,12 @@ class Cortex3d_InstantMesh:
             diffusion_steps = cortex_config.params.get("diffusion_steps", presets.get("diffusion_steps", diffusion_steps))
             texture_resolution = cortex_config.params.get("texture_resolution", presets.get("texture_resolution", texture_resolution))
 
+        pr.update(2, "InstantMesh: 正在重建...")
         mesh = InstantMeshAdapter.reconstruct(
             image_path=img_path, diffusion_steps=diffusion_steps,
             texture_resolution=texture_resolution, seed=seed, export_texture=export_texture,
         )
+        pr.done("InstantMesh: 重建完成")
         preview = _make_preview(mesh)
         return (mesh, preview)
 
@@ -120,16 +126,20 @@ class Cortex3d_TripoSR:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, quality_preset="balanced", mc_resolution=256,
                 texture_resolution=2048, bake_texture=True):
         from ..adapters.triposr_adapter import TripoSRAdapter
         from ..bridge.file_bridge import FileBridge
         fb = FileBridge()
         img_path = fb.tensor_to_tmp_png(image)
+        pr = ProgressReporter(total=2)
+        pr.update(1, "TripoSR: 正在重建...")
         mesh = TripoSRAdapter.reconstruct(
             image_path=img_path, mc_resolution=mc_resolution,
             bake_texture=bake_texture, texture_resolution=texture_resolution,
         )
+        pr.done("TripoSR: 重建完成")
         return (mesh, _make_preview(mesh))
 
 
@@ -159,16 +169,20 @@ class Cortex3d_TRELLIS2:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, quality_preset="balanced", model="microsoft/TRELLIS.2-4B",
                 ss_steps=12, slat_steps=12, seed=42, decimation=500000, texture_size=2048):
         from ..adapters.trellis2_adapter import Trellis2Adapter
         from ..bridge.file_bridge import FileBridge
         fb = FileBridge()
         img_path = fb.tensor_to_tmp_png(image)
+        pr = ProgressReporter(total=2)
+        pr.update(1, "TRELLIS.2: 正在重建...")
         mesh = Trellis2Adapter.reconstruct(
             image_path=img_path, model=model, ss_steps=ss_steps,
             slat_steps=slat_steps, seed=seed, decimation=decimation, texture_size=texture_size,
         )
+        pr.done("TRELLIS.2: 重建完成")
         return (mesh, _make_preview(mesh))
 
 
@@ -194,6 +208,7 @@ class Cortex3d_Hunyuan3D:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, version="2.1", quality_preset="balanced", no_texture=False):
         from ..adapters.hunyuan3d_adapter import Hunyuan3DAdapter
         from ..bridge.file_bridge import FileBridge
@@ -201,9 +216,12 @@ class Cortex3d_Hunyuan3D:
         img_path = fb.tensor_to_tmp_png(image)
         if quality_preset == "fast":
             no_texture = True
+        pr = ProgressReporter(total=2)
+        pr.update(1, f"Hunyuan3D {version}: 正在重建...")
         mesh = Hunyuan3DAdapter.reconstruct(
             image_path=img_path, version=version, no_texture=no_texture,
         )
+        pr.done(f"Hunyuan3D {version}: 重建完成")
         return (mesh, _make_preview(mesh))
 
 
@@ -232,6 +250,7 @@ class Cortex3d_Hunyuan3DOmni:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, image, quality_preset="balanced", control=None,
                 steps=50, octree_resolution=512, guidance_scale=5.5, flashvdm=False):
         from ..adapters.hunyuan3d_adapter import Hunyuan3DAdapter
@@ -240,6 +259,8 @@ class Cortex3d_Hunyuan3DOmni:
         fb = FileBridge()
         img_path = fb.tensor_to_tmp_png(image)
         preset = QUALITY_PRESETS.get("hunyuan3d-omni", {}).get(quality_preset, {})
+        pr = ProgressReporter(total=2)
+        pr.update(1, "Hunyuan3D-Omni: 正在重建...")
         mesh = Hunyuan3DAdapter.reconstruct_omni(
             image_path=img_path, control=control,
             steps=preset.get("steps", steps),
@@ -247,6 +268,7 @@ class Cortex3d_Hunyuan3DOmni:
             guidance_scale=preset.get("guidance_scale", guidance_scale),
             flashvdm=preset.get("flashvdm", flashvdm),
         )
+        pr.done("Hunyuan3D-Omni: 重建完成")
         return (mesh, _make_preview(mesh))
 
 
@@ -276,6 +298,7 @@ class Cortex3d_MultiviewReconstruction:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, images, algorithm, quality_preset, cortex_config=None, seed=None):
         # INPUT_IS_LIST=True 时所有入参都是列表
         algo     = algorithm[0]     if isinstance(algorithm, list)     else algorithm
@@ -288,6 +311,8 @@ class Cortex3d_MultiviewReconstruction:
         paths = [fb.tensor_to_tmp_png(img) for img in images_list]
         primary = paths[0] if paths else None
 
+        pr = ProgressReporter(total=2)
+        pr.update(1, f"多视角重建 ({algo}): 正在运行...")
         mesh = None
         if algo == "instantmesh":
             from ..adapters.instantmesh_adapter import InstantMeshAdapter
@@ -304,4 +329,5 @@ class Cortex3d_MultiviewReconstruction:
             from ..adapters.triposr_adapter import TripoSRAdapter
             mesh = TripoSRAdapter.reconstruct(image_path=primary)
 
+        pr.done(f"多视角重建 ({algo}): 完成")
         return (mesh, _make_preview(mesh))

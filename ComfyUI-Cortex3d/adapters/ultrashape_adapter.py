@@ -6,10 +6,12 @@ from typing import Optional, Literal
 from ..bridge.docker_bridge import DockerBridge
 from ..bridge.file_bridge import FileBridge
 from ..types.mesh import CortexMesh
+from .cache import ResultCache
 
 logger = logging.getLogger(__name__)
 _bridge = DockerBridge()
 _fb = FileBridge()
+_cache = ResultCache("ultrashape")
 
 UltraPreset = Literal["lowmem", "fast", "balanced", "high", "ultra"]
 
@@ -24,6 +26,14 @@ class UltraShapeAdapter:
         low_vram: bool = False,
         output_dir: Optional[str] = None,
     ) -> Optional[CortexMesh]:
+        # ── 缓存查找 ──
+        cache_kw = dict(image_path=image_path, mesh_path=mesh_path,
+                        preset=preset, low_vram=low_vram)
+        hit = _cache.get(**cache_kw)
+        if hit:
+            fmt = "glb" if hit.endswith(".glb") else "obj"
+            return CortexMesh(file_path=hit, format=fmt, source_algo="ultrashape")
+
         out_dir = output_dir or str(_fb.make_output_dir("comfyui_ultrashape"))
         container_img  = _fb.to_container_path(image_path)
         container_mesh = _fb.to_container_path(mesh_path)
@@ -55,6 +65,7 @@ class UltraShapeAdapter:
             glb = _fb.find_latest_file(out_dir, "*.obj")
         if not glb:
             return None
+        _cache.put(glb, **cache_kw)
         return CortexMesh(
             file_path=glb,
             format="glb" if glb.endswith(".glb") else "obj",

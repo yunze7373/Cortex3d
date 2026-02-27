@@ -1,6 +1,7 @@
 """工具类节点 (4) — Docker管理 / 网格加载 / 网格保存 / 质量预设。"""
 from __future__ import annotations
 import os
+from ..utils.errors import node_guard
 
 CAT = "Cortex3d/Utility"
 
@@ -11,7 +12,7 @@ class Cortex3d_DockerManager:
         "instantmesh", "trellis2", "hunyuan3d", "hunyuan3d-2.1",
         "hunyuan3d-omni", "ultrashape", "zimage", "qwen-image-edit",
     ]
-    ACTIONS = ["status", "start", "stop", "restart"]
+    ACTIONS = ["status", "start", "stop", "restart", "clear_cache"]
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -27,6 +28,7 @@ class Cortex3d_DockerManager:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, service, action):
         from ..bridge.docker_bridge import DockerBridge
         bridge = DockerBridge()
@@ -47,6 +49,10 @@ class Cortex3d_DockerManager:
                 bridge.start(service)
                 running = bridge.is_running(service)
                 return (f"{service}: restarted", running)
+            elif action == "clear_cache":
+                from ..adapters.cache import clear_all_caches
+                clear_all_caches()
+                return ("Cache cleared ✓", True)
         except Exception as e:
             return (f"Error: {e}", False)
         return (f"Unknown action: {action}", False)
@@ -68,6 +74,7 @@ class Cortex3d_MeshLoader:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, file_path, source_algo="external"):
         from ..types.mesh import CortexMesh
         if not file_path or not os.path.isfile(file_path):
@@ -102,6 +109,7 @@ class Cortex3d_MeshSaver:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, mesh, output_dir, filename, format):
         import shutil
         from ..bridge.file_bridge import FileBridge
@@ -154,6 +162,7 @@ class Cortex3d_QualityPreset:
     FUNCTION      = "execute"
     CATEGORY      = CAT
 
+    @node_guard()
     def execute(self, algorithm, preset_level, custom_params="{}"):
         import json
         from ..types.config import CortexConfig, QUALITY_PRESETS

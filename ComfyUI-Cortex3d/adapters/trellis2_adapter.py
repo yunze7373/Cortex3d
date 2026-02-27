@@ -6,10 +6,12 @@ from typing import Optional
 from ..bridge.docker_bridge import DockerBridge
 from ..bridge.file_bridge import FileBridge
 from ..types.mesh import CortexMesh
+from .cache import ResultCache
 
 logger = logging.getLogger(__name__)
 _bridge = DockerBridge()
 _fb = FileBridge()
+_cache = ResultCache("trellis2")
 
 DEFAULT_MODEL = "microsoft/TRELLIS.2-4B"
 
@@ -27,6 +29,14 @@ class Trellis2Adapter:
         texture_size: int = 2048,
         output_dir: Optional[str] = None,
     ) -> Optional[CortexMesh]:
+        # ── 缓存查找 ──
+        cache_kw = dict(image_path=image_path, model=model, ss_steps=ss_steps,
+                        slat_steps=slat_steps, seed=seed, decimation=decimation,
+                        texture_size=texture_size)
+        hit = _cache.get(**cache_kw)
+        if hit:
+            return CortexMesh(file_path=hit, format="glb", source_algo="trellis2")
+
         out_dir = output_dir or str(_fb.make_output_dir("comfyui_trellis2"))
         container_img = _fb.to_container_path(image_path)
         container_out = _fb.to_container_path(out_dir)
@@ -54,6 +64,7 @@ class Trellis2Adapter:
         if not glb_path:
             logger.warning("Trellis2 未找到 .glb 输出")
             return None
+        _cache.put(glb_path, **cache_kw)
         return CortexMesh(file_path=glb_path, format="glb", source_algo="trellis2")
 
     @staticmethod
