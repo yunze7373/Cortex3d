@@ -1,4 +1,5 @@
 """Adapters — 对现有 Cortex3d scripts/ 的 Python 调用封装层。"""
+from .cache import ResultCache, get_or_create_client, lru_result, clear_all_caches
 
 from .prompt_adapter import PromptAdapter
 from .gemini_adapter import GeminiAdapter

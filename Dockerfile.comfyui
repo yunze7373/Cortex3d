@@ -1,0 +1,50 @@
+# ComfyUI + Cortex3d 节点包
+# 基于 CUDA 12.1 + Python 3.11，无需在容器内打包 GPU 模型（通过 Docker Bridge 调用其他容器）
+
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+
+ARG COMFYUI_VERSION=0.3.10
+ARG PYTHON_VERSION=3.11
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    COMFYUI_DIR=/app/ComfyUI
+
+# ── 系统依赖 ───────────────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python${PYTHON_VERSION} python${PYTHON_VERSION}-dev python3-pip python3-venv \
+    git wget curl ffmpeg libgl1 libglib2.0-0 \
+    docker.io docker-compose-plugin \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN ln -sf /usr/bin/python${PYTHON_VERSION} /usr/bin/python3 \
+ && ln -sf /usr/bin/python3 /usr/bin/python
+
+# ── 安装 ComfyUI ───────────────────────────────────────────────────────────
+WORKDIR /app
+RUN git clone --depth 1 --branch v${COMFYUI_VERSION} \
+    https://github.com/comfyanonymous/ComfyUI.git || \
+    git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git
+
+WORKDIR ${COMFYUI_DIR}
+RUN pip install --upgrade pip \
+ && pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 \
+ && pip install -r requirements.txt
+
+# ── 安装 Cortex3d 节点包依赖 ───────────────────────────────────────────────
+COPY ComfyUI-Cortex3d/requirements.txt /tmp/cortex3d_req.txt
+RUN pip install -r /tmp/cortex3d_req.txt
+
+# ── 挂载节点包（通过 volume 映射，勿 COPY — 开发时便于热更新）─────────────
+
+# ── 启动脚本 ───────────────────────────────────────────────────────────────
+COPY docker_entrypoint_comfyui.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 8188
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
+    CMD curl -f http://localhost:8188/ || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]

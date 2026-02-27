@@ -248,6 +248,53 @@ services:
               count: 1
               capabilities: [gpu]
 
+  # ==========================================================================
+  # ComfyUI + Cortex3d 节点包
+  # 端口: 8188 (Web UI)
+  # 通过 /var/run/docker.sock 调用其他 GPU 容器（Docker Bridge 模式）
+  # ==========================================================================
+  comfyui:
+    build:
+      context: .
+      dockerfile: Dockerfile.comfyui
+    image: cortex3d-comfyui:latest
+    container_name: cortex3d-comfyui
+    working_dir: /app/ComfyUI
+    ports:
+      - "8188:8188"
+    volumes:
+      - .:/workspace                                    # 共享项目工作区（含 scripts/）
+      - /var/run/docker.sock:/var/run/docker.sock       # Docker Bridge 调用其他容器
+      - hf-cache:/root/.cache/huggingface
+      - comfyui-models:/app/ComfyUI/models
+      - comfyui-output:/app/ComfyUI/output
+    environment:
+      - CORTEX3D_WORKSPACE=/workspace
+      - CORTEX3D_DOCKER_MODE=compose
+      - CORTEX3D_COMPOSE_FILE=/workspace/compose.yml
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - AIPROXY_API_KEY=${AIPROXY_API_KEY:-}
+      - AIPROXY_URL=${AIPROXY_URL:-}
+      - HF_TOKEN=${HF_TOKEN:-}
+      - ZIMAGE_URL=http://zimage:8199
+      - QWEN_URL=http://qwen-image-edit:8200
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8188/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
 volumes:
   hf-cache:
+  comfyui-models:
+  comfyui-output:
 

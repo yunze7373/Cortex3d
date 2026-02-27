@@ -169,4 +169,14 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Cortex3d_QualityPreset":          "⚙️ 质量预设",
 }
 
-__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
+# ── 初始化日志 ─────────────────────────────────────────────────────────────
+try:
+    from .utils.errors import setup_logging
+    setup_logging(os.environ.get("CORTEX3D_LOG_LEVEL", "INFO"))
+except Exception:
+    pass
+
+# ── 注册 Web 扩展目录（CSS + JS Widget） ──────────────────────────────────
+WEB_DIRECTORY = str(Path(__file__).parent / "web")
+
+__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
