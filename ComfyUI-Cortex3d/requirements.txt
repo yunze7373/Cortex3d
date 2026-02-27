@@ -1,0 +1,24 @@
+# ComfyUI-Cortex3d 依赖
+# 注意: 3D 重建模型全部通过 Docker 容器运行，无需在 ComfyUI 主机安装重型依赖
+
+# 图像处理（轻量）
+Pillow>=10.0
+numpy>=1.24
+
+# 3D 网格工具（预览/验证，不含模型）
+trimesh>=4.0
+
+# HTTP 客户端（调用 Docker 容器内的 Flask/Gradio 服务）
+requests>=2.28
+
+# YAML 配置解析
+pyyaml>=6.0
+
+# 环境变量加载
+python-dotenv>=1.0
+
+# 背景移除（运行在 ComfyUI 主机，轻量）
+rembg>=2.0
+
+# Gemini API（仅 REST 调用，无本地模型）
+google-generativeai>=0.8

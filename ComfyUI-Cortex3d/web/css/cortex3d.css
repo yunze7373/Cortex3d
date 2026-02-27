@@ -1,0 +1,123 @@
+/* ComfyUI-Cortex3d — 全局样式 */
+
+/* ── 自定义数据类型连接线颜色 ─────────────────────────────────────────── */
+:root {
+    --cx-mesh:    #7c5cbf;
+    --cx-view:    #5c9cbf;
+    --cx-cfg:     #9c7c5c;
+    --cx-ctrl:    #bf5c7c;
+    --cx-prompt:  #1a3a5c;
+    --cx-gen:     #1a4a2a;
+    --cx-proc:    #3a2a1a;
+    --cx-recon:   #2a1a4a;
+    --cx-post:    #4a2a1a;
+    --cx-edit:    #4a1a3a;
+    --cx-util:    #2a2a2a;
+}
+
+/* ── 3D预览面板 ────────────────────────────────────────────────────────── */
+#cortex3d-preview-panel {
+    position:    fixed;
+    right:       16px;
+    bottom:      16px;
+    width:       520px;
+    background:  #0d0d1a;
+    border:      1px solid #7c5cbf;
+    border-radius: 10px;
+    box-shadow:  0 8px 32px rgba(0, 0, 0, 0.6);
+    z-index:     9999;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    color:       #e0d8f8;
+    overflow:    hidden;
+}
+
+.cortex3d-panel-header {
+    display:         flex;
+    justify-content: space-between;
+    align-items:     center;
+    padding:         8px 12px;
+    background:      #1a0a2e;
+    border-bottom:   1px solid #7c5cbf44;
+    font-weight:     600;
+    font-size:       13px;
+}
+
+.cortex3d-close {
+    background:    none;
+    border:        none;
+    color:         #a090d0;
+    cursor:        pointer;
+    font-size:     14px;
+    padding:       2px 6px;
+    border-radius: 4px;
+    transition:    background 0.2s;
+}
+.cortex3d-close:hover { background: #7c5cbf44; color: #fff; }
+
+.cortex3d-panel-body {
+    display:        flex;
+    flex-direction: column;
+    align-items:    center;
+    padding:        8px;
+}
+
+#cortex3d-canvas {
+    width:         480px;
+    height:        360px;
+    border-radius: 6px;
+    cursor:        grab;
+}
+#cortex3d-canvas:active { cursor: grabbing; }
+
+.cortex3d-panel-info {
+    margin-top: 6px;
+    font-size:  11px;
+    color:      #8878c0;
+}
+
+.cortex3d-panel-footer {
+    padding:    4px 12px 8px;
+    text-align: center;
+    font-size:  10px;
+    color:      #5a4a8a;
+}
+
+/* ── 节点分类颜色（辅助选择器）──────────────────────────────────────── */
+.litecontextmenu .prompt-category  { color: #7cbfff; }
+.litecontextmenu .generate-category{ color: #7cbf7c; }
+.litecontextmenu .recon-category   { color: #bf7cbf; }
+
+/* ── 节点输出连接线颜色覆盖（LiteGraph canvas）──────────────────────── */
+/* LiteGraph 不支持 CSS 覆盖连线颜色，颜色在 JS 端控制（见 __init__.py TYPE_COLORS）*/
+
+/* ── 工具提示 ────────────────────────────────────────────────────────── */
+.cortex3d-tooltip {
+    position:      absolute;
+    background:    #1a0a2e;
+    border:        1px solid #7c5cbf;
+    border-radius: 4px;
+    padding:       4px 8px;
+    font-size:     11px;
+    pointer-events: none;
+    z-index:       10001;
+    max-width:     240px;
+    word-wrap:     break-word;
+}
+
+/* ── 进度指示条（长时间重建任务）────────────────────────────────────── */
+.cortex3d-progress {
+    width:         100%;
+    height:        3px;
+    background:    #1a0a2e;
+    border-radius: 2px;
+    overflow:      hidden;
+}
+.cortex3d-progress-bar {
+    height:     100%;
+    background: linear-gradient(90deg, #7c5cbf, #5c9cbf);
+    animation:  cortex3d-shimmer 1.5s infinite;
+}
+@keyframes cortex3d-shimmer {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+}

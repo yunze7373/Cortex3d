@@ -1,0 +1,43 @@
+{
+  "_comment": "Cortex3d — 纯本地离线流水线 (Z-Image + TripoSR，无需云API)",
+  "version": "0.4",
+  "nodes": [
+    {"id":1,"type":"Cortex3d_ZImageGenerator","pos":[40,80],"size":[320,180],
+     "outputs":[{"name":"image","type":"IMAGE","links":[1]}],
+     "widgets_values":["anime girl, front view, white background, full body, high quality",
+                       "http://localhost:8199",1024,1024,20,42]},
+    {"id":2,"type":"Cortex3d_BackgroundRemover","pos":[420,80],"size":[260,80],
+     "inputs":[{"name":"image","type":"IMAGE","link":1}],
+     "outputs":[{"name":"image","type":"IMAGE","links":[2]}],
+     "widgets_values":["isnet-general-use","white"]},
+    {"id":3,"type":"Cortex3d_ImageEnhancer","pos":[420,200],"size":[260,100],
+     "inputs":[{"name":"image","type":"IMAGE","link":2}],
+     "outputs":[{"name":"image","type":"IMAGE","links":[3]}],
+     "widgets_values":[2,1024,false,false]},
+    {"id":4,"type":"Cortex3d_DockerManager","pos":[40,300],"size":[260,80],
+     "outputs":[{"name":"status_msg","type":"STRING","links":[]},{"name":"is_running","type":"BOOLEAN","links":[]}],
+     "widgets_values":["instantmesh","start"]},
+    {"id":5,"type":"Cortex3d_TripoSR","pos":[740,80],"size":[300,160],
+     "inputs":[{"name":"image","type":"IMAGE","link":3}],
+     "outputs":[{"name":"mesh","type":"CORTEX_MESH","links":[4]},{"name":"preview","type":"IMAGE","links":[5]}],
+     "widgets_values":["balanced",256,2048,true]},
+    {"id":6,"type":"Cortex3d_MeshValidator","pos":[1100,80],"size":[260,100],
+     "inputs":[{"name":"mesh","type":"CORTEX_MESH","link":4}],
+     "outputs":[{"name":"mesh","type":"CORTEX_MESH","links":[6]},{"name":"report","type":"STRING","links":[7]},{"name":"is_valid","type":"BOOLEAN","links":[]}],
+     "widgets_values":[true,false]},
+    {"id":7,"type":"Cortex3d_MeshSaver","pos":[1100,220],"size":[260,100],
+     "inputs":[{"name":"mesh","type":"CORTEX_MESH","link":6}],
+     "outputs":[{"name":"saved_path","type":"STRING","links":[]}],
+     "widgets_values":["","offline_output","obj"]},
+    {"id":8,"type":"PreviewImage","pos":[1400,80],"size":[300,260],"inputs":[{"name":"images","type":"IMAGE","link":5}]},
+    {"id":9,"type":"ShowText|pysssss","pos":[1100,360],"size":[260,80],"inputs":[{"name":"text","type":"STRING","link":7}]}
+  ],
+  "links":[
+    [1,1,0,2,0,"IMAGE"],[2,2,0,3,0,"IMAGE"],[3,3,0,5,0,"IMAGE"],
+    [4,5,0,6,0,"CORTEX_MESH"],[5,5,1,8,0,"IMAGE"],
+    [6,6,0,7,0,"CORTEX_MESH"],[7,6,1,9,0,"STRING"]
+  ],
+  "extra":{
+    "_note":"此工作流仅依赖本地 Z-Image(:8199) + TripoSR(instantmesh容器)，无需 Gemini/AiProxy 云端 API"
+  }
+}

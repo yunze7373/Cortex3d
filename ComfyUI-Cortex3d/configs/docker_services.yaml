@@ -1,0 +1,91 @@
+---
+# ComfyUI-Cortex3d Docker 容器服务配置
+# 描述 Cortex3d compose.yml 中各容器的 RPC 接入方式
+
+services:
+
+  instantmesh:
+    description: "InstantMesh + TripoSR + Blender 4.2"
+    mode: docker_exec          # 通过 docker compose exec 调用脚本
+    compose_service: instantmesh
+    scripts:
+      instantmesh: "/workspace/scripts/run_instantmesh.py"
+      triposr:     "/workspace/scripts/run_triposr.py"
+      multiview:   "/workspace/scripts/run_instantmesh_multiview.py"
+    vram_gb: 8
+    timeout_s: 600
+
+  trellis2:
+    description: "Microsoft TRELLIS.2 (O-Voxel)"
+    mode: docker_exec
+    compose_service: trellis2
+    scripts:
+      trellis2: "/workspace/scripts/run_trellis2.py"
+    vram_gb: 16
+    timeout_s: 900
+
+  hunyuan3d:
+    description: "腾讯 Hunyuan3D 2.0"
+    mode: docker_exec
+    compose_service: hunyuan3d
+    scripts:
+      hunyuan3d: "/workspace/scripts/run_hunyuan3d.py"
+    vram_gb: 16
+    timeout_s: 1200
+
+  hunyuan3d-21:
+    description: "腾讯 Hunyuan3D 2.1"
+    mode: docker_exec
+    compose_service: hunyuan3d-2.1
+    scripts:
+      hunyuan3d_21: "/workspace/scripts/run_hunyuan3d.py"
+    vram_gb: 16
+    timeout_s: 1200
+
+  hunyuan3d-omni:
+    description: "Hunyuan3D-Omni 全能版（支持控制信号）"
+    mode: docker_exec
+    compose_service: hunyuan3d-omni
+    scripts:
+      hunyuan3d_omni: "/workspace/scripts/run_hunyuan3d_omni.py"
+    vram_gb: 10
+    timeout_s: 1800
+
+  ultrashape:
+    description: "UltraShape 几何精化器 (Gradio UI + API)"
+    mode: http                 # 通过 HTTP API 调用
+    compose_service: ultrashape
+    base_url: "http://ultrashape:7863"
+    api_endpoint: "/api/predict"
+    vram_gb_per_preset:
+      lowmem: 5
+      fast: 6
+      balanced: 10
+      high: 24
+      ultra: 32
+    timeout_s: 3600
+
+  zimage:
+    description: "Z-Image-Turbo 本地图像生成（阿里通义）"
+    mode: http
+    compose_service: zimage
+    base_url_env: ZIMAGE_URL
+    base_url_default: "http://localhost:8199"
+    endpoints:
+      generate: "/generate"
+      img2img:  "/img2img"
+      health:   "/health"
+    vram_gb: 16
+    timeout_s: 300
+
+  qwen-image-edit:
+    description: "Qwen-Image-Edit 20B 图像编辑"
+    mode: http
+    compose_service: qwen-image-edit
+    base_url_env: QWEN_IMAGE_EDIT_URL
+    base_url_default: "http://localhost:8200"
+    endpoints:
+      edit:   "/edit"
+      health: "/health"
+    vram_gb: 16
+    timeout_s: 600

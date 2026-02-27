@@ -1,0 +1,61 @@
+{
+  "_comment": "Cortex3d — 多算法对比工作流 (InstantMesh vs TRELLIS2 vs Hunyuan3D-2.1)",
+  "version": "0.4",
+  "nodes": [
+    {
+      "id": 1, "type": "Cortex3d_MultiviewPromptBuilder",
+      "pos": [40, 80], "size": [340, 180],
+      "outputs": [{"name":"prompt","type":"STRING","links":[1]},{"name":"view_config","type":"CORTEX_VIEW_CONFIG","links":[2,3,4]}],
+      "widgets_values": ["armored fantasy warrior", "anime", "standard_4", false, false, ""]
+    },
+    {
+      "id": 2, "type": "Cortex3d_GeminiGenerator",
+      "pos": [440, 80], "size": [360, 220],
+      "inputs":  [{"name":"prompt","type":"STRING","link":1},{"name":"view_config","type":"CORTEX_VIEW_CONFIG","link":2}],
+      "outputs": [{"name":"images","type":"IMAGE","links":[5,6,7,8]},{"name":"view_config","type":"CORTEX_VIEW_CONFIG","links":[]},{"name":"output_dir","type":"STRING","links":[]}],
+      "widgets_values": ["", "gemini-2.0-flash-exp", "", 1024, false, 42]
+    },
+    {
+      "id": 10, "type": "Cortex3d_InstantMesh",
+      "pos": [860, 40], "size": [300, 180],
+      "inputs":  [{"name":"image","type":"IMAGE","link":5}],
+      "outputs": [{"name":"mesh","type":"CORTEX_MESH","links":[11]},{"name":"preview","type":"IMAGE","links":[14]}],
+      "widgets_values": ["balanced", 75, 1024, 42, true]
+    },
+    {
+      "id": 11, "type": "Cortex3d_TRELLIS2",
+      "pos": [860, 260], "size": [300, 200],
+      "inputs":  [{"name":"image","type":"IMAGE","link":6}],
+      "outputs": [{"name":"mesh","type":"CORTEX_MESH","links":[12]},{"name":"preview","type":"IMAGE","links":[15]}],
+      "widgets_values": ["balanced","microsoft/TRELLIS.2-4B",12,12,42,500000,2048]
+    },
+    {
+      "id": 12, "type": "Cortex3d_Hunyuan3D",
+      "pos": [860, 500], "size": [300, 160],
+      "inputs":  [{"name":"image","type":"IMAGE","link":7}],
+      "outputs": [{"name":"mesh","type":"CORTEX_MESH","links":[13]},{"name":"preview","type":"IMAGE","links":[16]}],
+      "widgets_values": ["2.1", "balanced", false]
+    },
+    {
+      "id": 20, "type": "PreviewImage", "pos": [1220, 40],  "size": [280,240], "inputs": [{"name":"images","type":"IMAGE","link":14}] },
+    {
+      "id": 21, "type": "PreviewImage", "pos": [1220, 300], "size": [280,240], "inputs": [{"name":"images","type":"IMAGE","link":15}] },
+    {
+      "id": 22, "type": "PreviewImage", "pos": [1220, 560], "size": [280,240], "inputs": [{"name":"images","type":"IMAGE","link":16}] }
+  ],
+  "links": [
+    [1,  1, 0, 2, 0, "STRING"],
+    [2,  1, 1, 2, 1, "CORTEX_VIEW_CONFIG"],
+    [5,  2, 0, 10,0, "IMAGE"],
+    [6,  2, 0, 11,0, "IMAGE"],
+    [7,  2, 0, 12,0, "IMAGE"],
+    [14, 10,1, 20,0, "IMAGE"],
+    [15, 11,1, 21,0, "IMAGE"],
+    [16, 12,1, 22,0, "IMAGE"]
+  ],
+  "groups": [
+    {"title":"InstantMesh 分支","bounding":[840,20,300,220],"color":"#2a1a4a"},
+    {"title":"TRELLIS2 分支",  "bounding":[840,240,300,220],"color":"#1a2a4a"},
+    {"title":"Hunyuan3D 分支", "bounding":[840,460,300,220],"color":"#1a4a2a"}
+  ]
+}
