@@ -15,7 +15,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python${PYTHON_VERSION} python${PYTHON_VERSION}-dev python3-pip python3-venv \
     git wget curl ffmpeg libgl1 libglib2.0-0 \
-    docker.io docker-compose-plugin \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ln -sf /usr/bin/python${PYTHON_VERSION} /usr/bin/python3 \
