@@ -1,0 +1,4 @@
+3d.home.lan {
+    reverse_proxy localhost:5173
+    encode gzip
+}

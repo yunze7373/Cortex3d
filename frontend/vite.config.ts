@@ -8,6 +8,13 @@ export default defineConfig({
     host: '0.0.0.0',        // 监听所有网络接口
     port: 5173,
     strictPort: false,       // 端口占用时自动尝试下一个
+    allowedHosts: [
+      'localhost',
+      '127.0.0.1',
+      '3d.home.lan',         // 自定义域名
+      '*.home.lan',          // 支持所有 .home.lan 域名
+      '*.localhost',
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:8000',  // 本地开发时代理到 localhost:8000

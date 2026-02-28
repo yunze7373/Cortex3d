@@ -24,12 +24,16 @@ app = FastAPI(
 # CORS middleware
 # 允许来源: 开发环境 + 生产环境 (通过环境变量 CORS_ORIGINS 配置)
 _cors_origins = os.environ.get("CORS_ORIGINS", "")
+_domain_name = os.environ.get("CORTEX3D_DOMAIN", "3d.home.lan")
 _allowed_origins = [
     "http://localhost:5173",
     "http://localhost:3000",
     "http://localhost:8000",
-    "http://172.28.124.41:5173",    # WSL 局域网 IP - 前端
-    "http://172.28.124.41:8000",    # WSL 局域网 IP - 后端
+    "http://172.28.124.41:5173",    # WSL 局域网 IP
+    "http://172.28.124.41:8000",
+    f"http://{_domain_name}:5173",  # 域名访问（带端口）
+    f"http://{_domain_name}:8000",
+    f"https://{_domain_name}",      # Caddy 反向代理（无端口 HTTPS）
 ]
 if _cors_origins:
     _allowed_origins.extend([o.strip() for o in _cors_origins.split(",") if o.strip()])

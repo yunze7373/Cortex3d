@@ -30,6 +30,17 @@ env/
 
 # Project specific
 outputs/
+logs/
+
+# Runtime artifacts
+.backend.pid
+.frontend.pid
+.caddy.pid
+caddy.pid
+
+# Environment variables
+.env.local
+.env.*.local
 
 # OS specific
 .DS_Store
