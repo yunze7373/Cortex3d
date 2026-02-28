@@ -54,22 +54,7 @@ export const PreviewGallery: React.FC<PreviewGalleryProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
 
-  if (!generation && !isGenerating) {
-    return (
-      <Card variant="glass" className="h-full flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-bg-hover flex items-center justify-center">
-            <Grid3X3 className="w-10 h-10 text-text-muted" />
-          </div>
-          <h3 className="text-lg font-medium text-text-primary mb-2">暂无生成的图像</h3>
-          <p className="text-sm text-text-muted max-w-xs">
-            输入描述并点击生成按钮来创建多视角角色图像
-          </p>
-        </div>
-      </Card>
-    );
-  }
-
+  // ---- 所有 hook 必须在任何条件 return 之前声明 ----
   const images = generation?.images
     ? Object.entries(generation.images)
       .filter(([_, url]) => url)
@@ -105,6 +90,23 @@ export const PreviewGallery: React.FC<PreviewGalleryProps> = ({
   }, [sortedImages]);
 
   const currentIndex = sortedImages.findIndex((img) => img.view === selectedView);
+  // ---- hook 声明结束 ----
+
+  if (!generation && !isGenerating) {
+    return (
+      <Card variant="glass" className="h-full flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-bg-hover flex items-center justify-center">
+            <Grid3X3 className="w-10 h-10 text-text-muted" />
+          </div>
+          <h3 className="text-lg font-medium text-text-primary mb-2">暂无生成的图像</h3>
+          <p className="text-sm text-text-muted max-w-xs">
+            输入描述并点击生成按钮来创建多视角角色图像
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   const goToPrevious = () => {
     const newIndex = currentIndex > 0 ? currentIndex - 1 : sortedImages.length - 1;

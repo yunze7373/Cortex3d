@@ -6,6 +6,15 @@ import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, Imag
 import { extractClothes, type ProgressEvent } from '../services/api';
 import type { FeatureTab } from '../types';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+/** 将服务器相对路径转换为完整 URL */
+function resolveImageUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
 interface ExtractClothesPageProps {
   activeTab: FeatureTab;
   onTabChange: (tab: FeatureTab) => void;
@@ -175,7 +184,7 @@ const ExtractClothesPage: React.FC<ExtractClothesPageProps> = ({ activeTab, onTa
                     <div>
                       <p className="text-sm text-text-muted mb-2">提取的服装</p>
                       <img
-                        src={result.extractedClothes}
+                        src={resolveImageUrl(result.extractedClothes)}
                         alt="Extracted clothes"
                         className="w-full rounded-lg"
                       />
@@ -184,7 +193,7 @@ const ExtractClothesPage: React.FC<ExtractClothesPageProps> = ({ activeTab, onTa
                         className="w-full mt-2"
                         onClick={() => {
                           const link = document.createElement('a');
-                          link.href = result.extractedClothes!;
+                          link.href = resolveImageUrl(result.extractedClothes!);
                           link.download = 'extracted-clothes.png';
                           link.click();
                         }}
