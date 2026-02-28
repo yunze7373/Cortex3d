@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Download,
@@ -8,6 +8,8 @@ import {
   Maximize2,
   ChevronLeft,
   ChevronRight,
+  PackageOpen,
+  Loader2,
 } from 'lucide-react';
 import { Button, Card, ImageGrid, RealProgress } from '../common';
 import type { GenerateResponse } from '../../types';
@@ -21,6 +23,28 @@ interface PreviewGalleryProps {
 
 const viewOrder = ['front', 'frontRight', 'right', 'backRight', 'back', 'backLeft', 'left', 'frontLeft'];
 
+/** 下载单张图片（通过 blob 确保触发保存） */
+async function downloadImage(url: string, filename: string) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    // fallback: 直接链接下载
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+  }
+}
+
 export const PreviewGallery: React.FC<PreviewGalleryProps> = ({
   generation,
   isGenerating,
@@ -28,6 +52,7 @@ export const PreviewGallery: React.FC<PreviewGalleryProps> = ({
 }) => {
   const [selectedView, setSelectedView] = useState<string>('front');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
 
   if (!generation && !isGenerating) {
     return (
@@ -59,12 +84,25 @@ export const PreviewGallery: React.FC<PreviewGalleryProps> = ({
     ? images.find((img) => img.view === selectedView)
     : images[0];
 
-  const handleDownload = async (url: string, view: string) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `cortex3d-${view}-${Date.now()}.png`;
-    link.click();
-  };
+  const handleDownload = useCallback(async (url: string, view: string) => {
+    await downloadImage(url, `cortex3d-${view}-${Date.now()}.png`);
+  }, []);
+
+  /** 一键下载所有视角图片 */
+  const handleDownloadAll = useCallback(async () => {
+    if (sortedImages.length === 0) return;
+    setIsDownloadingAll(true);
+    const ts = Date.now();
+    for (let i = 0; i < sortedImages.length; i++) {
+      const img = sortedImages[i];
+      await downloadImage(img.url, `cortex3d-${img.view}-${ts}.png`);
+      // 间隔 300ms 避免浏览器拦截多次下载
+      if (i < sortedImages.length - 1) {
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    }
+    setIsDownloadingAll(false);
+  }, [sortedImages]);
 
   const currentIndex = sortedImages.findIndex((img) => img.view === selectedView);
 
@@ -92,22 +130,13 @@ export const PreviewGallery: React.FC<PreviewGalleryProps> = ({
           )}
         </h3>
         {currentImage && (
-          <div className="flex gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleDownload(currentImage.url, currentImage.view)}
-            >
-              <Download className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsFullscreen(true)}
-            >
-              <Maximize2 className="w-4 h-4" />
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsFullscreen(true)}
+          >
+            <Maximize2 className="w-4 h-4" />
+          </Button>
         )}
       </div>
 
@@ -172,6 +201,39 @@ export const PreviewGallery: React.FC<PreviewGalleryProps> = ({
         </div>
       )}
 
+      {/* ===== Download Actions ===== */}
+      {sortedImages.length > 0 && !isGenerating && (
+        <div className="flex gap-2 mb-4">
+          {/* 下载当前 */}
+          {currentImage && (
+            <Button
+              variant="outline"
+              size="md"
+              className="flex-1"
+              onClick={() => handleDownload(currentImage.url, currentImage.view)}
+              leftIcon={<Download className="w-4 h-4" />}
+            >
+              下载当前
+            </Button>
+          )}
+          {/* 下载全部 */}
+          <Button
+            variant="primary"
+            size="md"
+            className="flex-1"
+            onClick={handleDownloadAll}
+            disabled={isDownloadingAll}
+            leftIcon={
+              isDownloadingAll
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <PackageOpen className="w-4 h-4" />
+            }
+          >
+            {isDownloadingAll ? '下载中...' : `全部下载 (${sortedImages.length})`}
+          </Button>
+        </div>
+      )}
+
       {/* Image Grid */}
       {sortedImages.length > 0 && (
         <div className="space-y-3">
@@ -190,12 +252,24 @@ export const PreviewGallery: React.FC<PreviewGalleryProps> = ({
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
           onClick={() => setIsFullscreen(false)}
         >
-          <button
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
-            onClick={() => setIsFullscreen(false)}
-          >
-            <RotateCcw className="w-5 h-5" />
-          </button>
+          <div className="absolute top-4 right-4 flex gap-2">
+            <button
+              className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDownload(currentImage.url, currentImage.view);
+              }}
+              title="下载当前图片"
+            >
+              <Download className="w-5 h-5" />
+            </button>
+            <button
+              className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+              onClick={() => setIsFullscreen(false)}
+            >
+              <RotateCcw className="w-5 h-5" />
+            </button>
+          </div>
           <motion.img
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
