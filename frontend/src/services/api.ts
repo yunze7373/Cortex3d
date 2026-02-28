@@ -1,7 +1,29 @@
 import axios from 'axios';
 import type { GenerateRequest, GenerateResponse } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// 智能检测 API 地址
+const getAPIBaseURL = (): string => {
+  const env = import.meta.env.VITE_API_BASE_URL;
+  
+  // 如果环境变量中明确指定了，直接使用
+  if (env) {
+    return env;
+  }
+  
+  // 否则根据当前访问地址动态生成
+  const host = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  // 如果是 localhost 或 127.0.0.1，使用本地后端
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return 'http://localhost:8000';
+  }
+  
+  // 否则假设后端在同一个 IP 的 8000 端口（例如 172.28.124.41:8000）
+  return `${protocol}//${host}:8000`;
+};
+
+const API_BASE_URL = getAPIBaseURL();
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

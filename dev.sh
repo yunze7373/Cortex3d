@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PROJECT_ROOT="$(dirname "$0")"
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"  # 获取脚本所在目录的绝对路径
 BACKEND_PID_FILE="$PROJECT_ROOT/.backend.pid"
 FRONTEND_PID_FILE="$PROJECT_ROOT/.frontend.pid"
 LOG_DIR="$PROJECT_ROOT/logs"
@@ -79,15 +79,23 @@ show_status() {
     echo "║    🔌 API：http://$WSL_IP:8000                           ║"
     echo "║    📖 文档：http://$WSL_IP:8000/docs                     ║"
     echo "╠════════════════════════════════════════════════════════════╣"
+    echo "║ ✨ 已启用智能 API 地址检测：                               ║"
+    echo "║    •前端会自动检测访问地址并连接对应后端                    ║"
+    echo "║    •无需手工配置即可支持本地和局域网访问                    ║"
+    echo "╠════════════════════════════════════════════════════════════╣"
     echo "║ 📋 日志文件：                                               ║"
-    echo "║    tail -f logs/backend.log                                ║"
-    echo "║    tail -f logs/frontend.log                               ║"
+    echo "║    tail -f $LOG_DIR/backend.log                     ║"
+    echo "║    tail -f $LOG_DIR/frontend.log                    ║"
     echo "╠════════════════════════════════════════════════════════════╣"
     echo "║ 💡 命令：                                                   ║"
     echo "║    ./dev.sh start   - 启动                                  ║"
     echo "║    ./dev.sh stop    - 停止                                  ║"
     echo "║    ./dev.sh restart - 重启                                  ║"
     echo "║    ./dev.sh status  - 状态                                  ║"
+    echo "╠════════════════════════════════════════════════════════════╣"
+    echo "║ ❓ 无法访问？查看日志：                                      ║"
+    echo "║    tail -f $LOG_DIR/backend.log                     ║"
+    echo "║    tail -f $LOG_DIR/frontend.log                    ║"
     echo "╚════════════════════════════════════════════════════════════╝"
     echo ""
 }
