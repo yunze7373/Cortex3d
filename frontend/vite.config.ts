@@ -14,6 +14,8 @@ export default defineConfig({
       '3d.home.lan',         // 自定义域名
       '*.home.lan',          // 支持所有 .home.lan 域名
       '*.localhost',
+      '100.90.173.90',       // Tailscale IP
+      '100.89.126.68',       // 其他 Tailscale IP
     ],
     proxy: {
       '/api': {
@@ -24,6 +26,12 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+    },
+    // 配置 HMR（热模块替换）以支持反向代理和远程访问
+    hmr: {
+      protocol: 'ws',
+      host: undefined,  // 让 Vite 自动使用请求的 Host 头
+      port: undefined,  // 使用默认端口
     },
     middlewareMode: false,
   },

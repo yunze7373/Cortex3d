@@ -25,7 +25,6 @@ app = FastAPI(
 # 允许来源: 开发环境 + 生产环境 (通过环境变量 CORS_ORIGINS 配置)
 _cors_origins = os.environ.get("CORS_ORIGINS", "")
 _domain_name = os.environ.get("CORTEX3D_DOMAIN", "3d.home.lan")
-# 支持所有 Tailscale IP (100.64.0.0/10 范围) - 不只是特定的一个
 _allowed_origins = [
     # localhost
     "http://localhost:5173",
@@ -44,6 +43,15 @@ _allowed_origins = [
     f"https://{_domain_name}",         # HTTPS（Caddy）
     f"https://{_domain_name}:5173",    # HTTPS（带端口）
     f"https://{_domain_name}:8000",
+    # Tailscale IP 范围 (100.64.0.0/10 内的常见 IP)
+    "http://100.90.173.90:5173",
+    "http://100.90.173.90:8000",
+    "https://100.90.173.90:5173",
+    "https://100.90.173.90:8000",
+    "http://100.89.126.68:5173",
+    "http://100.89.126.68:8000",
+    "https://100.89.126.68:5173",
+    "https://100.89.126.68:8000",
 ]
 if _cors_origins:
     _allowed_origins.extend([o.strip() for o in _cors_origins.split(",") if o.strip()])
