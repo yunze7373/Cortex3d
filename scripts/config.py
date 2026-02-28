@@ -27,8 +27,13 @@ except ImportError:
 # 模型配置 - 统一管理，代理和直连使用相同名称
 # =============================================================================
 
-# 图像生成模型 (NanoBanana Pro) - 用于 proxy/direct 模式
-IMAGE_MODEL = "gemini-3-pro-image-preview"
+# 图像生成模型 (Nano Banana 2) - 用于 proxy/direct 模式
+# Nano Banana 2: gemini-3.1-flash-image-preview (速度+高用量优化，推荐默认)
+# Nano Banana Pro: gemini-3-pro-image-preview (专业资产制作，高保真)
+# Nano Banana: gemini-2.5-flash-image (速度效率，仅1024px)
+IMAGE_MODEL = "gemini-3.1-flash-image-preview"
+IMAGE_MODEL_PRO = "gemini-3-pro-image-preview"
+IMAGE_MODEL_LEGACY = "gemini-2.5-flash-image"
 
 # 文本模型
 TEXT_MODEL = "gemini-3-flash-preview"

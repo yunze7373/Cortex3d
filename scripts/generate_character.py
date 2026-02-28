@@ -455,15 +455,15 @@ def main():
         "--model", "--engine",
         dest="model",
         metavar="MODEL",
-        help="指定生成模型 (默认: models/nano-banana-pro-preview)\n"
-             "留空使用最新推荐模型"
+        help="指定生成模型 (默认: gemini-3.1-flash-image-preview)\n"
+             "留空使用 Nano Banana 2 推荐模型"
     )
     
     quality_group.add_argument(
         "--pro", "--high-quality",
         dest="pro", 
         action="store_true",
-        help="启用Pro模型获得更高质量 (gemini-3-pro-image-preview)\n"
+        help="启用Pro模型获得更高保真 (gemini-3-pro-image-preview)\n"
              "速度较慢但效果更好"
     )
     
@@ -1483,7 +1483,7 @@ def main():
             wear_model_name = "gemini-3-pro-image-preview"
             print(f"  🎯 模型: {wear_model_name} (Pro 高保真)")
         else:
-            wear_model_name = args.model if args.model else "gemini-2.5-flash-image"
+            wear_model_name = args.model if args.model else "gemini-3.1-flash-image-preview"
             print(f"  🎯 模型: {wear_model_name}")
         
         print(f"  🔄 调用模式: {args.mode.upper()}")
@@ -1649,7 +1649,7 @@ def main():
                 edit_instruction=args.edit_elements,
                 character_description=character_desc,
                 api_key=args.token,
-                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                model_name=args.model if args.model else "gemini-3.1-flash-image-preview",
                 output_dir=args.output,
                 mode=args.mode  # 传入 proxy/direct 模式
             )
@@ -1712,7 +1712,7 @@ def main():
                 issue_description=detail_issue,
                 character_description=character_desc,
                 api_key=args.token,
-                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                model_name=args.model if args.model else "gemini-3.1-flash-image-preview",
                 output_dir=args.output,
                 mode=args.mode  # 传入 proxy/direct 模式
             )
@@ -1774,7 +1774,7 @@ def main():
                 style_preset=style_preset if not args.custom_style else "custom",
                 character_description=character_desc,
                 api_key=args.token,
-                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                model_name=args.model if args.model else "gemini-3.1-flash-image-preview",
                 output_dir=args.output,
                 custom_style=args.custom_style if args.custom_style else None,
                 preserve_details=args.preserve_details,
@@ -1980,7 +1980,7 @@ def main():
                         extracted_path = smart_extract_clothing(
                             image_path=clothing_img,
                             api_key=analysis_api_key,
-                            model_name=args.model if args.model else "gemini-2.5-flash-image",
+                            model_name=args.model if args.model else "gemini-3.1-flash-image-preview",
                             output_dir=args.output,
                             mode=analysis_mode,  # 分析始终用云端
                         )
@@ -2015,7 +2015,7 @@ def main():
             composite_model = "gemini-3-pro-image-preview"
             print(f"  └─ 模型: {composite_model} (Pro 高保真模式)")
         else:
-            composite_model = args.model if args.model else "gemini-2.5-flash-image"
+            composite_model = args.model if args.model else "gemini-3.1-flash-image-preview"
             print(f"  └─ 模型: {composite_model}")
         
         # 确定分辨率和宽高比
@@ -2159,7 +2159,7 @@ def main():
                 preserve_details=args.preserve_detail_desc,
                 element_image_path=element_image,
                 api_key=args.token,
-                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                model_name=args.model if args.model else "gemini-3.1-flash-image-preview",
                 output_dir=args.output,
                 output_name=args.preserve_output_name,
                 mode=args.mode
@@ -2227,7 +2227,7 @@ def main():
             
         print(f"\n  └─ 源图片: {main_image.name}")
         print(f"  └─ 提取道具: {'是' if args.extract_props else '否'}")
-        print(f"  └─ 模型: {args.model if args.model else 'gemini-2.5-flash-image'}")
+        print(f"  └─ 模型: {args.model if args.model else 'gemini-3.1-flash-image-preview'}")
         print(f"  └─ 调用模式: {args.mode.upper()}")
         print("")
         
@@ -2238,7 +2238,7 @@ def main():
             result = smart_extract_clothing(
                 image_path=str(main_image),
                 api_key=args.token,
-                model_name=args.model if args.model else "gemini-2.5-flash-image",
+                model_name=args.model if args.model else "gemini-3.1-flash-image-preview",
                 output_dir=args.output,
                 mode=args.mode,
                 extract_props=args.extract_props,
@@ -2443,8 +2443,8 @@ def main():
                 print(f"   {' '.join(base_cmd_parts + ['--mode direct'])}\n")
                 sys.exit(1)
     
-    # 设置模型
-    model = args.model or "models/nano-banana-pro-preview"
+    # 设置模型 (Nano Banana 2 为默认)
+    model = args.model or "gemini-3.1-flash-image-preview"
     
     # 显示模式信息（导出模式除外）
     if not args.export_prompt:

@@ -30,7 +30,7 @@ class GenerateRequest(BaseModel):
     negativePrompt: Optional[str] = ""
     subjectOnly: bool = True
     withProps: Optional[list] = []
-    model: Optional[str] = "gemini-3-pro-image-preview"
+    model: Optional[str] = "gemini-3.1-flash-image-preview"
     useNegativePrompt: bool = True
     negativeCategories: Optional[list] = []
     useStrictMode: bool = False
@@ -187,7 +187,7 @@ async def generate_multiview(request: GenerateRequest):
                     token=token,
                     output_dir=output_dir,
                     auto_cut=True,
-                    model=request.model or "gemini-3-pro-image-preview",
+                    model=request.model or "gemini-3.1-flash-image-preview",
                     style=request.style or "cinematic character",
                     asset_id=asset_id,
                     reference_image_path=reference_image_path,

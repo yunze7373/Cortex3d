@@ -45,7 +45,7 @@ def style_transfer_character(
   - `3d` - 3D/CGI 风格
 - `character_description`: 角色描述 (用于提示词)
 - `api_key`: Gemini API Key
-- `model_name`: 使用的模型 (默认: `models/nano-banana-pro-preview`)
+- `model_name`: 使用的模型 (默认: `gemini-3.1-flash-image-preview` / Nano Banana 2)
 - `output_dir`: 输出目录 (默认: `test_images`)
 - `custom_style`: 自定义风格描述 (可覆盖预设)
 - `preserve_details`: 是否保留原始细节 (默认: True)
@@ -198,7 +198,7 @@ CLI 显示结果
 
 ## 📌 关键注意事项
 
-1. **API 模型**: 使用 `models/nano-banana-pro-preview` (可配置)
+1. **API 模型**: 使用 `gemini-3.1-flash-image-preview` / Nano Banana 2 (可配置)
 2. **输出质量**: 取决于 Gemini API 的能力
 3. **细节保留**: `preserve_details=True` 添加提示词约束
 4. **自定义风格**: 可覆盖预设进行高级定制

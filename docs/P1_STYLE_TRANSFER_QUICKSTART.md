@@ -57,7 +57,7 @@ python scripts/generate_character.py \
     --character "anime character with blue hair and armor" \
     --preserve-details \
     --output test_images/ \
-    --model models/nano-banana-pro-preview
+    --model gemini-3.1-flash-image-preview
 ```
 
 ## 参数参考
@@ -71,7 +71,7 @@ python scripts/generate_character.py \
 | `--preserve-details` | 标志 | 保留原始细节 (默认: 是) |
 | `--character` | 字符串 | 角色描述 (可选) |
 | `--output` | 路径 | 输出目录 (默认: test_images/) |
-| `--model` | 字符串 | 使用的模型 (默认: models/nano-banana-pro-preview) |
+| `--model` | 字符串 | 使用的模型 (默认: gemini-3.1-flash-image-preview) |
 | `--token` | 字符串 | Gemini API Key (默认: 环境变量) |
 
 ## 预设风格详解
@@ -197,7 +197,7 @@ for $style in @("anime", "cinematic", "oil-painting", "watercolor", "comic", "3d
 
 ### 错误: "模型未找到"
 - 检查模型名称是否正确
-- 使用默认模型: `models/nano-banana-pro-preview`
+- 使用默认模型: `gemini-3.1-flash-image-preview` (Nano Banana 2)
 
 ## 下一步
 

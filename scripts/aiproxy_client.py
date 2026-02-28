@@ -17,6 +17,8 @@ from typing import Optional, Tuple
 from config import (
     AIPROXY_BASE_URL,
     IMAGE_MODEL,
+    IMAGE_MODEL_PRO,
+    IMAGE_MODEL_LEGACY,
     build_multiview_prompt,
     build_image_reference_prompt,
     build_strict_copy_prompt
@@ -115,12 +117,15 @@ def generate_image_via_proxy(
     MAX_RETRIES = 1
     
     # 定义回退模型 map
-    # nano-banana-pro-preview = gemini-3-pro-image-preview (支持4K)
-    # 回退到 gemini-2.5-flash-image (仅1024px，但更稳定)
+    # Nano Banana 2 = gemini-3.1-flash-image-preview (速度+高用量优化，支持4K)
+    # Nano Banana Pro = gemini-3-pro-image-preview (专业高保真，支持4K)
+    # Nano Banana = gemini-2.5-flash-image (仅1024px，最稳定)
     FALLBACK_MODELS = {
+        "gemini-3.1-flash-image-preview": "gemini-3-pro-image-preview",
+        "models/gemini-3.1-flash-image-preview": "gemini-3-pro-image-preview",
         "gemini-3-pro-image-preview": "gemini-2.5-flash-image",
         "models/gemini-3-pro-image-preview": "gemini-2.5-flash-image",
-        IMAGE_MODEL: "gemini-2.5-flash-image",
+        IMAGE_MODEL: "gemini-3-pro-image-preview",
     }
 
     current_model = model
@@ -527,8 +532,9 @@ def generate_character_multiview(
         print("="*70)
         
         print(f"\n【推荐模型】")
-        print(f"   nano-banana-pro-preview (最佳图像生成模型)")
-        print(f"   备用: gemini-2.5-flash-image")
+        print(f"   gemini-3.1-flash-image-preview (Nano Banana 2, 推荐默认)")
+        print(f"   gemini-3-pro-image-preview (Nano Banana Pro, 专业高保真)")
+        print(f"   备用: gemini-2.5-flash-image (Nano Banana, 速度优先)")
         print(f"   提示: 在 AI Studio 或 API 中使用上述模型名称")
         
         print(f"\n【配置参数建议】")
@@ -578,8 +584,8 @@ def generate_character_multiview(
         print("   或使用 Gemini 移动应用")
         
         print("\n第二步: 选择模型")
-        print("   在 AI Studio 中使用: nano-banana-pro-preview")
-        print("   或在代码中调用: models/nano-banana-pro-preview")
+        print("   推荐: gemini-3.1-flash-image-preview (Nano Banana 2)")
+        print("   高保真: gemini-3-pro-image-preview (Nano Banana Pro)")
         
         if reference_image_data:
             print("\n第三步: 上传参考图像 ⚠️ 先上传图像!")

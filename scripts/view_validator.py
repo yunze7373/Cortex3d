@@ -673,7 +673,7 @@ Generate ONE clean panel of the {view_name} view."""
         
         payload = {
             "prompt": prompt,
-            "model": "gemini-2.5-flash-image",  # 图生成模型 (支持图像输入和输出)
+            "model": "gemini-3.1-flash-image-preview",  # Nano Banana 2 (图生成模型)
             "image": f"data:{mime_type};base64,{b64_image}",
             "image_size": "2K",
             "aspect_ratio": "1:1",  # 单视角用方形
@@ -768,7 +768,7 @@ Generate ONE clean panel of the {view_name} view."""
             client = new_genai.Client(api_key=self.api_key)
             
             response = client.models.generate_content(
-                model="gemini-2.5-flash-image",  # 使用 2.5 flash image 模型
+                model="gemini-3.1-flash-image-preview",  # Nano Banana 2
                 contents=[ref_img, prompt],
             )
             
@@ -794,7 +794,7 @@ Generate ONE clean panel of the {view_name} view."""
             self._log(f"[INFO] 使用旧版 google.generativeai SDK")
             
             try:
-                model = genai.GenerativeModel("gemini-2.5-flash-image")
+                model = genai.GenerativeModel("gemini-3.1-flash-image-preview")
                 response = model.generate_content(
                     [prompt, ref_img],
                     generation_config=genai.GenerationConfig(

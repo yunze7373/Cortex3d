@@ -65,7 +65,7 @@ python scripts/generate_character.py \
 
 **技术细节**:
 - 函数: `style_transfer_character(source_image_path, style_preset, character_description, api_key, model_name, output_dir, custom_style, preserve_details) → Optional[str]`
-- 模型: `models/nano-banana-pro-preview` (可配置)
+- 模型: `gemini-3.1-flash-image-preview` / Nano Banana 2 (可配置)
 - 样式: 6 种预设 (anime, cinematic, oil-painting, watercolor, comic, 3d) + 无限自定义
 - 输出: PNG 格式，带时间戳
 - 特性: 完整的错误处理、Base64 编码、细节保留选项

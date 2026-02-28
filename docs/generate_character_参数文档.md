@@ -223,7 +223,7 @@ python scripts/generate_character.py [DESCRIPTION] [OPTIONS]
 | 参数 | 描述 |
 |------|------|
 | `--export-prompt` | 导出提示词和参数而非调用API |
-| `--model` | 模型名称（默认：models/nano-banana-pro-preview） |
+| `--model` | 模型名称（默认：gemini-3.1-flash-image-preview / Nano Banana 2） |
 
 ## 使用示例
 

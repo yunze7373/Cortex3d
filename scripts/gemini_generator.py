@@ -18,7 +18,7 @@ from typing import Optional, Tuple, List
 import io
 
 # 导入共享配置
-from config import IMAGE_MODEL, build_multiview_prompt
+from config import IMAGE_MODEL, IMAGE_MODEL_PRO, IMAGE_MODEL_LEGACY, build_multiview_prompt
 
 # Lazy imports
 genai = None
@@ -56,7 +56,7 @@ def _ensure_imports():
 
 
 # 使用共享配置中的默认模型（和代理模式完全一致）
-DEFAULT_MODEL = IMAGE_MODEL  # models/nano-banana-pro-preview
+DEFAULT_MODEL = IMAGE_MODEL  # gemini-3.1-flash-image-preview (Nano Banana 2)
 
 
 # =============================================================================
@@ -220,9 +220,12 @@ def generate_character_views(
         ]
         
         # 定义回退模型（当主模型不可用时降级使用）
-        # nano-banana-pro-preview = gemini-3-pro-image-preview (支持4K)
-        # 回退到 gemini-2.5-flash-image (仅1024px，但更稳定)
+        # Nano Banana 2 = gemini-3.1-flash-image-preview (速度+高用量优化，支持4K)
+        # Nano Banana Pro = gemini-3-pro-image-preview (专业高保真，支持4K)
+        # Nano Banana = gemini-2.5-flash-image (仅1024px，但更稳定)
         FALLBACK_MODELS = {
+            "gemini-3.1-flash-image-preview": "gemini-3-pro-image-preview",
+            "models/gemini-3.1-flash-image-preview": "gemini-3-pro-image-preview",
             "gemini-3-pro-image-preview": "gemini-2.5-flash-image",
             "models/gemini-3-pro-image-preview": "gemini-2.5-flash-image",
         }
@@ -282,9 +285,10 @@ def generate_character_views(
                 print("="*70)
                 
                 print(f"\n【推荐模型】")
-                print(f"   nano-banana-pro-preview (最佳图像生成模型)")
-                print(f"   备用: gemini-2.5-flash-image")
-                print(f"   提示: 在 AI Studio 或 API 中使用上述模型名称")
+                print(f"   gemini-3.1-flash-image-preview (Nano Banana 2, 推荐默认)")
+                print(f"   gemini-3-pro-image-preview (Nano Banana Pro, 专业高保真)")
+                print(f"   备用: gemini-2.5-flash-image (Nano Banana, 速度优先)")
+                print(f"   提示: 在 AI Studio 或 API 中使用上述模型名称"))
                 
                 print(f"\n【配置参数建议】")
                 print(f"   分辨率: {image_size}")
@@ -335,8 +339,8 @@ def generate_character_views(
                 print("   或使用 Gemini 移动应用")
                 
                 print("\n第二步: 选择模型")
-                print("   在 AI Studio 中使用: nano-banana-pro-preview")
-                print("   或在代码中调用: models/nano-banana-pro-preview")
+                print("   推荐: gemini-3.1-flash-image-preview (Nano Banana 2)")
+                print("   高保真: gemini-3-pro-image-preview (Nano Banana Pro)")
                 
                 if reference_image_b64:
                     print("\n第三步: 上传参考图像 ⚠️ 先上传图像!")
@@ -594,7 +598,7 @@ def edit_character_elements(
     edit_instruction: str,
     character_description: str,
     api_key: str,
-    model_name: str = None,  # 默认使用 gemini-2.5-flash-image
+    model_name: str = None,  # 默认使用 gemini-3.1-flash-image-preview (Nano Banana 2)
     output_dir: str = "test_images",
     auto_cut: bool = True,
     style: str = "cinematic character",
@@ -607,14 +611,14 @@ def edit_character_elements(
     """
     编辑角色的元素(添加/移除/修改)
     
-    使用 Gemini 2.5 Flash Image 模型进行图像编辑，保持原始风格、光照和透视效果。
+    使用 Gemini 图像模型进行图像编辑，保持原始风格、光照和透视效果。
     
     Args:
         source_image_path: 源图像路径
         edit_instruction: 编辑指令 ("add:xxx", "remove:xxx", "modify:xxx")
         character_description: 角色描述
         api_key: API Key (代理模式为 proxy token，直连模式为 Gemini API Key)
-        model_name: 模型名称 (默认: gemini-2.5-flash-image)
+        model_name: 模型名称 (默认: gemini-3.1-flash-image-preview)
         output_dir: 输出目录
         auto_cut: 是否自动切割
         style: 风格描述
@@ -632,9 +636,9 @@ def edit_character_elements(
     
     _ensure_imports()
     
-    # 使用正确的图像编辑模型
+    # 使用正确的图像编辑模型 (Nano Banana 2 支持编辑)
     if not model_name:
-        model_name = "gemini-2.5-flash-image"
+        model_name = IMAGE_MODEL  # gemini-3.1-flash-image-preview
     
     # 解析编辑指令
     edit_type, edit_detail = parse_edit_instruction(edit_instruction)
@@ -815,7 +819,7 @@ def _edit_via_direct(
     
     try:
         # 调用 Gemini API - 使用新的 google.genai 客户端
-        # 注意: gemini-2.5-flash-image 需要使用新 SDK
+        # 注意: Nano Banana 2/Pro 需要使用新 SDK (google-genai)
         try:
             from google import genai as new_genai
             from google.genai import types
@@ -925,7 +929,7 @@ def refine_character_details(
     issue_description: str,
     character_description: str,
     api_key: str,
-    model_name: str = None,  # 默认使用 gemini-2.5-flash-image
+    model_name: str = None,  # 默认使用 gemini-3.1-flash-image-preview (Nano Banana 2)
     output_dir: str = "test_images",
     auto_cut: bool = True,
     export_prompt: bool = False,
@@ -941,7 +945,7 @@ def refine_character_details(
         issue_description: 问题描述
         character_description: 角色描述
         api_key: API Key (代理模式为 proxy token，直连模式为 Gemini API Key)
-        model_name: 模型名称 (默认: gemini-2.5-flash-image)
+        model_name: 模型名称 (默认: gemini-3.1-flash-image-preview)
         output_dir: 输出目录
         auto_cut: 是否自动切割
         export_prompt: 是否导出提示词
@@ -956,9 +960,9 @@ def refine_character_details(
     
     _ensure_imports()
     
-    # 使用正确的图像编辑模型
+    # 使用正确的图像编辑模型 (Nano Banana 2 支持优化)
     if not model_name:
-        model_name = "gemini-2.5-flash-image"
+        model_name = IMAGE_MODEL  # gemini-3.1-flash-image-preview
     
     # 构建部位标签
     part_labels = {
@@ -1023,7 +1027,7 @@ def style_transfer_character(
     style_preset: str,
     character_description: str,
     api_key: str,
-    model_name: str = None,  # 默认使用 gemini-2.5-flash-image
+    model_name: str = None,  # 默认使用 gemini-3.1-flash-image-preview (Nano Banana 2)
     output_dir: str = "test_images",
     custom_style: Optional[str] = None,
     preserve_details: bool = True,
@@ -1053,9 +1057,9 @@ def style_transfer_character(
     
     _ensure_imports()
     
-    # 使用正确的图像编辑模型
+    # 使用正确的图像编辑模型 (Nano Banana 2)
     if not model_name:
-        model_name = "gemini-2.5-flash-image"
+        model_name = IMAGE_MODEL  # gemini-3.1-flash-image-preview
     
     # 风格预设映射
     style_presets = {
@@ -1166,7 +1170,7 @@ def preserve_detail_edit(
     _ensure_imports()
     
     if not model_name:
-        model_name = "gemini-2.5-flash-image"
+        model_name = IMAGE_MODEL  # gemini-3.1-flash-image-preview
     
     print(f"\n[高保真细节保留编辑]")
     print(f"  主图片: {Path(main_image_path).name}")
@@ -1508,7 +1512,7 @@ def _preserve_edit_via_direct(
 def smart_extract_clothing(
     image_path: str,
     api_key: str,
-    model_name: str = "gemini-2.5-flash-image",
+    model_name: str = "gemini-3.1-flash-image-preview",
     output_dir: str = "test_images",
     mode: str = "proxy",
     proxy_base_url: str = None,
@@ -1777,7 +1781,7 @@ DO NOT draw these items under any circumstances."""
         try:
             # 对于图像生成（提取衣服），必须使用图像生成模型
             # 而不是之前分析用的文本模型
-            image_gen_model = "gemini-2.5-flash-image"  # 图像生成模型
+            image_gen_model = IMAGE_MODEL  # Nano Banana 2 图像生成模型
             extracted_props = None
             
             # 调用AI生成提取后的衣服图片
@@ -2128,7 +2132,7 @@ def composite_images(
     _ensure_imports()
     
     if not model_name:
-        model_name = "gemini-2.5-flash-image"
+        model_name = IMAGE_MODEL  # gemini-3.1-flash-image-preview
     
     # 单图模式检查 (只有clothing_text类型支持单图)
     if len(image_paths) < 2:
