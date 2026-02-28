@@ -1170,16 +1170,16 @@ def split_quadrant_image(image, margin: int = 5, expected_views: list = None) ->
     return views
 
 
-def remove_background(image, model_name: str = "isnet-general-use"):
+def remove_background(image, model_name: str = "birefnet-general"):
     """
     使用 rembg 去除图片背景
     
     Args:
         image: BGR 格式的 numpy 数组
         model_name: rembg 模型名称，可选:
-            - "isnet-general-use" (默认，不容易删除道具)
-            - "birefnet-general" (最新模型，质量最高但较激进)
-            - "u2net" (经典模型)
+            - "birefnet-general" (默认，最新效果最好)
+            - "isnet-general-use" (保守，不易删除道具)
+            - "u2net" (经典稳定模型)
     
     Returns:
         BGRA 格式的 numpy 数组（带 alpha 通道）
@@ -1313,8 +1313,8 @@ def main():
     parser.add_argument(
         "--rembg-model", "--remove-bg-model",
         choices=["birefnet-general", "isnet-general-use", "u2net"],
-        default="isnet-general-use",
-        help="背景去除模型选择 (默认: isnet-general-use)"
+        default="birefnet-general",
+        help="背景去除模型选择 (默认: birefnet-general)"
     )
     parser.add_argument(
         "--margin",
