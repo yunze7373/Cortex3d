@@ -74,11 +74,42 @@ def node_guard(fallback_fn: Optional[Callable] = None):
 
 
 def _auto_fallback(fn: Callable):
-    """根据函数返回类型注解生成最小化占位返回值。"""
+    """根据节点类的 RETURN_TYPES 生成最小化占位返回值。"""
     import torch
-    hints = getattr(fn, "__annotations__", {})
-    ret   = hints.get("return", None)
-    # 最通用的占位：空图像 + None 网格
+
+    # 尝试从所属类的 RETURN_TYPES 推断每个输出槽的占位值
+    cls = None
+    qualname = getattr(fn, "__qualname__", "")
+    if "." in qualname:
+        cls_name = qualname.rsplit(".", 1)[0]
+        # fn.__globals__ 中可能有所属类（同模块中已定义）
+        cls = fn.__globals__.get(cls_name)
+
+    if cls and hasattr(cls, "RETURN_TYPES"):
+        placeholders = []
+        for rtype in cls.RETURN_TYPES:
+            if rtype == "IMAGE":
+                placeholders.append(torch.zeros(1, 64, 64, 3))
+            elif rtype == "CORTEX_MESH":
+                # 返回空 CortexMesh 占位
+                try:
+                    from ..types.mesh import CortexMesh
+                    placeholders.append(CortexMesh())
+                except Exception:
+                    placeholders.append(None)
+            elif rtype in ("STRING",):
+                placeholders.append("")
+            elif rtype in ("INT",):
+                placeholders.append(0)
+            elif rtype in ("FLOAT",):
+                placeholders.append(0.0)
+            elif rtype in ("BOOLEAN",):
+                placeholders.append(False)
+            else:
+                placeholders.append(None)
+        return tuple(placeholders)
+
+    # 最通用的占位：空图像
     return (torch.zeros(1, 64, 64, 3),)
 
 

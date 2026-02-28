@@ -26,7 +26,7 @@
      "outputs":[{"name":"views","type":"IMAGE","links":[9]}],
      "widgets_values":[4,false]},
     {"id":8,"type":"Cortex3d_InstantMesh","pos":[1480,200],"size":[300,180],
-     "inputs":[{"name":"image","type":"IMAGE","link":7}],
+     "inputs":[{"name":"image","type":"IMAGE","link":9}],
      "outputs":[{"name":"mesh","type":"CORTEX_MESH","links":[10]},{"name":"preview","type":"IMAGE","links":[11]}],
      "widgets_values":["balanced",75,1024,42,true]},
     {"id":9,"type":"PreviewImage","pos":[1480,420],"size":[280,240],"inputs":[{"name":"images","type":"IMAGE","link":11}]},
@@ -38,7 +38,7 @@
   "links":[
     [1,1,0,3,0,"IMAGE"],[2,2,0,3,1,"IMAGE"],[3,3,0,4,0,"IMAGE"],[4,4,0,6,2,"IMAGE"],
     [5,5,0,6,0,"STRING"],[6,5,1,6,1,"CORTEX_VIEW_CONFIG"],[7,6,0,7,0,"IMAGE"],
-    [7,6,0,8,0,"IMAGE"],[8,6,1,7,1,"CORTEX_VIEW_CONFIG"],[9,7,0,8,0,"IMAGE"],
+    [8,6,1,7,1,"CORTEX_VIEW_CONFIG"],[9,7,0,8,0,"IMAGE"],
     [10,8,0,10,0,"CORTEX_MESH"],[11,8,1,9,0,"IMAGE"]
   ]
 }

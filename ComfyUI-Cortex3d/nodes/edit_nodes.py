@@ -41,7 +41,7 @@ class Cortex3d_ClothingExtractor:
             "Remove the character, keep clothing isolated on white background."
         )
         result = QwenAdapter(server_url=server_url).edit(
-            image_path=img_path, prompt=prompt, cfg_scale=cfg_scale, steps=steps, output_dir=out_dir,
+            image_path=img_path, prompt=prompt, cfg_scale=cfg_scale, steps=steps, output_path=out_dir,
         )
         if result and os.path.isfile(result):
             return (fb.path_to_tensor(result), clothing_description or "extracted clothing")
@@ -92,7 +92,7 @@ class Cortex3d_WardrobeChange:
         result = QwenAdapter(server_url=server_url).edit(
             image_path=char_path, prompt=full_prompt,
             cfg_scale=cfg_scale, steps=steps,
-            seed=seed if seed > 0 else None, output_dir=out_dir,
+            seed=seed if seed > 0 else None, output_path=out_dir,
         )
         if result and os.path.isfile(result):
             return (fb.path_to_tensor(result),)
@@ -144,7 +144,7 @@ class Cortex3d_StyleTransfer:
             f"Style transfer strength: {style_strength:.0%}."
         )
         result = QwenAdapter(server_url=server_url).edit(
-            image_path=img_path, prompt=prompt, cfg_scale=cfg_scale, steps=steps, output_dir=out_dir,
+            image_path=img_path, prompt=prompt, cfg_scale=cfg_scale, steps=steps, output_path=out_dir,
         )
         if result and os.path.isfile(result):
             return (fb.path_to_tensor(result),)

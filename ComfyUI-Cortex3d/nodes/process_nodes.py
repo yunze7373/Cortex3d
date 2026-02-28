@@ -35,12 +35,14 @@ class Cortex3d_MultiviewCutter:
         fb = FileBridge()
         img_path = fb.tensor_to_tmp_png(image)
         out_dir = str(fb.make_output_dir("comfyui_cut"))
+        # 适配器期望 views: int 和 remove_bg: bool（与节点 no_rembg 逻辑反转）
+        num_views = getattr(view_config, "num_views", 4)
         view_paths = ImageAdapter.cut_multiview(
             image_path=img_path,
-            view_config=view_config,
             output_dir=out_dir,
+            views=num_views,
+            remove_bg=not no_rembg,
             margin=margin,
-            no_rembg=no_rembg,
         )
         tensors = [fb.path_to_tensor(p) for p in view_paths if os.path.isfile(p)]
         if not tensors:
@@ -73,9 +75,11 @@ class Cortex3d_BackgroundRemover:
         from ..bridge.file_bridge import FileBridge
         fb = FileBridge()
         img_path = fb.tensor_to_tmp_png(image)
-        out_dir = str(fb.make_output_dir("comfyui_rembg"))
+        out_dir = fb.make_output_dir("comfyui_rembg")
+        output_path = str(out_dir / "rembg_result.png")
+        # 适配器签名仅接受 (image_path, output_path)
         result_path = ImageAdapter.remove_background(
-            image_path=img_path, output_dir=out_dir, model=model, bg_color=bg_color,
+            image_path=img_path, output_path=output_path,
         )
         if result_path and os.path.isfile(result_path):
             return (fb.path_to_tensor(result_path),)
@@ -153,11 +157,16 @@ class Cortex3d_ImageEnhancer:
         from ..bridge.file_bridge import FileBridge
         fb = FileBridge()
         img_path = fb.tensor_to_tmp_png(image)
-        out_dir = str(fb.make_output_dir("comfyui_enhance"))
+        out_dir = fb.make_output_dir("comfyui_enhance")
+        output_path = str(out_dir / "enhanced_result.png")
+        # 适配器期望 use_realesrgan/use_gfpgan (正逻辑) 和 output_path
         result = ImageAdapter.enhance(
-            image_path=img_path, output_dir=out_dir,
-            scale=scale, target_size=target_size if target_size > 0 else None,
-            no_realesrgan=no_realesrgan, no_gfpgan=no_gfpgan,
+            image_path=img_path,
+            scale=scale,
+            target_size=target_size if target_size > 0 else 1024,
+            use_realesrgan=not no_realesrgan,
+            use_gfpgan=not no_gfpgan,
+            output_path=output_path,
         )
         if result and os.path.isfile(result):
             return (fb.path_to_tensor(result),)
