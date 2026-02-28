@@ -1,11 +1,17 @@
 3d.home.lan:80 {
-    # 代理前端（所有路由）
+    # 代理后端 API 和静态文件
+    reverse_proxy /api/* localhost:8000
+    reverse_proxy /outputs/* localhost:8000
+    # 代理前端（所有其他路由）
     reverse_proxy / localhost:5173
     encode gzip
 }
 
 3d.home.lan:443 {
-    # 代理前端（所有路由）
+    # 代理后端 API 和静态文件
+    reverse_proxy /api/* localhost:8000
+    reverse_proxy /outputs/* localhost:8000
+    # 代理前端（所有其他路由）
     reverse_proxy / localhost:5173
     encode gzip
     tls internal
