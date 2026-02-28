@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Shirt, Download, Loader2, Sparkles } from 'lucide-react';
+import { Shirt, Download, Sparkles } from 'lucide-react';
 import { MainLayout } from '../components/layout';
-import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, ImageUploader, TextArea, Select } from '../components/common';
-import { changeClothes } from '../services/api';
+import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, ImageUploader, TextArea, Select, RealProgress } from '../components/common';
+import { changeClothes, type ProgressEvent } from '../services/api';
 import { CLOTHES_PRESETS, STYLE_OPTIONS } from '../types';
 import type { FeatureTab } from '../types';
 
@@ -32,6 +32,7 @@ const ChangeClothesPage: React.FC<ChangeClothesPageProps> = ({ activeTab, onTabC
     };
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progressState, setProgressState] = useState<ProgressEvent>({ message: '', progress: 0 });
 
   const handleCharacterSelect = (base64: string) => {
     setCharacterImage(base64);
@@ -78,6 +79,7 @@ const ChangeClothesPage: React.FC<ChangeClothesPageProps> = ({ activeTab, onTabC
 
     setIsProcessing(true);
     setError(null);
+    setProgressState({ message: '正在初始化换装...', progress: 0 });
 
     try {
       let finalDescription = '';
@@ -104,7 +106,7 @@ const ChangeClothesPage: React.FC<ChangeClothesPageProps> = ({ activeTab, onTabC
         propsImage: mode === 'image' && propsImage ? propsImage : undefined,
         targetStyle,
         viewMode: '4-view',
-      });
+      }, (event) => setProgressState(event));
 
       setResult({
         images: response.images,
@@ -301,8 +303,11 @@ const ChangeClothesPage: React.FC<ChangeClothesPageProps> = ({ activeTab, onTabC
             <CardContent>
               {isProcessing ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <Loader2 className="w-12 h-12 text-accent-primary animate-spin mb-4" />
-                  <p className="text-text-secondary">正在处理...</p>
+                  <RealProgress
+                    isProcessing={isProcessing}
+                    progress={progressState.progress}
+                    message={progressState.message}
+                  />
                 </div>
               ) : result && result.images.front ? (
                 <div className="space-y-4">

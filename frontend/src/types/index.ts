@@ -40,8 +40,9 @@ export const ASPECT_RATIO_OPTIONS = [
 
 // 模型选项
 export const MODEL_OPTIONS = [
-  { value: 'gemini-3-pro-image-preview', label: 'Nano Banana Pro (推荐)', labelEn: 'Nano Banana Pro (Recommended)' },
-  { value: 'gemini-2.5-flash-image', label: 'Nano Banana (快速)', labelEn: 'Nano Banana (Fast)' },
+  { value: 'gemini-3.1-flash-image-preview', label: 'Nano Banana 2 (推荐)', labelEn: 'Nano Banana 2 (Recommended)' },
+  { value: 'gemini-3-pro-image-preview', label: 'Nano Banana Pro (高质量)', labelEn: 'Nano Banana Pro (High Quality)' },
+  { value: 'gemini-2.5-flash-image', label: 'Nano Banana (快速/旧版)', labelEn: 'Nano Banana (Fast/Legacy)' },
 ];
 
 export interface GenerateRequest {
@@ -198,7 +199,7 @@ export const DEFAULT_GENERATION_STATE: GenerationState = {
   targetClothes: '',
   targetStyle: 'realistic',
   styleStrength: 0.7,
-  model: 'gemini-3-pro-image-preview',
+  model: 'gemini-3.1-flash-image-preview',
   useNegativePrompt: true,
   negativeCategories: ['anatomy', 'quality', 'layout'],
   useStrictMode: false,

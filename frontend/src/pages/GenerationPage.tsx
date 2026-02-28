@@ -4,10 +4,20 @@ import { History, Trash2 } from 'lucide-react';
 import { MainLayout } from '../components/layout';
 import { GenerationForm } from '../components/generation';
 import { PreviewGallery } from '../components/preview';
-import { Button, Modal, Input } from '../components/common';
+import { Button, Modal, Input, Select } from '../components/common';
 import { useGenerationStore, useSettingsStore } from '../stores/generationStore';
 import type { GenerateResponse, GenerationHistoryItem, FeatureTab } from '../types';
+import { MODEL_OPTIONS, RESOLUTION_OPTIONS } from '../types';
 import { generateFromText, generateFromImage, type ProgressEvent } from '../services/api';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+/** 将服务器相对路径转换为完整 URL */
+function resolveImageUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('data:') || url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+}
 
 interface GenerationPageProps {
   activeTab: FeatureTab;
@@ -187,7 +197,7 @@ const GenerationPage: React.FC<GenerationPageProps> = ({ activeTab, onTabChange 
                   }}
                 >
                   <img
-                    src={item.thumbnail}
+                    src={resolveImageUrl(item.thumbnail)}
                     alt={item.description}
                     className="w-full h-full object-cover"
                   />
@@ -208,7 +218,7 @@ const GenerationPage: React.FC<GenerationPageProps> = ({ activeTab, onTabChange 
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         title="设置"
-        description="配置您的生成设置"
+        description="配置您的生成设置和应用偏好"
         size="md"
       >
         <div className="space-y-4">
@@ -219,6 +229,43 @@ const GenerationPage: React.FC<GenerationPageProps> = ({ activeTab, onTabChange 
             onChange={(e) => updateSettings({ apiKey: e.target.value })}
             helperText="您的认证API密钥"
           />
+
+          <Select
+            label="默认模型"
+            options={MODEL_OPTIONS.map(m => ({ value: m.value, label: m.label }))}
+            value={settings.defaultModel}
+            onChange={(value) => updateSettings({ defaultModel: value })}
+          />
+
+          <Select
+            label="默认分辨率"
+            options={RESOLUTION_OPTIONS}
+            value={settings.defaultResolution}
+            onChange={(value) => updateSettings({ defaultResolution: value as '1K' | '2K' | '4K' })}
+          />
+
+          <Select
+            label="默认视图模式"
+            options={[
+              { value: 'single', label: '单视图' },
+              { value: '4-view', label: '4视图 (推荐)' },
+              { value: '6-view', label: '6视图' },
+              { value: '8-view', label: '8视图' },
+            ]}
+            value={settings.defaultViewMode}
+            onChange={(value) => updateSettings({ defaultViewMode: value as 'single' | '4-view' | '6-view' | '8-view' | 'custom' })}
+          />
+
+          <Select
+            label="主题"
+            options={[
+              { value: 'dark', label: '深色模式' },
+              { value: 'light', label: '浅色模式' },
+            ]}
+            value={settings.theme}
+            onChange={(value) => updateSettings({ theme: value as 'dark' | 'light' })}
+          />
+
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={() => setSettingsOpen(false)}>
               关闭

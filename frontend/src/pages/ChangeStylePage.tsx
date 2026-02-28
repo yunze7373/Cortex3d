@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Palette, Upload, Download, Loader2, RefreshCw } from 'lucide-react';
+import { Palette, Upload, Download, RefreshCw } from 'lucide-react';
 import { MainLayout } from '../components/layout';
-import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, ImageUploader, Select, Slider } from '../components/common';
-import { changeStyle } from '../services/api';
+import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, ImageUploader, Select, Slider, RealProgress } from '../components/common';
+import { changeStyle, type ProgressEvent } from '../services/api';
 import { STYLE_OPTIONS } from '../types';
 import type { FeatureTab } from '../types';
 
@@ -22,6 +22,7 @@ const ChangeStylePage: React.FC<ChangeStylePageProps> = ({ activeTab, onTabChang
     styledImage?: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progressState, setProgressState] = useState<ProgressEvent>({ message: '', progress: 0 });
 
   const handleImageSelect = (base64: string) => {
     setSelectedImage(base64);
@@ -37,13 +38,14 @@ const ChangeStylePage: React.FC<ChangeStylePageProps> = ({ activeTab, onTabChang
 
     setIsProcessing(true);
     setError(null);
+    setProgressState({ message: '正在初始化风格转换...', progress: 0 });
 
     try {
       const response = await changeStyle({
         image: selectedImage,
         style: selectedStyle,
         strength: styleStrength,
-      });
+      }, (event) => setProgressState(event));
 
       setResult({
         originalImage: response.originalImage,
@@ -229,11 +231,11 @@ const ChangeStylePage: React.FC<ChangeStylePageProps> = ({ activeTab, onTabChang
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-text-muted">
                     {isProcessing ? (
-                      <>
-                        <Loader2 className="w-12 h-12 animate-spin text-accent-primary mb-4" />
-                        <p>正在应用 {STYLE_OPTIONS.find(s => s.value === selectedStyle)?.label || selectedStyle} 风格...</p>
-                        <p className="text-sm mt-2">这可能需要一些时间</p>
-                      </>
+                      <RealProgress
+                        isProcessing={isProcessing}
+                        progress={progressState.progress}
+                        message={progressState.message}
+                      />
                     ) : (
                       <>
                         <Palette className="w-16 h-16 mb-4 opacity-50" />

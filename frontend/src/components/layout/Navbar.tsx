@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Settings, Github, Menu, X, Wand2, Shirt, Sparkles, Palette } from 'lucide-react';
+import { Settings, Menu, X, Wand2, Shirt, Sparkles, Palette } from 'lucide-react';
 import { Button } from '../common';
 import type { FeatureTab } from '../../types';
 
@@ -64,10 +64,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onSettingsClick, activeTab, onTa
               <Settings className="w-4 h-4 mr-2" />
               设置
             </Button>
-            <Button variant="ghost" size="sm">
-              <Github className="w-4 h-4 mr-2" />
-              GitHub
-            </Button>
           </div>
 
           {/* Mobile Menu Button */}
@@ -119,10 +115,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onSettingsClick, activeTab, onTa
             >
               <Settings className="w-4 h-4 mr-2" />
               设置
-            </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <Github className="w-4 h-4 mr-2" />
-              GitHub
             </Button>
           </div>
         </motion.div>

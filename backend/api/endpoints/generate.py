@@ -1,5 +1,7 @@
 import os
 import sys
+import json
+import asyncio
 import base64
 import uuid
 import tempfile
@@ -7,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 # Add the project root to the path
@@ -105,12 +108,6 @@ def image_to_base64(image_path: str) -> str:
     with open(image_path, "rb") as f:
         return f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
 
-
-def get_api_token() -> str:
-    """从环境变量获取API token"""
-import json
-import asyncio
-from fastapi.responses import StreamingResponse
 
 def get_api_token() -> str:
     """从环境变量获取API token"""
@@ -438,188 +435,238 @@ async def extract_clothes(request: ExtractClothesRequest):
 
 @router.post("/edit/change-clothes")
 async def change_clothes(request: ChangeClothesRequest):
-    """Change character's clothes"""
+    """Change character's clothes (Streaming NDJSON)"""
     if not request.characterImage:
         raise HTTPException(status_code=400, detail="需要上传角色图片")
 
-    try:
-        from gemini_generator import composite_images
+    async def event_generator():
+        try:
+            from gemini_generator import composite_images
 
-        token = get_api_token()
-        if not token:
-            raise HTTPException(status_code=400, detail="请设置 AIPROXY_TOKEN 环境变量")
+            token = get_api_token()
+            if not token:
+                yield create_ndjson_event("error", message="请设置 AIPROXY_TOKEN 环境变量")
+                return
 
-        asset_id = str(uuid.uuid4())
-        output_dir = str(project_root / "outputs" / asset_id)
-        os.makedirs(output_dir, exist_ok=True)
+            asset_id = str(uuid.uuid4())
+            output_dir = str(project_root / "outputs" / asset_id)
+            os.makedirs(output_dir, exist_ok=True)
 
-        print(f"[换装] 开始单图换装处理...")
+            print(f"[换装] 开始单图换装处理...")
+            yield create_ndjson_event("progress", message="正在准备换装请求...", progress=5)
 
-        # 保存角色图片
-        char_path = base64_to_temp_file(request.characterImage, ".png")
-        image_paths = [char_path]
+            # 保存角色图片
+            char_path = base64_to_temp_file(request.characterImage, ".png")
+            image_paths = [char_path]
 
-        # 检查是否有衣服图片 (图生图换装)
-        if request.clothesImage:
-            clothes_path = base64_to_temp_file(request.clothesImage, ".png")
-            image_paths.append(clothes_path)
-            
-        # 检查是否有道具图片 (多模态融合)
-        if request.propsImage:
-            props_path = base64_to_temp_file(request.propsImage, ".png")
-            image_paths.append(props_path)
+            # 检查是否有衣服图片 (图生图换装)
+            if request.clothesImage:
+                clothes_path = base64_to_temp_file(request.clothesImage, ".png")
+                image_paths.append(clothes_path)
+                
+            # 检查是否有道具图片 (多模态融合)
+            if request.propsImage:
+                props_path = base64_to_temp_file(request.propsImage, ".png")
+                image_paths.append(props_path)
 
-        # 构建指令
-        base_instruction = request.clothesDescription
-        if not base_instruction:
-            if len(image_paths) > 1:
-                base_instruction = "Put the clothing from Image 2 onto the person in Image 1. Keep the person's face, hair, pose, and background exactly the same."
-            else:
-                base_instruction = "character with new clothes"
+            yield create_ndjson_event("progress", message="正在构建换装提示词...", progress=15)
 
-        # 决定合成类型
-        composite_type = "clothing" if len(image_paths) > 1 else "clothing_text"
+            # 构建指令
+            base_instruction = request.clothesDescription
+            if not base_instruction:
+                if len(image_paths) > 1:
+                    base_instruction = "Put the clothing from Image 2 onto the person in Image 1. Keep the person's face, hair, pose, and background exactly the same."
+                else:
+                    base_instruction = "character with new clothes"
 
-        # 像 CLI 一样，提前构建完整 Prompt 并标记 instruction_is_final=True
-        # 由于我们这里没有命令行里的 style 参数传递，默认使用写实风格 (或者可以扩展请求里的目标风格)
-        from prompts.wardrobe import build_wardrobe_prompt
-        # 前端其实传了 request.targetStyle 比如 "写实风格"，但如果没有严格映射，先设为写实
-        target_style_prompt = None
-        if hasattr(request, 'targetStyle') and request.targetStyle:
-            from prompts.styles import get_style_preset, find_matching_style
-            matched = find_matching_style(request.targetStyle)
-            if matched:
-                target_style_prompt = matched.prompt
+            # 决定合成类型
+            composite_type = "clothing" if len(image_paths) > 1 else "clothing_text"
 
-        final_prompt = build_wardrobe_prompt(
-            task_type=composite_type,
-            instruction=base_instruction,
-            num_images=len(image_paths),
-            strict_mode=True,
-            style=target_style_prompt
-        )
+            from prompts.wardrobe import build_wardrobe_prompt
+            target_style_prompt = None
+            if hasattr(request, 'targetStyle') and request.targetStyle:
+                from prompts.styles import get_style_preset, find_matching_style
+                matched = find_matching_style(request.targetStyle)
+                if matched:
+                    target_style_prompt = matched.prompt
 
-        result = composite_images(
-            image_paths=image_paths,
-            instruction=final_prompt,
-            api_key=token,
-            model_name="gemini-3-pro-image-preview",
-            output_dir=output_dir,
-            output_name=f"{asset_id}.jpg",
-            mode="proxy",
-            composite_type=composite_type,
-            instruction_is_final=True, # 关键修复点：直接传递完整的 prompt
-            resolution="2K"
-        )
+            final_prompt = build_wardrobe_prompt(
+                task_type=composite_type,
+                instruction=base_instruction,
+                num_images=len(image_paths),
+                strict_mode=True,
+                style=target_style_prompt
+            )
 
-        for path in image_paths:
-            try:
-                os.unlink(path)
-            except:
-                pass
+            yield create_ndjson_event("progress", message="正在调用AI模型生成换装图像...", progress=30)
 
-        if not result:
-            raise HTTPException(status_code=500, detail="换装生成失败")
+            def sync_composite():
+                return composite_images(
+                    image_paths=image_paths,
+                    instruction=final_prompt,
+                    api_key=token,
+                    model_name="gemini-3-pro-image-preview",
+                    output_dir=output_dir,
+                    output_name=f"{asset_id}.jpg",
+                    mode="proxy",
+                    composite_type=composite_type,
+                    instruction_is_final=True,
+                    resolution="2K"
+                )
 
-        # 将生成的单张图片作为主图返回，放在 front 和 master 键下
-        output_url = f"/outputs/{asset_id}/{Path(result).name}"
-        
-        images = {
-            "master": output_url,
-            "front": output_url
-        }
+            task = asyncio.create_task(asyncio.to_thread(sync_composite))
 
-        print(f"[换装] 成功")
-        return ChangeClothesResponse(
-            assetId=asset_id,
-            status="success",
-            images=images,
-        )
+            progress_val = 30
+            while not task.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=3.0)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    progress_val = min(progress_val + 5, 85)
+                    yield create_ndjson_event("progress", message="AI模型正在生成中...", progress=progress_val)
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+            result = task.result()
+
+            for path in image_paths:
+                try:
+                    os.unlink(path)
+                except:
+                    pass
+
+            if not result:
+                yield create_ndjson_event("error", message="换装生成失败")
+                return
+
+            yield create_ndjson_event("progress", message="正在构建响应数据...", progress=95)
+
+            output_url = f"/outputs/{asset_id}/{Path(result).name}"
+            images = {
+                "master": output_url,
+                "front": output_url
+            }
+
+            print(f"[换装] 成功")
+            response_str = create_ndjson_event("result", data={
+                "assetId": asset_id,
+                "status": "success",
+                "images": images,
+            }, message="换装完毕", progress=100)
+
+            chunk_size = 1024 * 1024
+            for i in range(0, len(response_str), chunk_size):
+                yield response_str[i:i + chunk_size]
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield create_ndjson_event("error", message=f"服务器内部异常: {str(e)}")
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 
 @router.post("/edit/change-style")
 async def change_style(request: ChangeStyleRequest):
-    """Change image style"""
+    """Change image style (Streaming NDJSON)"""
     if not request.image:
         raise HTTPException(status_code=400, detail="需要上传图片")
 
-    try:
-        from aiproxy_client import generate_character_multiview
-
-        token = get_api_token()
-        if not token:
-            raise HTTPException(status_code=400, detail="请设置 AIPROXY_TOKEN 环境变量")
-
-        style_prompts = {
-            "anime": "anime style, cel-shaded, vibrant colors",
-            "cartoon": "cartoon style, comic book art",
-            "3d-render": "3D render, photorealistic",
-            "sketch": "pencil sketch, hand-drawn",
-            "watercolor": "watercolor painting, artistic",
-            "oil-painting": "oil painting style, classic art",
-            "pixel-art": "pixel art, 8-bit style",
-            "realistic": "photorealistic, high quality",
-            "cinematic": "cinematic lighting, movie quality",
-        }
-
-        description = f"same subject, {style_prompts.get(request.style, request.style)}"
-
-        asset_id = str(uuid.uuid4())
-        output_dir = str(project_root / "outputs" / asset_id)
-        os.makedirs(output_dir, exist_ok=True)
-
-        print(f"[风格转换] 开始处理 style={request.style}")
-
-        img_path = base64_to_temp_file(request.image, ".png")
-
-        result = generate_character_multiview(
-            character_description=description,
-            token=token,
-            output_dir=output_dir,
-            auto_cut=False,
-            model="gemini-3-pro-image-preview",
-            reference_image_path=img_path,
-            use_image_reference_prompt=True,
-        )
-
+    async def event_generator():
         try:
-            os.unlink(img_path)
-        except:
-            pass
+            from aiproxy_client import generate_character_multiview
 
-        output_path = Path(output_dir)
-        styled_image = None
+            token = get_api_token()
+            if not token:
+                yield create_ndjson_event("error", message="请设置 AIPROXY_TOKEN 环境变量")
+                return
 
-        for ext in [".png", ".jpg", ".jpeg"]:
-            files = list(output_path.glob(f"*{ext}"))
-            if files:
-                styled_image = f"/outputs/{asset_id}/{files[0].name}"
-                break
+            style_prompts = {
+                "anime": "anime style, cel-shaded, vibrant colors",
+                "cartoon": "cartoon style, comic book art",
+                "3d-render": "3D render, photorealistic",
+                "sketch": "pencil sketch, hand-drawn",
+                "watercolor": "watercolor painting, artistic",
+                "oil-painting": "oil painting style, classic art",
+                "pixel-art": "pixel art, 8-bit style",
+                "realistic": "photorealistic, high quality",
+                "cinematic": "cinematic lighting, movie quality",
+            }
 
-        if not styled_image:
-            raise HTTPException(status_code=500, detail="风格转换失败")
+            description = f"same subject, {style_prompts.get(request.style, request.style)}"
 
-        print(f"[风格转换] 成功")
-        return ChangeStyleResponse(
-            assetId=asset_id,
-            status="success",
-            originalImage=request.image,
-            styledImage=styled_image,
-        )
+            asset_id = str(uuid.uuid4())
+            output_dir = str(project_root / "outputs" / asset_id)
+            os.makedirs(output_dir, exist_ok=True)
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+            print(f"[风格转换] 开始处理 style={request.style}")
+            yield create_ndjson_event("progress", message=f"正在准备风格转换: {request.style}...", progress=5)
+
+            img_path = base64_to_temp_file(request.image, ".png")
+
+            yield create_ndjson_event("progress", message="正在调用AI模型...", progress=20)
+
+            # 使用用户选择的模型而非硬编码
+            model_name = getattr(request, 'model', None) or "gemini-3.1-flash-image-preview"
+
+            def sync_style():
+                return generate_character_multiview(
+                    character_description=description,
+                    token=token,
+                    output_dir=output_dir,
+                    auto_cut=False,
+                    model=model_name,
+                    reference_image_path=img_path,
+                    use_image_reference_prompt=True,
+                )
+
+            task = asyncio.create_task(asyncio.to_thread(sync_style))
+
+            progress_val = 20
+            while not task.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=3.0)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    progress_val = min(progress_val + 5, 85)
+                    yield create_ndjson_event("progress", message="AI模型正在生成中...", progress=progress_val)
+
+            result = task.result()
+
+            try:
+                os.unlink(img_path)
+            except:
+                pass
+
+            output_path = Path(output_dir)
+            styled_image = None
+
+            for ext in [".png", ".jpg", ".jpeg"]:
+                files = list(output_path.glob(f"*{ext}"))
+                if files:
+                    styled_image = f"/outputs/{asset_id}/{files[0].name}"
+                    break
+
+            if not styled_image:
+                yield create_ndjson_event("error", message="风格转换失败")
+                return
+
+            yield create_ndjson_event("progress", message="正在构建响应数据...", progress=95)
+
+            print(f"[风格转换] 成功")
+            response_str = create_ndjson_event("result", data={
+                "assetId": asset_id,
+                "status": "success",
+                "originalImage": request.image,
+                "styledImage": styled_image,
+            }, message="风格转换完毕", progress=100)
+
+            chunk_size = 1024 * 1024
+            for i in range(0, len(response_str), chunk_size):
+                yield response_str[i:i + chunk_size]
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield create_ndjson_event("error", message=f"服务器内部异常: {str(e)}")
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 
 @router.get("/history")

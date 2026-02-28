@@ -10,3 +10,4 @@ export { ProgressIndicator, LoadingOverlay } from './Progress';
 export { SimulatedProgress } from './SimulatedProgress';
 export { RealProgress } from './RealProgress';
 export { Slider } from './Slider';
+export { ErrorBoundary } from './ErrorBoundary';

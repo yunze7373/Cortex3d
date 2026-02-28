@@ -173,9 +173,11 @@ export interface ChangeClothesResponse {
   };
 }
 
-export const changeClothes = async (request: ChangeClothesRequest): Promise<ChangeClothesResponse> => {
-  const response = await apiClient.post<ChangeClothesResponse>('/api/edit/change-clothes', request);
-  return response.data;
+export const changeClothes = async (
+  request: ChangeClothesRequest,
+  onProgress?: (event: ProgressEvent) => void
+): Promise<ChangeClothesResponse> => {
+  return streamingFetch<ChangeClothesResponse>('/api/edit/change-clothes', request, onProgress);
 };
 
 // ============ 风格切换 ============
@@ -193,9 +195,11 @@ export interface ChangeStyleResponse {
   styledImage?: string;
 }
 
-export const changeStyle = async (request: ChangeStyleRequest): Promise<ChangeStyleResponse> => {
-  const response = await apiClient.post<ChangeStyleResponse>('/api/edit/change-style', request);
-  return response.data;
+export const changeStyle = async (
+  request: ChangeStyleRequest,
+  onProgress?: (event: ProgressEvent) => void
+): Promise<ChangeStyleResponse> => {
+  return streamingFetch<ChangeStyleResponse>('/api/edit/change-style', request, onProgress);
 };
 
 // ============ 其他功能 ============

@@ -84,7 +84,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   defaultMode: 'proxy',
   defaultViewMode: '4-view',
   defaultResolution: '1K',
-  defaultModel: 'gemini-3-pro-image-preview',
+  defaultModel: 'gemini-3.1-flash-image-preview',
   theme: 'dark',
 };
 
