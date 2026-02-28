@@ -10,7 +10,6 @@ const getAPIBaseURL = (): string => {
     return env;
   }
   
-  // 否则根据当前访问地址动态生成
   const host = window.location.hostname;
   const protocol = window.location.protocol;
   
@@ -19,7 +18,8 @@ const getAPIBaseURL = (): string => {
     return 'http://localhost:8000';
   }
   
-  // 否则假设后端在同一个 IP 的 8000 端口（例如 172.28.124.41:8000）
+  // 其他所有情况（域名、IP、Caddy 反向代理）
+  // 都在同一个主机的 8000 端口上找后端
   return `${protocol}//${host}:8000`;
 };
 
