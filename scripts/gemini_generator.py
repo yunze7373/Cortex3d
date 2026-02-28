@@ -79,7 +79,8 @@ def generate_character_views(
     original_args = None,
     export_prompt: bool = False,
     subject_only: bool = False,
-    with_props: list = None
+    with_props: list = None,
+    remove_bg: bool = True
 ) -> Optional[str]:
     """
     使用 Gemini API 生成多视图角色图像
@@ -570,10 +571,10 @@ def generate_character_views(
                     expected_view_objs = get_views_for_mode(view_mode)
                 expected_views = [v.name for v in expected_view_objs]
                 
-                cut_and_save(str(filepath), output_dir, expected_views=expected_views)
+                cut_and_save(str(filepath), output_dir, expected_views=expected_views, remove_bg=remove_bg)
             except Exception as e:
                 print(f"[WARNING] 无法计算期望视角: {e}, 使用默认切割")
-                cut_and_save(str(filepath), output_dir)
+                cut_and_save(str(filepath), output_dir, remove_bg=remove_bg)
         
         return str(filepath)
         
@@ -2565,7 +2566,7 @@ def _composite_via_direct(
 # 直连模式应该和代理模式使用相同的逻辑，只是访问路径不同
 
 
-def cut_and_save(image_path: str, output_dir: str, expected_views: list = None):
+def cut_and_save(image_path: str, output_dir: str, expected_views: list = None, remove_bg: bool = True):
     """
     调用 image_processor 切割图像
     """
@@ -2579,7 +2580,7 @@ def cut_and_save(image_path: str, output_dir: str, expected_views: list = None):
         process_quadrant_image(
             input_path=image_path,
             output_dir=output_dir,
-            remove_bg_flag=True,
+            remove_bg_flag=remove_bg,
             expected_views=expected_views,
             margin=5
         )

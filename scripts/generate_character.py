@@ -629,6 +629,13 @@ def main():
     )
     
     proc_group.add_argument(
+        "--no-rembg", "--keep-bg",
+        dest="no_rembg",
+        action="store_true",
+        help="切割时跳过背景去除（保留道具/行李箱等）"
+    )
+    
+    proc_group.add_argument(
         "--preprocess", "--clean",
         dest="preprocess",
         action="store_true",
@@ -2753,7 +2760,8 @@ def main():
             negative_categories=args.negative_categories,
             subject_only=args.subject_only,
             with_props=args.with_props,
-            export_prompt=args.export_prompt
+            export_prompt=args.export_prompt,
+            remove_bg=not getattr(args, 'no_rembg', False)
         )
     elif args.mode == "direct":
         # Gemini 直连模式 - 完整支持所有参数
@@ -2866,7 +2874,8 @@ def main():
                 original_args=args,
                 export_prompt=args.export_prompt,
                 subject_only=args.subject_only,
-                with_props=args.with_props
+                with_props=args.with_props,
+                remove_bg=not getattr(args, 'no_rembg', False)
             )
     
     # =========================================================================

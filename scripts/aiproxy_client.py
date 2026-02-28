@@ -391,6 +391,7 @@ def generate_character_multiview(
     subject_only: bool = False,  # 只处理主体，移除背景物体
     with_props: list = None,  # 要包含的道具列表
     export_prompt: bool = False,  # 是否导出提示词而不调用 API
+    remove_bg: bool = True,  # 切割时是否去除背景
     progress_callback: Optional[callable] = None # 进度回调函数
 ) -> Optional[str]:
     """
@@ -685,7 +686,7 @@ def generate_character_multiview(
             process_quadrant_image(
                 input_path=str(filepath),
                 output_dir=output_dir,
-                remove_bg_flag=True,
+                remove_bg_flag=remove_bg,
                 expected_views=expected_views,
                 margin=5
             )
