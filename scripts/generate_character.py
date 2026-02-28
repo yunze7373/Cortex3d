@@ -647,7 +647,16 @@ def main():
         choices=["birefnet-general", "isnet-general-use", "u2net"],
         default="birefnet-general",
         metavar="MODEL",
-        help="背景去除模型 (默认: birefnet-general)"
+        help="预处理(输入图片)的背景去除模型 (默认: birefnet-general)"
+    )
+    
+    proc_group.add_argument(
+        "--rembg-model", "--remove-bg-model",
+        dest="rembg_model",
+        choices=["birefnet-general", "isnet-general-use", "u2net"],
+        default="isnet-general-use",
+        metavar="MODEL",
+        help="后处理(切割后)的背景去除模型。推荐选择: isnet-general-use(保守,保留道具), u2net(经典), birefnet-general(激进) (默认: isnet-general-use)"
     )
     
     proc_group.add_argument(
@@ -2761,7 +2770,8 @@ def main():
             subject_only=args.subject_only,
             with_props=args.with_props,
             export_prompt=args.export_prompt,
-            remove_bg=not getattr(args, 'no_rembg', False)
+            remove_bg=not getattr(args, 'no_rembg', False),
+            rembg_model=getattr(args, 'rembg_model', 'isnet-general-use')
         )
     elif args.mode == "direct":
         # Gemini 直连模式 - 完整支持所有参数
@@ -2875,7 +2885,8 @@ def main():
                 export_prompt=args.export_prompt,
                 subject_only=args.subject_only,
                 with_props=args.with_props,
-                remove_bg=not getattr(args, 'no_rembg', False)
+                remove_bg=not getattr(args, 'no_rembg', False),
+                rembg_model=getattr(args, 'rembg_model', 'isnet-general-use')
             )
     
     # =========================================================================

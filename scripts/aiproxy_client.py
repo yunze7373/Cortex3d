@@ -392,6 +392,7 @@ def generate_character_multiview(
     with_props: list = None,  # 要包含的道具列表
     export_prompt: bool = False,  # 是否导出提示词而不调用 API
     remove_bg: bool = True,  # 切割时是否去除背景
+    rembg_model: str = "isnet-general-use",  # 后处理去背景模型
     progress_callback: Optional[callable] = None # 进度回调函数
 ) -> Optional[str]:
     """
@@ -688,7 +689,8 @@ def generate_character_multiview(
                 output_dir=output_dir,
                 remove_bg_flag=remove_bg,
                 expected_views=expected_views,
-                margin=5
+                margin=5,
+                rembg_model=rembg_model
             )
             # 记录切割后的文件
             metadata["files"]["front"] = f"{asset_id}_front.png"

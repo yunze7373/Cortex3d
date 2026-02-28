@@ -1170,15 +1170,15 @@ def split_quadrant_image(image, margin: int = 5, expected_views: list = None) ->
     return views
 
 
-def remove_background(image, model_name: str = "birefnet-general"):
+def remove_background(image, model_name: str = "isnet-general-use"):
     """
     使用 rembg 去除图片背景
     
     Args:
         image: BGR 格式的 numpy 数组
         model_name: rembg 模型名称，可选:
-            - "isnet-general-use" (默认，对复杂前景更好)
-            - "birefnet-general" (最新模型，质量最高但较慢)
+            - "isnet-general-use" (默认，不容易删除道具)
+            - "birefnet-general" (最新模型，质量最高但较激进)
             - "u2net" (经典模型)
     
     Returns:
@@ -1219,7 +1219,8 @@ def process_quadrant_image(
     output_dir: str,
     remove_bg_flag: bool = True,
     margin: int = 5,
-    expected_views: List[str] = None
+    expected_views: List[str] = None,
+    rembg_model: str = "isnet-general-use"
 ) -> List[str]:
     """
     处理四宫格图片的主函数
@@ -1229,6 +1230,8 @@ def process_quadrant_image(
         output_dir: 输出目录
         remove_bg_flag: 是否去除背景
         margin: 切割边界收缩像素
+        expected_views: 预旧蕪逻辑视角名称
+        rembg_model: 负边额遢阂，可选：isnet-general-use(保守), u2net(经典), birefnet-general(激进)
     
     Returns:
         生成的文件路径列表
@@ -1263,7 +1266,7 @@ def process_quadrant_image(
         if remove_bg_flag:
             print(f"[处理中] 去除 {view_name} 视图背景...")
             try:
-                processed = remove_background(view_image)
+                processed = remove_background(view_image, model_name=rembg_model)
                 
                 # 移除小碎片（如相邻视图的手片段）
                 print(f"[处理中] 清理 {view_name} 视图碎片...")
@@ -1308,6 +1311,12 @@ def main():
         help="跳过去背景处理"
     )
     parser.add_argument(
+        "--rembg-model", "--remove-bg-model",
+        choices=["birefnet-general", "isnet-general-use", "u2net"],
+        default="isnet-general-use",
+        help="背景去除模型选择 (默认: isnet-general-use)"
+    )
+    parser.add_argument(
         "--margin",
         type=int,
         default=5,
@@ -1335,7 +1344,8 @@ def main():
         output_dir=args.output,
         remove_bg_flag=not args.no_rembg,
         margin=args.margin,
-        expected_views=expected_views
+        expected_views=expected_views,
+        rembg_model=args.rembg_model
     )
 
 

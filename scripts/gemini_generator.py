@@ -571,10 +571,10 @@ def generate_character_views(
                     expected_view_objs = get_views_for_mode(view_mode)
                 expected_views = [v.name for v in expected_view_objs]
                 
-                cut_and_save(str(filepath), output_dir, expected_views=expected_views, remove_bg=remove_bg)
+                cut_and_save(str(filepath), output_dir, expected_views=expected_views, remove_bg=remove_bg, rembg_model=rembg_model)
             except Exception as e:
                 print(f"[WARNING] 无法计算期望视角: {e}, 使用默认切割")
-                cut_and_save(str(filepath), output_dir, remove_bg=remove_bg)
+                cut_and_save(str(filepath), output_dir, remove_bg=remove_bg, rembg_model=rembg_model)
         
         return str(filepath)
         
@@ -2566,7 +2566,7 @@ def _composite_via_direct(
 # 直连模式应该和代理模式使用相同的逻辑，只是访问路径不同
 
 
-def cut_and_save(image_path: str, output_dir: str, expected_views: list = None, remove_bg: bool = True):
+def cut_and_save(image_path: str, output_dir: str, expected_views: list = None, remove_bg: bool = True, rembg_model: str = "isnet-general-use"):
     """
     调用 image_processor 切割图像
     """
@@ -2582,7 +2582,8 @@ def cut_and_save(image_path: str, output_dir: str, expected_views: list = None, 
             output_dir=output_dir,
             remove_bg_flag=remove_bg,
             expected_views=expected_views,
-            margin=5
+            margin=5,
+            rembg_model=rembg_model
         )
     except ImportError:
         print("[WARNING] 无法导入 image_processor，跳过自动切割")
