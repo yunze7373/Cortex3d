@@ -5,7 +5,9 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: '0.0.0.0',        // 监听所有网络接口，支持局域网访问
     port: 5173,
+    strictPort: false,       // 端口占用时自动尝试下一个
     proxy: {
       '/api': {
         target: 'http://172.28.124.41:8000',
@@ -16,5 +18,9 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    hmr: {
+      host: 'localhost',     // 开发时使用 localhost
+      port: 5173,
+    }
   },
 })

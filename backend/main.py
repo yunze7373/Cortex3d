@@ -28,6 +28,8 @@ _allowed_origins = [
     "http://localhost:5173",
     "http://localhost:3000",
     "http://localhost:8000",
+    "http://172.28.124.41:5173",    # WSL 局域网 IP - 前端
+    "http://172.28.124.41:8000",    # WSL 局域网 IP - 后端
 ]
 if _cors_origins:
     _allowed_origins.extend([o.strip() for o in _cors_origins.split(",") if o.strip()])

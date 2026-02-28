@@ -1,0 +1,13 @@
+# Cortex3d Development Environment
+# 复制下面这些行到你的 ~/.bashrc 或 ~/.zshrc 中
+
+alias 3d='source ~/projects/cortex3d/.venv/bin/activate && cd ~/projects/cortex3d && ./dev.sh start'
+alias 3d-stop='~/projects/cortex3d/dev.sh stop'
+alias 3d-restart='~/projects/cortex3d/dev.sh restart'
+alias 3d-status='~/projects/cortex3d/dev.sh status'
+
+# (可选) WSL 进入时自动进入项目目录
+# if [ -f "$HOME/projects/cortex3d/dev.sh" ]; then
+#     cd ~/projects/cortex3d
+#     source .venv/bin/activate 2>/dev/null
+# fi
