@@ -1,4 +1,9 @@
-3d.home.lan {
+3d.home.lan:80 {
+    reverse_proxy localhost:5173
+    encode gzip
+}
+
+3d.home.lan:443 {
     reverse_proxy localhost:5173
     encode gzip
     tls internal
