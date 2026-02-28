@@ -78,6 +78,13 @@ start_caddy() {
         return
     fi
     
+    # 清理可能存在的旧 Caddy 进程（特别是在端口冲突的情况下）
+    if pgrep -f "caddy run" > /dev/null 2>&1; then
+        echo "⏹️  清理旧的 Caddy 进程..."
+        sudo pkill -f "caddy run" 2>/dev/null || true
+        sleep 1
+    fi
+    
     echo "🚀 启动 Caddy 反向代理..."
     # 需要 sudo 来使用 80/443 端口
     nohup sudo caddy run --config "$PROJECT_ROOT/Caddyfile" > "$LOG_DIR/caddy.log" 2>&1 &
